@@ -164,7 +164,7 @@ final class KnobModel: ObservableObject {
     func setPower(_ on: Bool) {
         guard !starting else { return }
         wantsOn = on
-        if on, connection != .online {
+        if on, connection != .online || isStaleEngine {
             Task { await startEngine() }
             return
         }
@@ -187,47 +187,84 @@ final class KnobModel: ObservableObject {
         }
     }
 
+    /// An engine is already answering that this copy of Knob didn't start: left over from the
+    /// previous version after an update or a crash. Reusing it is what made the first start after
+    /// installing or updating fail, so an installed Knob replaces it. (Dev copies keep theirs on
+    /// purpose, so relaunching on every save doesn't restart the sound.)
+    private var isStaleEngine: Bool {
+        guard let launcher else { return false }
+        return connection == .online && !launcher.isRunning
+            && Bundle.main.bundleIdentifier?.hasSuffix(".dev") != true
+    }
+
     private func startEngine() async {
         guard let launcher else { return }
         starting = true
         notice = "Starting the sound engine..."
         defer { starting = false }
         let physical = HardwareDevices.preferredPhysicalOutput()
+        if isStaleEngine { await retireEngine(keepingLauncher: false) }
         let session = Self.sessionURL.flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }
-        do {
-            try await launcher.start(preset: session ?? currentPreset?.url)
-            canInstallDevice = false
-        } catch EngineLauncher.Problem.deviceMissing where DriverInstaller.bundledDriver != nil {
-            canInstallDevice = true
-            notice = "Knob needs to install its audio device first."
-            wantsOn = false
-            return
-        } catch {
-            notice = error.localizedDescription
-            wantsOn = false
-            return
+
+        // Two tries: a fresh engine every time, because a first start that can't get audio flowing
+        // (right after installing or updating) works on the second.
+        for attempt in 1...2 {
+            do {
+                try await launcher.start(preset: session ?? currentPreset?.url)
+                canInstallDevice = false
+            } catch EngineLauncher.Problem.deviceMissing where DriverInstaller.bundledDriver != nil {
+                canInstallDevice = true
+                notice = "Knob needs to install its audio device first."
+                wantsOn = false
+                return
+            } catch {
+                notice = error.localizedDescription
+                wantsOn = false
+                return
+            }
+            for _ in 0..<50 where connection != .online {
+                try? await Task.sleep(for: .milliseconds(200))
+                await refresh()
+            }
+            if connection == .online {
+                _ = await succeeds("setBypass", ["value": false])
+                for _ in 0..<40 where !routingActive {   // the engine makes itself the output once audio flows
+                    try? await Task.sleep(for: .milliseconds(200))
+                    await refreshState(includeControls: true)
+                }
+                if routingActive {
+                    VolumeHandoff.takeOver(from: physical)
+                    notice = nil   // started: the "Starting the sound engine..." message goes away
+                    return
+                }
+                if attempt == 2 { break }
+            }
+            notice = "Starting the sound engine again..."
+            await retireEngine(keepingLauncher: false)
+            try? await Task.sleep(for: .seconds(1))
         }
-        for _ in 0..<50 where connection != .online {
-            try? await Task.sleep(for: .milliseconds(200))
-            await refresh()
-        }
-        guard connection == .online else {
+        if connection == .online {
+            await takeOverOutput(followingSystem: false)   // last resort; explains if it fails
+        } else {
             launcher.stop()
             notice = EngineLauncher.Problem.launchFailed.errorDescription
             wantsOn = false
-            return
         }
-        _ = await succeeds("setBypass", ["value": false])
-        for _ in 0..<30 where !routingActive {   // the engine makes itself the output once audio flows
-            try? await Task.sleep(for: .milliseconds(200))
-            await refreshState(includeControls: true)
+    }
+
+    /// Stops whatever engine is running without saving over the user's session, waits until it
+    /// is really gone, and gives the speakers back.
+    private func retireEngine(keepingLauncher: Bool) async {
+        _ = await succeeds("activateRouting", ["value": false])
+        _ = await succeeds("shutdown", [:])
+        if !keepingLauncher { launcher?.stop() }
+        VolumeHandoff.giveBack()
+        for _ in 0..<20 {
+            try? await Task.sleep(for: .milliseconds(150))
+            if (try? await engine.send("getState", [:])) == nil { break }
         }
-        if routingActive {
-            VolumeHandoff.takeOver(from: physical)
-            notice = nil   // started: the "Starting the sound engine..." message goes away
-        } else {
-            await takeOverOutput(followingSystem: false)   // clears the message on success, explains on failure
-        }
+        connection = .offline
+        routingActive = false
     }
 
     /// Installs the audio device bundled in the app (one password prompt), then switches Knob on.
