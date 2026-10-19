@@ -222,7 +222,12 @@ final class KnobModel: ObservableObject {
             try? await Task.sleep(for: .milliseconds(200))
             await refreshState(includeControls: true)
         }
-        if routingActive { VolumeHandoff.takeOver(from: physical) } else { await takeOverOutput(followingSystem: false) }
+        if routingActive {
+            VolumeHandoff.takeOver(from: physical)
+            notice = nil   // started: the "Starting the sound engine..." message goes away
+        } else {
+            await takeOverOutput(followingSystem: false)   // clears the message on success, explains on failure
+        }
     }
 
     /// Installs the audio device bundled in the app (one password prompt), then switches Knob on.

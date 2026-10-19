@@ -12,7 +12,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Clicking the Dock icon opens the Knob panel from the menu bar.
     @MainActor func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        StatusItemPanel.open()
+        // Activate first, then press the menu bar button on the next beat: pressing it while the
+        // app is still becoming active let the panel open and close again straight away.
+        NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { StatusItemPanel.open() }
         return false
     }
 
