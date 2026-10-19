@@ -163,9 +163,7 @@ struct RealisticKnob: View {
 
     private func set(_ newValue: Double, animated: Bool) {
         let clamped = min(max(newValue, 0), 1)
-        if (value > 0 && clamped == 0) || (value < 1 && clamped == 1) {
-            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
-        }
+        if !animated { Haptics.moved(from: value, to: clamped) }
         var transaction = Transaction(animation: animated ? Motion.knob : nil)
         transaction.disablesAnimations = !animated
         withTransaction(transaction) { value = clamped }

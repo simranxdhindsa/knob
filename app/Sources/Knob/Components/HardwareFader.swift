@@ -49,7 +49,10 @@ struct HardwareFader: View {
                 if !dragging { dragging = true; onEditingChanged(true) }
                 let raw = (centreY - g.location.y) / (travel / 2)
                 var t = Transaction(); t.disablesAnimations = true
-                withTransaction(t) { value = min(max(Double(raw), -1), 1) }
+                let next = min(max(Double(raw), -1), 1)
+                if (value < 0) != (next < 0) || (next == 0 && value != 0) { Haptics.detent() }
+                else { Haptics.moved(from: (value + 1) / 2, to: (next + 1) / 2) }
+                withTransaction(t) { value = next }
             }
             .onEnded { _ in dragging = false; onEditingChanged(false) })
         .onTapGesture(count: 2) { withAnimation(Motion.snappy) { value = 0 } }
