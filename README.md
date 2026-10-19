@@ -57,13 +57,13 @@ Knob places its own audio device between your apps and your speakers. The Mac tr
 <td width="50%" valign="top">
 
 ### 🔊 Volume for every output
-HDMI, DisplayPort, USB, Bluetooth or built-in speakers. The **volume keys** and the on-screen HUD work again, and the big knob follows them with a spring.
+HDMI, DisplayPort, USB, Bluetooth or built-in speakers. The **volume keys** and the on-screen HUD work again, and the big knob follows them with a spring while its ring of marks lights up from MIN to MAX.
 
 </td>
 <td width="50%" valign="top">
 
 ### 🎚️ Five effects
-**Clarity, Ambience, Surround Sound, Dynamic Boost and Bass Boost**, each on its own realistic knob. Double-click any knob to reset it.
+**Clarity, Ambience, Surround Sound, Dynamic Boost and Bass Boost**, each on its own realistic knob, ringed by **Marshall-style indicator marks** that light up in orange, one by one, as you turn it up. Double-click any knob to reset it.
 
 </td>
 </tr>
@@ -109,9 +109,23 @@ A supervisor hands your speakers back if the engine ever stops, and Knob never l
 
 </td>
 </tr>
+<tr>
+<td valign="top">
+
+### 💡 Indicator marks
+Eleven marks from 0 to 10 circle every knob, like the dials on a guitar amp. They glow as you turn up and stay dark when switched off, in light and dark mode.
+
+</td>
+<td valign="top">
+
+### 📳 Haptic feedback
+On a MacBook or Magic Trackpad you **feel the knob turn**: a firm tick for each notch, and the strongest click at minimum, maximum and the fader's centre.
+
+</td>
+</tr>
 </table>
 
-**Also included:** 🌗 light and dark mode · 🪀 spring animations with Framer Motion settings · 👆 trackpad ticks at the knob's end stops · ♿️ VoiceOver labels and adjustable controls · ⌨️ arrow keys on the tabs · 🧪 demo mode with sample data
+**Also included:** 🌗 light and dark mode · 🪀 spring animations with Framer Motion settings · 📳 trackpad haptics on knobs and faders · ♿️ VoiceOver labels and adjustable controls · ⌨️ arrow keys on the tabs · 🧪 demo mode with sample data
 
 ---
 
