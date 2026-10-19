@@ -20,13 +20,16 @@ struct RealisticKnob: View {
     @State private var rotary: RotaryDrag?
 
     private static let sweep = 270.0
+    /// Indicator marks around the knob, 0 to 10 like a guitar amp.
+    private static let marks = 11
 
     /// Diameters of the well, skirt and cap as fractions of `size`. Small knobs (the effects)
     /// sit tighter inside their arc than the big volume knob, so the ring never looks oversized.
     private var proportions: (well: CGFloat, skirt: CGFloat, cap: CGFloat) {
         let t = min(max((size - 54) / (150 - 54), 0), 1)   // 0 at effect-knob size, 1 at volume size
         func mix(_ small: CGFloat, _ large: CGFloat) -> CGFloat { small + (large - small) * t }
-        return (mix(0.92, 0.86), mix(0.84, 0.77), mix(0.73, 0.66))
+        // Scaled down so the indicator marks fit in a ring outside the body.
+        return (mix(0.92, 0.86) * 0.82, mix(0.84, 0.77) * 0.82, mix(0.73, 0.66) * 0.82)
     }
 
     var body: some View {
@@ -70,18 +73,26 @@ struct RealisticKnob: View {
 
     // MARK: Layers
 
+    /// Marshall-style indicator marks around the knob: short radial dashes from MIN to MAX that
+    /// light up one by one in orange as the value rises. Unlit marks stay dark, like switched-off LEDs.
     private func arc(_ p: Palette, _ v: Double) -> some View {
-        let fraction = Self.sweep / 360
-        let width = max(2.5, size * 0.028)
+        let marks = Self.marks
+        let length = size * 0.085
+        let width = max(1.8, size * 0.026)
+        let inner = size * 0.415
         return ZStack {
-            Circle().trim(from: 0, to: fraction)
-                .stroke(p.faint.opacity(0.35), style: StrokeStyle(lineWidth: width, lineCap: .round))
-            Circle().trim(from: 0, to: fraction * v)
-                .stroke(Palette.accent, style: StrokeStyle(lineWidth: width, lineCap: .round))
-                .shadow(color: Palette.accentGlow.opacity(isEnabled ? 0.9 : 0), radius: width * 1.6)
+            ForEach(0..<marks, id: \.self) { i in
+                let lit = isEnabled && v * Double(marks - 1) >= Double(i) - 0.001
+                let degrees = -Self.sweep / 2 + Self.sweep * Double(i) / Double(marks - 1)
+                Capsule()
+                    .fill(lit ? Palette.accent : p.faint.opacity(0.4))
+                    .frame(width: width, height: length)
+                    .shadow(color: Palette.accentGlow.opacity(lit ? 0.9 : 0), radius: width * 1.4)
+                    .offset(y: -(inner + length / 2))
+                    .rotationEffect(.degrees(degrees))
+            }
         }
-        .rotationEffect(.degrees(90 + (360 - Self.sweep) / 2))
-        .padding(width / 2)
+        .frame(width: size, height: size)
     }
 
     private func well(_ p: Palette) -> some View {
