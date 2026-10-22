@@ -29,6 +29,19 @@ struct ScreenSection: View {
                 } else if model.connection == .offline {
                     statusNote("Sound engine is off. Turn Knob on to start it.", attention: false)
                 }
+                if let failure = model.startupFailure, !model.starting {
+                    HStack(spacing: 12) {
+                        Button("Retry") { model.retryStartup() }
+                        Button(failure == .audioAccess ? "Microphone Settings" : "Sound Settings") {
+                            model.openStartupSettings()
+                        }
+                        Button("Open Log") { model.openEngineLog() }
+                        Spacer(minLength: 0)
+                    }
+                    .font(.system(size: 10, weight: .semibold))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Palette.accent)
+                }
             }
         }
         .environment(\.colorScheme, .dark)
@@ -77,14 +90,15 @@ struct EffectsGrid: View {
                         .lineLimit(2)
                         .frame(width: 62, height: 22, alignment: .bottom)
                     RealisticKnob(value: Binding(get: { model.effects[slot.rawValue] }, set: { model.setEffect(slot, $0) }),
-                                  size: 54, defaultValue: 0, showsMinMax: false,
+                                  size: 54, defaultValue: 0, showsMinMax: false, steps: 10,
                                   accessibilityLabel: slot.title,
                                   accessibilityValue: "\(Int((model.effects[slot.rawValue] * 10).rounded())) of 10",
                                   onEditingChanged: model.editingChanged)
-                    Text("\(Int((model.effects[slot.rawValue] * 10).rounded()))")
-                        .font(.system(size: 10, weight: .semibold).monospacedDigit())
-                        .foregroundStyle(Palette.accent)
-                        .contentTransition(.numericText(value: model.effects[slot.rawValue]))
+                    NumericValueField(value: Binding(get: { model.effects[slot.rawValue] * 10 },
+                                                     set: { model.setEffect(slot, $0 / 10) }),
+                                      range: 0...10, label: slot.title,
+                                      onEditingChanged: model.editingChanged)
+                        .frame(width: 36)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -97,7 +111,7 @@ struct EffectsGrid: View {
 /// One fader per EQ band, over the live spectrum.
 struct EqualizerBank: View {
     @ObservedObject var model: KnobModel
-    private let faderHeight: CGFloat = 128
+    private let faderHeight: CGFloat = 106
 
     /// Placeholder faders shown (disabled) until the engine reports its real bands.
     private static let skeletonBands = 10
@@ -136,6 +150,12 @@ struct EqualizerBank: View {
     private func columns(width: CGFloat?) -> some View {
         ForEach(model.eq.indices, id: \.self) { band in
             VStack(spacing: 8) {
+                NumericValueField(value: Binding(get: { model.eq[band] * 12 },
+                                                 set: { model.setEQ(band: band, $0 / 12) }),
+                                  range: -12...12, label: "\(Self.label(model.frequencies[safe: band])) hertz gain",
+                                  unit: "dB", fontSize: 8,
+                                  onEditingChanged: model.editingChanged)
+                    .frame(width: 29)
                 HardwareFader(value: Binding(get: { model.eq[band] }, set: { model.setEQ(band: band, $0) }),
                               height: faderHeight,
                               accessibilityLabel: "\(Self.label(model.frequencies[safe: band])) hertz",

@@ -10,6 +10,10 @@ struct RealisticKnob: View {
     var size: CGFloat
     var defaultValue: Double? = nil
     var showsMinMax = true
+    /// When set, the knob shows this many marks, one per whole number (mark n sits where the
+    /// pointer points at n and lights once the value rounds to n or more). The effect knobs use
+    /// 10, so their lit marks always match the number shown under them.
+    var steps: Int? = nil
     var accessibilityLabel: String
     var accessibilityValue: String
     var onEditingChanged: (Bool) -> Void = { _ in }
@@ -20,7 +24,7 @@ struct RealisticKnob: View {
     @State private var rotary: RotaryDrag?
 
     private static let sweep = 270.0
-    /// Indicator marks around the knob, 0 to 10 like a guitar amp.
+    /// Indicator marks around the knob without `steps`, 0 to 10 like a guitar amp.
     private static let marks = 11
 
     /// Diameters of the well, skirt and cap as fractions of `size`. Small knobs (the effects)
@@ -66,6 +70,7 @@ struct RealisticKnob: View {
         .accessibilityElement()
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(accessibilityValue)
+        .help("Drag to turn. Hold Shift for fine adjustment. Double-click to reset when available.")
         .accessibilityAdjustableAction { direction in
             set(value + (direction == .increment ? 0.05 : -0.05), animated: true)
         }
@@ -76,14 +81,24 @@ struct RealisticKnob: View {
     /// Marshall-style indicator marks around the knob: short radial dashes from MIN to MAX that
     /// light up one by one in orange as the value rises. Unlit marks stay dark, like switched-off LEDs.
     private func arc(_ p: Palette, _ v: Double) -> some View {
-        let marks = Self.marks
         let length = size * 0.085
         let width = max(1.8, size * 0.026)
         let inner = size * 0.415
+        // Each mark as (position on the sweep 0...1, lit).
+        let marks: [(at: Double, lit: Bool)] = {
+            if let steps, steps > 0 {
+                let number = Int((v * Double(steps)).rounded())
+                return (1...steps).map { (Double($0) / Double(steps), number >= $0) }
+            }
+            let count = Self.marks
+            return (0..<count).map { i in
+                (Double(i) / Double(count - 1), v * Double(count - 1) >= Double(i) - 0.001)
+            }
+        }()
         return ZStack {
-            ForEach(0..<marks, id: \.self) { i in
-                let lit = isEnabled && v * Double(marks - 1) >= Double(i) - 0.001
-                let degrees = -Self.sweep / 2 + Self.sweep * Double(i) / Double(marks - 1)
+            ForEach(marks.indices, id: \.self) { i in
+                let lit = isEnabled && marks[i].lit
+                let degrees = -Self.sweep / 2 + Self.sweep * marks[i].at
                 Capsule()
                     .fill(lit ? Palette.accent : p.faint.opacity(0.4))
                     .frame(width: width, height: length)
@@ -163,7 +178,9 @@ struct RealisticKnob: View {
                     rotary = RotaryDrag(sweep: Self.sweep, size: size, value: value)
                     onEditingChanged(true)
                 }
-                if let next = rotary?.move(to: g.location) { set(next, animated: false) }
+                if let next = rotary?.move(to: g.location, precision: NSEvent.modifierFlags.contains(.shift)) {
+                    set(next, animated: false)
+                }
             }
             .onEnded { _ in
                 dragStart = nil

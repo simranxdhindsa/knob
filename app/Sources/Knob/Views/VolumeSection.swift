@@ -42,11 +42,14 @@ struct VolumeSection: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(model.muted ? "Unmute" : "Mute")
-            Text(model.volumeControllable ? "\(Int((model.volume * 100).rounded()))%" : "Fixed")
-                .font(.system(size: 12, weight: .semibold).monospacedDigit())
-                .foregroundStyle(p.label)
-                .contentTransition(.numericText(value: model.volume))
-                .animation(Motion.snappy, value: model.volume)
+            if model.volumeControllable {
+                NumericValueField(value: Binding(get: { model.volume * 100 }, set: { model.setVolume($0 / 100) }),
+                                  range: 0...100, label: "Volume", unit: "percent", fontSize: 12)
+                    .frame(width: 42)
+                Text("%").font(.system(size: 10, weight: .semibold)).foregroundStyle(p.label)
+            } else {
+                Text("Fixed").font(.system(size: 12, weight: .semibold)).foregroundStyle(p.label)
+            }
         }
         .padding(.horizontal, 10)
         .frame(height: 24)

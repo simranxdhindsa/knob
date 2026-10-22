@@ -13,3 +13,9 @@ __pycache__/
 .mcp.json
 .claude/settings.local.json
 .code-review-graph/
+
+# Voiden
+**/.voiden/*
+!**/.voiden/env-public.yaml
+!**/.voiden/env-*-public.yaml
+.voiden-inherited.void
