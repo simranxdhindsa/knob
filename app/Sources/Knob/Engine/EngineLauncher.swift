@@ -21,10 +21,26 @@ final class EngineLauncher {
     }
 
     private var supervisor: Process?
+    private var launchLogOffset: UInt64?
+    private var launchOutputUID: String?
+
+    var startupFailure: StartupFailure {
+        if let uid = launchOutputUID, HardwareDevices.device(uid: uid) == nil { return .outputUnavailable }
+        guard let offset = launchLogOffset, let url = EngineLog.url,
+              let handle = try? FileHandle(forReadingFrom: url) else { return .engineUnavailable }
+        defer { try? handle.close() }
+        do {
+            try handle.seek(toOffset: offset)
+            let bytes = try handle.read(upToCount: 1 << 20) ?? Data()
+            return StartupFailure.diagnose(log: String(decoding: bytes, as: UTF8.self)) ?? .engineUnavailable
+        } catch { return .engineUnavailable }
+    }
 
     var isRunning: Bool { supervisor?.isRunning == true }
 
     func start(preset: URL?) async throws {
+        launchLogOffset = nil
+        launchOutputUID = nil
         let helpers = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers")
         let engine = helpers.appendingPathComponent("knob-engine")
         let supervisorURL = helpers.appendingPathComponent("knob-supervisor")
@@ -33,6 +49,7 @@ final class EngineLauncher {
         else { throw Problem.helpersMissing }
         guard HardwareDevices.all().contains(where: { $0.uid == HardwareDevices.knobUID }) else { throw Problem.deviceMissing }
         guard let output = HardwareDevices.preferredPhysicalOutput() else { throw Problem.noOutput }
+        launchOutputUID = output.uid
         guard await Self.audioAccess() else { throw Problem.permissionDenied }
 
         // The supervisor restores whatever output was current when it started, so make sure
@@ -51,6 +68,7 @@ final class EngineLauncher {
         process.arguments = arguments
         // The supervisor and the engine it runs write their errors here (the engine inherits it).
         if let log = EngineLog.open(note: "Starting the sound engine for output \(output.uid)") {
+            launchLogOffset = log.offsetInFile
             process.standardOutput = log
             process.standardError = log
         }

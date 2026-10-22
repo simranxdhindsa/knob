@@ -38,6 +38,16 @@ enum Snapshot {
                 }
             }
 
+            // Recovery messages and actions must fit alongside the real panel layout.
+            for failure in StartupFailure.allCases {
+                offline.showStartupFailure(failure)
+                UserDefaults.standard.set(ScreenSection.Tab.effects.rawValue, forKey: PersistKey.selectedTab.rawValue)
+                for (name, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {
+                    render(PanelView(model: offline).environment(\.colorScheme, scheme), scheme: scheme,
+                           to: folder.appendingPathComponent("recovery-\(failure)-\(name).png"))
+                }
+            }
+
             // Pressing ON with the engine off: the real launcher's checks, never a silent no-op.
             // (Runs the real device check; it only launches anything if Knob's device is installed.)
             let attempt = KnobModel(engine: SocketEngine(path: "/nonexistent/knob-engine.sock"), volume: DemoVolume(),

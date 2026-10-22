@@ -26,6 +26,7 @@ final class KnobModel: ObservableObject {
     /// A plain-language message for the panel, such as why the engine couldn't start.
     @Published private(set) var notice: String?
     @Published private(set) var starting = false
+    @Published private(set) var startupFailure: StartupFailure?
     /// True when ON failed only because the audio device isn't installed and the app can install it.
     @Published private(set) var canInstallDevice = false
     /// True when the Mac's sound actually goes through Knob (Knob is the default output).
@@ -200,6 +201,7 @@ final class KnobModel: ObservableObject {
     private func startEngine() async {
         guard let launcher else { return }
         starting = true
+        startupFailure = nil
         notice = "Starting the sound engine..."
         defer { starting = false }
         let physical = HardwareDevices.preferredPhysicalOutput()
@@ -218,19 +220,27 @@ final class KnobModel: ObservableObject {
                 wantsOn = false
                 return
             } catch {
-                notice = error.localizedDescription
+                switch error as? EngineLauncher.Problem {
+                case .permissionDenied: showStartupFailure(.audioAccess)
+                case .noOutput: showStartupFailure(.outputUnavailable)
+                case .deviceMissing, .helpersMissing:
+                    notice = error.localizedDescription
+                default: showStartupFailure(.engineUnavailable)
+                }
                 wantsOn = false
                 return
             }
             for _ in 0..<50 where connection != .online {
                 try? await Task.sleep(for: .milliseconds(200))
                 await refresh()
+                if !launcher.isRunning { break }
             }
             if connection == .online {
                 _ = await succeeds("setBypass", ["value": false])
                 for _ in 0..<40 where !routingActive {   // the engine makes itself the output once audio flows
                     try? await Task.sleep(for: .milliseconds(200))
                     await refreshState(includeControls: true)
+                    if !launcher.isRunning { break }
                 }
                 if routingActive {
                     VolumeHandoff.takeOver(from: physical)
@@ -243,13 +253,37 @@ final class KnobModel: ObservableObject {
             await retireEngine(keepingLauncher: false)
             try? await Task.sleep(for: .seconds(1))
         }
-        if connection == .online {
+        if connection == .online && launcher.isRunning {
             await takeOverOutput(followingSystem: false)   // last resort; explains if it fails
-        } else {
-            launcher.stop()
-            notice = EngineLauncher.Problem.launchFailed.errorDescription
-            wantsOn = false
+            if routingActive { return }
         }
+        // Capture the failure before stopping the partial launch. OFF must really mean off.
+        let diagnostic = launcher.startupFailure
+        let failure: StartupFailure = diagnostic == .engineUnavailable && launcher.isRunning ? .routing : diagnostic
+        await retireEngine(keepingLauncher: false)
+        powerOn = false
+        wantsOn = false
+        showStartupFailure(failure)
+    }
+
+    func showStartupFailure(_ failure: StartupFailure) {
+        startupFailure = failure
+        notice = failure.message
+    }
+
+    func retryStartup() {
+        guard !starting else { return }
+        setPower(true) // Re-enumerates devices and chooses the Mac's current physical output.
+    }
+
+    func openStartupSettings() {
+        guard let failure = startupFailure else { return }
+        NSWorkspace.shared.open(failure.settingsURL)
+    }
+
+    func openEngineLog() {
+        guard let url = EngineLog.url else { return }
+        NSWorkspace.shared.open(url)
     }
 
     /// Stops whatever engine is running without saving over the user's session, waits until it
@@ -354,6 +388,7 @@ final class KnobModel: ObservableObject {
         routingActive = false
         connection = .offline
         notice = nil
+        startupFailure = nil
     }
 
     func quit() {

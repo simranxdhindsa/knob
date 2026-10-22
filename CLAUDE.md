@@ -199,6 +199,7 @@ If the same UI pattern is needed in 2+ places, extract it into `Components/`; ne
 |---|---|
 | `RealisticKnob` | Hardware rotary knob: well, skirt, lit cap, pointer, glowing arc, MIN/MAX. Turned by circling the pointer around it (`RotaryDrag`), double-click reset, VoiceOver adjustable, trackpad tick at the ends. Proportions tighten for small knobs |
 | `RotaryDrag` | Pure maths for turning a knob by angle (no SwiftUI), so it can be tested on its own |
+| `NumericValueField`, `NumericEntry` | Inline exact values for volume, effects and EQ; validates finite numbers and ranges, Enter/blur commits, Escape cancels |
 | `HardwareFader` | Vertical fader for the dark screen, -1...1 with centre detent |
 | `SegmentedTabs` | **21st.dev Segmented Control** (halaska-studio, MIT) port: sliding thumb, arrow keys |
 | `PowerSwitch` | **21st.dev Switch** (serafimcloud) port: pill thumb, sliding gradient track, 250/125ms timing |
@@ -210,6 +211,8 @@ If the same UI pattern is needed in 2+ places, extract it into `Components/`; ne
 | `Grain` | Deterministic panel speckle |
 | `UpdateStatusLabel` | Updater state beside the version in the header: short text ("Downloading…"), full sentence as tooltip |
 | `EngravedLabel` | Uppercase control label (in `Views/PanelView.swift`) |
+
+Precision controls and startup recovery: [`docs/precision-and-recovery.md`](docs/precision-and-recovery.md). Knobs and faders support Shift-drag at one-tenth speed. Startup diagnosis must read only the current launch's log bytes, never historical errors. Regression checks: `sh tests/precision-startup-build.sh`.
 
 ### 11. UI copy
 Never use em dashes (`—`) or double dashes (`--`) in user-facing text: headings, labels, tips, errors, menu items, anything on screen. Rewrite as two sentences, or join with a comma, "and" or "so". This doesn't apply to code, comments or commit messages.

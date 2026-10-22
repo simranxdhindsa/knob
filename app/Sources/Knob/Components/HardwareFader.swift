@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// A vertical hardware fader: recessed groove, orange fill from the centre detent, and a
@@ -11,6 +12,7 @@ struct HardwareFader: View {
 
     @Environment(\.isEnabled) private var isEnabled
     @State private var dragging = false
+    @State private var lastY: CGFloat?
 
     private let thumbHeight: CGFloat = 11
     private let thumbWidth: CGFloat = 18
@@ -47,20 +49,25 @@ struct HardwareFader: View {
         .gesture(DragGesture(minimumDistance: 0)
             .onChanged { g in
                 if !dragging { dragging = true; onEditingChanged(true) }
-                let raw = (centreY - g.location.y) / (travel / 2)
+                // Apply movement incrementally, so pressing/releasing Shift never jumps the value.
+                let previousY = lastY ?? g.startLocation.y
+                lastY = g.location.y
+                let sensitivity = NSEvent.modifierFlags.contains(.shift) ? 0.1 : 1.0
+                let raw = value + Double((previousY - g.location.y) / (travel / 2)) * sensitivity
                 var t = Transaction(); t.disablesAnimations = true
                 let next = min(max(Double(raw), -1), 1)
                 if (value < 0) != (next < 0) || (next == 0 && value != 0) { Haptics.detent() }
                 else { Haptics.moved(from: (value + 1) / 2, to: (next + 1) / 2) }
                 withTransaction(t) { value = next }
             }
-            .onEnded { _ in dragging = false; onEditingChanged(false) })
+            .onEnded { _ in dragging = false; lastY = nil; onEditingChanged(false) })
         .onTapGesture(count: 2) { withAnimation(Motion.snappy) { value = 0 } }
         .animation(dragging ? nil : Motion.snappy, value: value)
         .opacity(isEnabled ? 1 : 0.4)
         .accessibilityElement()
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(accessibilityValue)
+        .help("Drag to adjust. Hold Shift for fine adjustment. Double-click to reset to 0 dB.")
         .accessibilityAdjustableAction { direction in
             withAnimation(Motion.snappy) { value = min(max(value + (direction == .increment ? 0.083 : -0.083), -1), 1) }
         }

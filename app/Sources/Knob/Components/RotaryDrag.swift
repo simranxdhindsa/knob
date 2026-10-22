@@ -22,16 +22,17 @@ struct RotaryDrag {
     /// Feeds the next pointer location and returns the new knob value (0...1).
     /// Circling clockwise turns up. Within the inner 18% of the radius, where the angle is
     /// unsteady, up/down movement is used instead. Stops at both ends, never wraps.
-    mutating func move(to location: CGPoint) -> Double {
+    mutating func move(to location: CGPoint, precision: Bool = false) -> Double {
+        let sensitivity = precision ? 0.1 : 1.0
         let dx = Double(location.x - size / 2), dy = Double(location.y - size / 2)
         let nearCentre = (dx * dx + dy * dy).squareRoot() < Double(size) * 0.18
         let angle = atan2(dx, -dy) * 180 / .pi
         if !nearCentre, let previous = lastAngle {
             var delta = angle - previous
             if delta > 180 { delta -= 360 } else if delta < -180 { delta += 360 }
-            value += delta / sweep
+            value += delta / sweep * sensitivity
         } else if nearCentre, let last = lastLocation {
-            value += Double(last.y - location.y) / Double(max(160, size * 1.8))
+            value += Double(last.y - location.y) / Double(max(160, size * 1.8)) * sensitivity
         }
         lastAngle = nearCentre ? nil : angle
         lastLocation = location
