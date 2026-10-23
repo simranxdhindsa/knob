@@ -48,6 +48,7 @@ final class KnobModel: ObservableObject {
     /// True while the user's pick in the output menu is being applied. The engine hands the Mac
     /// its old output back for a moment while it switches, and that must not be "followed".
     private var switchingOutput = false
+    private let volumeKeys = VolumeKeys()
 
     init(engine: SoundEngine, volume: VolumeControl, launcher: EngineLauncher? = nil) {
         self.engine = engine
@@ -68,6 +69,8 @@ final class KnobModel: ObservableObject {
             // A previous run may have stopped while speakers were raised underneath Knob.
             if !knobIsOutput { VolumeHandoff.giveBack() }
             HardwareDevices.observeDefaultOutput { [weak self] in self?.defaultOutputChanged() }
+            volumeKeys.isActive = { [weak self] in self?.knobIsOutput == true }
+            volumeKeys.onStep = { [weak self] direction in self?.stepVolume(direction) }
         }
         presets = Preset.all()
         if let path = UserDefaults.standard.string(forKey: PersistKey.lastPreset.rawValue) {
@@ -135,6 +138,7 @@ final class KnobModel: ObservableObject {
         routingActive = state.routingActive
         // ON means effects are on AND the Mac's sound goes through Knob; anything else is OFF.
         powerOn = !state.bypassed && state.routingActive
+        if powerOn, launcher != nil { volumeKeys.enable() }
         outputUID = state.outputUID
         peakLeft = state.peakLeft
         peakRight = state.peakRight
@@ -159,6 +163,13 @@ final class KnobModel: ObservableObject {
         guard stepped != volume else { return }
         volume = stepped
         volumeControl.setVolume(stepped)
+    }
+
+    /// A volume key press while Knob is the output: 2% instead of macOS's 6%, with Knob's popup.
+    private func stepVolume(_ direction: Int) {
+        let next = min(max(Int((volume * 100).rounded()) + direction * VolumeKeys.step, 0), 100)
+        setVolume(Double(next) / 100)
+        VolumeOSD.show(volume: Double(next) / 100, muted: next == 0 && muted)
     }
 
     func toggleMute() { volumeControl.setMuted(!muted) }
