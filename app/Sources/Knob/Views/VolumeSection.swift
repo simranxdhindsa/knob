@@ -44,7 +44,8 @@ struct VolumeSection: View {
             .accessibilityLabel(model.muted ? "Unmute" : "Mute")
             if model.volumeControllable {
                 NumericValueField(value: Binding(get: { model.volume * 100 }, set: { model.setVolume($0 / 100) }),
-                                  range: 0...100, label: "Volume", unit: "percent", fontSize: 12)
+                                  range: 0...100, label: "Volume", unit: "percent", fontSize: 12,
+                                  fractionDigits: 0)
                     .frame(width: 42)
                 Text("%").font(.system(size: 10, weight: .semibold)).foregroundStyle(p.label)
             } else {

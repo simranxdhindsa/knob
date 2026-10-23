@@ -9,6 +9,8 @@ struct NumericValueField: View {
     let label: String
     var unit = ""
     var fontSize: CGFloat = 10
+    /// Decimal places shown; volume uses 0 so it reads in whole percents.
+    var fractionDigits = 1
     var onEditingChanged: (Bool) -> Void = { _ in }
 
     @Environment(\.colorScheme) private var scheme
@@ -54,7 +56,7 @@ struct NumericValueField: View {
     }
 
     private func formatted(_ number: Double) -> String {
-        number.formatted(.number.precision(.fractionLength(1)).grouping(.never))
+        number.formatted(.number.precision(.fractionLength(fractionDigits)).grouping(.never))
     }
 
     private func finish(commit: Bool) {

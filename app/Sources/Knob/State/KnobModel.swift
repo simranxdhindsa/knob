@@ -150,9 +150,12 @@ final class KnobModel: ObservableObject {
 
     // MARK: Actions
 
+    /// Volume moves in whole percents: turning the knob or typing 50.5 lands on 1% steps.
     func setVolume(_ value: Double) {
-        volume = value
-        volumeControl.setVolume(value)
+        let stepped = (value * 100).rounded() / 100
+        guard stepped != volume else { return }
+        volume = stepped
+        volumeControl.setVolume(stepped)
     }
 
     func toggleMute() { volumeControl.setMuted(!muted) }
