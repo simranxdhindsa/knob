@@ -70,6 +70,14 @@ enum Screen {
     static let tabThumb = Color(hex: 0x2A2A2A)
 }
 
+/// The VU meter's own tokens. Its face, ink and hub follow `Palette` like the knobs; only the
+/// needle's shaded base and the glass glare live here.
+enum Meter {
+    /// Base of the needle, where Knob's orange falls into shadow near the hub.
+    static let needleShade = Color(hex: 0x7A2A08)
+    static let glass = Color.white
+}
+
 extension Color {
     init(hex: UInt32) {
         self.init(.sRGB,

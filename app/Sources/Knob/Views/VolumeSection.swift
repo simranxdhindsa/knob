@@ -25,7 +25,11 @@ struct VolumeSection: View {
                          title: { $0.name }, placeholder: "No output") { model.selectOutput($0) }
                     .disabled(model.connection != .online)
                 EngravedLabel(text: "LEVEL").padding(.top, 6)
-                LevelMeter(left: model.peakLeft, right: model.peakRight, height: 74)
+                HStack(alignment: .top, spacing: 6) {
+                    LevelMeter(left: model.peakLeft, right: model.peakRight, height: 74)
+                    VUMeter(level: max(model.peakLeft, model.peakRight))
+                        .padding(.top, 6)
+                }
             }
             .frame(width: 128)
             .padding(.top, 2)

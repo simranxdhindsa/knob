@@ -10,6 +10,8 @@ enum Motion {
     static let gentle = Animation.interpolatingSpring(mass: 1, stiffness: 170, damping: 26)
     /// A knob catching up with an outside change, such as the Mac volume keys.
     static let knob = Animation.interpolatingSpring(mass: 1, stiffness: 260, damping: 24)
+    /// The VU meter needle: Analog UI Needle Gauge's spring `{ stiffness: 420, damping: 28, mass: 1 }`.
+    static let vuNeedle = Animation.interpolatingSpring(mass: 1, stiffness: 420, damping: 28)
     /// 21st.dev Segmented Control thumb: 0.35s cubic-bezier(0.2, 0, 0, 1).
     static let segment = Animation.timingCurve(0.2, 0, 0, 1, duration: 0.35)
 

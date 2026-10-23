@@ -208,6 +208,7 @@ If the same UI pattern is needed in 2+ places, extract it into `Components/`; ne
 | `InsetScreen` | Dark recessed screen with the level-driven orange glow |
 | `SpectrumView` | Live spectrum bars from the engine's 10 bands |
 | `LevelMeter` | L/R meters on a -48...0 dB scale |
+| `VUMeter` | Analog VU needle meter beside the level meters, in the knobs' finish (light/dark); needle shape and spring from **Analog UI Needle Gauge** (TechSquidTV, MIT). 0 VU = -6 dBFS peak |
 | `Grain` | Deterministic panel speckle |
 | `UpdateStatusLabel` | Updater state beside the version in the header: short text ("Downloading…"), full sentence as tooltip |
 | `EngravedLabel` | Uppercase control label (in `Views/PanelView.swift`) |
