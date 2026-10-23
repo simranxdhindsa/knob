@@ -455,9 +455,12 @@ final class KnobModel: ObservableObject {
         _ = try? await engine.send("savePreset", ["path": url.path])
     }
 
+    /// Effects move in whole steps, 0 to 10, one per indicator mark on the knob.
     func setEffect(_ slot: EffectSlot, _ value: Double) {
-        effects[slot.rawValue] = value
-        queue(slot.parameter, value * 10)
+        let stepped = (value * 10).rounded() / 10
+        guard stepped != effects[slot.rawValue] else { return }
+        effects[slot.rawValue] = stepped
+        queue(slot.parameter, stepped * 10)
     }
 
     func setEQ(band: Int, _ value: Double) {

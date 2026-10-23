@@ -96,7 +96,7 @@ struct EffectsGrid: View {
                                   onEditingChanged: model.editingChanged)
                     NumericValueField(value: Binding(get: { model.effects[slot.rawValue] * 10 },
                                                      set: { model.setEffect(slot, $0 / 10) }),
-                                      range: 0...10, label: slot.title,
+                                      range: 0...10, label: slot.title, fractionDigits: 0,
                                       onEditingChanged: model.editingChanged)
                         .frame(width: 36)
                 }
