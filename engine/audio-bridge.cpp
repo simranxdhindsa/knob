@@ -45,6 +45,7 @@ void AudioBridge::setProcessor(Processor processor, void* context) {
 }
 void AudioBridge::start(const std::string& outputUID) {
     stop();
+    startedAt_ = std::chrono::steady_clock::now();
     if (outputUID == virtualUID) throw std::runtime_error("virtual output would cause audio feedback");
     input_ = findDevice(virtualUID, true).id; output_ = findDevice(outputUID, false).id;
     try {

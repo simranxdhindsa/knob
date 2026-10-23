@@ -60,7 +60,6 @@ int main(int argc, char** argv) {
         }
         bridge.start(outputUID);
         knob::IPCServer server(socketPath);
-        auto started = std::chrono::steady_clock::now();
         bool shutdown = false;
         while (!stopping && !shutdown) {
             server.poll([&](const std::string& request) {
@@ -70,10 +69,11 @@ int main(int argc, char** argv) {
                 activate = false; routing.restore();
             }
             if (bridge.changed()) {
-                routing.restore(); dsp.prepare(bridge, outputUID); bridge.start(outputUID); started = std::chrono::steady_clock::now();
+                routing.restore(); dsp.prepare(bridge, outputUID); bridge.start(outputUID);
             }
             if (activate && !routing.owned() && bridge.ready()) routing.activate(bridge.inputDevice());
-            if (!bridge.ready() && std::chrono::steady_clock::now() - started > std::chrono::seconds(5))
+            // Measured from the latest IO start, so switching outputs gets the same 5 seconds.
+            if (!bridge.ready() && std::chrono::steady_clock::now() - bridge.startedAt() > std::chrono::seconds(5))
                 throw std::runtime_error("capture/render readiness timed out; default output was not activated");
         }
         routing.restore(); bridge.stop();

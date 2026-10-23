@@ -2,6 +2,7 @@
 #include "audio-devices.h"
 #include "adaptive-resampler.h"
 #include <atomic>
+#include <chrono>
 #include <array>
 
 namespace knob {
@@ -13,12 +14,15 @@ public:
     void stop() noexcept;
     bool ready() const noexcept;
     bool changed() noexcept { return changed_.exchange(false); }
+    /// When IO last (re)started: launch, an output switch or a device change. Control thread only.
+    std::chrono::steady_clock::time_point startedAt() const noexcept { return startedAt_; }
     using Processor = void (*)(void*, float*, size_t) noexcept;
     void setProcessor(Processor processor, void* context);
     AudioDeviceID inputDevice() const noexcept { return input_; }
     AudioDeviceID outputDevice() const noexcept { return output_; }
     std::string metricsJSON() const;
 private:
+    std::chrono::steady_clock::time_point startedAt_{};
     static OSStatus capture(AudioDeviceID, const AudioTimeStamp*, const AudioBufferList*,
                             const AudioTimeStamp*, AudioBufferList*, const AudioTimeStamp*, void*);
     static OSStatus render(AudioDeviceID, const AudioTimeStamp*, const AudioBufferList*,

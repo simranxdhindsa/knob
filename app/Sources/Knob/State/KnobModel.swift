@@ -545,6 +545,9 @@ final class KnobModel: ObservableObject {
             defer { switchingOutput = false }
             if await succeeds("setOutputUID", ["outputUID": device.uid]) {
                 notice = nil
+                // Make it the Mac's output underneath Knob too, so OFF, quitting and the next ON
+                // all use the device picked here, not the one that was playing before.
+                if let hardware = HardwareDevices.device(uid: device.uid) { HardwareDevices.setDefaultOutput(hardware.id) }
             } else {
                 outputUID = previous
                 notice = "Knob couldn't switch to \(device.name). It is still playing on the previous output."
