@@ -25,7 +25,7 @@ struct HeaderBar: View {
                     .animation(Motion.gentle, value: updater.status)
             }
             Spacer(minLength: 6)
-            PowerSwitch(isOn: Binding(get: { model.powerOn }, set: { model.setPower($0) }), label: "Sound effects")
+            PowerSwitch(isOn: Binding(get: { model.powerOn }, set: { model.userSetPower($0) }), label: "Sound effects")
                 .disabled(model.starting)
             Menu {
                 Button("About Knob") { AboutWindow.show() }

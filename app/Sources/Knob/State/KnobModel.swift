@@ -160,6 +160,26 @@ final class KnobModel: ObservableObject {
 
     func toggleMute() { volumeControl.setMuted(!muted) }
 
+    /// The switch, flipped by the user: remembered, so the next launch comes back the same way.
+    func userSetPower(_ on: Bool) {
+        guard !starting else { return }
+        Self.rememberPower(on)
+        setPower(on)
+    }
+
+    /// Turns Knob back on at launch if it was ON when it was last quit. Real engine only.
+    func restorePower() {
+        guard launcher != nil, UserDefaults.standard.bool(forKey: PersistKey.powerOn.rawValue) else { return }
+        Task {
+            await refresh()
+            if !powerOn && !starting { setPower(true) }
+        }
+    }
+
+    private static func rememberPower(_ on: Bool) {
+        UserDefaults.standard.set(on, forKey: PersistKey.powerOn.rawValue)
+    }
+
     /// ON starts the engine if needed, turns effects on, and makes Knob the Mac's output.
     /// OFF fully stops the engine Knob started: the speakers are handed back, and macOS stops
     /// showing audio input in use (the orange dot), because nothing reads Knob's device any
@@ -276,6 +296,7 @@ final class KnobModel: ObservableObject {
 
     func retryStartup() {
         guard !starting else { return }
+        Self.rememberPower(true)
         setPower(true) // Re-enumerates devices and chooses the Mac's current physical output.
     }
 
@@ -319,6 +340,7 @@ final class KnobModel: ObservableObject {
             }
             starting = false
             canInstallDevice = false
+            Self.rememberPower(true)
             wantsOn = true
             await startEngine()
         }
