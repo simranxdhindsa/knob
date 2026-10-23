@@ -2,6 +2,7 @@
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
+#include <thread>
 #include <mach/mach_time.h>
 
 namespace knob {
@@ -63,7 +64,15 @@ void AudioBridge::start(const std::string& outputUID) {
         checkAudio(AudioDeviceCreateIOProcID(output_, render, this, &renderID_), "create render IOProc");
         listeners(true);
         checkAudio(AudioDeviceStart(output_, renderID_), "start render");
-        checkAudio(AudioDeviceStart(input_, captureID_), "start capture");
+        // Restarting capture right after stopping it (switching outputs) can race the HAL's
+        // asynchronous stop of the previous IO, and Knob's device refuses the overlapping start.
+        // Control thread only, so a short wait and retry is safe.
+        OSStatus started = AudioDeviceStart(input_, captureID_);
+        for (int attempt = 0; started != noErr && attempt < 20; ++attempt) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            started = AudioDeviceStart(input_, captureID_);
+        }
+        checkAudio(started, "start capture");
     } catch (...) { stop(); throw; }
 }
 void AudioBridge::stop() noexcept {

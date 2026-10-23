@@ -45,6 +45,9 @@ final class KnobModel: ObservableObject {
     /// What the user asked for with the switch. While ON, Knob keeps itself as the Mac's output.
     private var wantsOn = false
     private var reclaiming = false
+    /// True while the user's pick in the output menu is being applied. The engine hands the Mac
+    /// its old output back for a moment while it switches, and that must not be "followed".
+    private var switchingOutput = false
 
     init(engine: SoundEngine, volume: VolumeControl, launcher: EngineLauncher? = nil) {
         self.engine = engine
@@ -377,6 +380,7 @@ final class KnobModel: ObservableObject {
         guard !knobIsOutput else { return }
         VolumeHandoff.giveBack()
         routingActive = false
+        guard !switchingOutput else { return }
         powerOn = false
         guard wantsOn, connection == .online, !reclaiming, !starting else { return }
         reclaiming = true
@@ -515,9 +519,28 @@ final class KnobModel: ObservableObject {
         select(presets[(index + offset + presets.count) % presets.count])
     }
 
+    /// Plays through the output picked in Knob's menu. Switching hands the Mac its old output
+    /// back for a moment, so while Knob is ON it takes the output again on the new device.
     func selectOutput(_ device: OutputDevice) {
+        guard !switchingOutput, device.uid != outputUID else { return }
+        let wasOn = powerOn || wantsOn
+        let previous = outputUID
         outputUID = device.uid
-        Task { _ = try? await engine.send("setOutputUID", ["outputUID": device.uid]) }
+        switchingOutput = true
+        Task {
+            defer { switchingOutput = false }
+            if await succeeds("setOutputUID", ["outputUID": device.uid]) {
+                notice = nil
+            } else {
+                outputUID = previous
+                notice = "Knob couldn't switch to \(device.name). It is still playing on the previous output."
+            }
+            if wasOn {
+                wantsOn = true
+                await takeOverOutput(followingSystem: false)
+            }
+            await refreshState()
+        }
     }
 
     /// Coalesces fast knob movement into at most one engine message per name every 50ms.
