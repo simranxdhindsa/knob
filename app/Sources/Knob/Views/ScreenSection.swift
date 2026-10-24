@@ -96,7 +96,7 @@ struct EffectsGrid: View {
                                   onEditingChanged: model.editingChanged)
                     NumericValueField(value: Binding(get: { model.effects[slot.rawValue] * 10 },
                                                      set: { model.setEffect(slot, $0 / 10) }),
-                                      range: 0...10, label: slot.title,
+                                      range: 0...10, label: slot.title, fractionDigits: 0,
                                       onEditingChanged: model.editingChanged)
                         .frame(width: 36)
                 }
@@ -147,19 +147,23 @@ struct EqualizerBank: View {
         }
     }
 
+    /// Reads a band safely: when the engine drops from 31 bands to 10, SwiftUI can still ask a
+    /// disappearing column for its value once, and a plain `eq[band]` crashed there.
+    private func gain(_ band: Int) -> Double { model.eq[safe: band] ?? 0 }
+
     private func columns(width: CGFloat?) -> some View {
         ForEach(model.eq.indices, id: \.self) { band in
             VStack(spacing: 8) {
-                NumericValueField(value: Binding(get: { model.eq[band] * 12 },
+                NumericValueField(value: Binding(get: { gain(band) * 12 },
                                                  set: { model.setEQ(band: band, $0 / 12) }),
                                   range: -12...12, label: "\(Self.label(model.frequencies[safe: band])) hertz gain",
                                   unit: "dB", fontSize: 8,
                                   onEditingChanged: model.editingChanged)
                     .frame(width: 29)
-                HardwareFader(value: Binding(get: { model.eq[band] }, set: { model.setEQ(band: band, $0) }),
+                HardwareFader(value: Binding(get: { gain(band) }, set: { model.setEQ(band: band, $0) }),
                               height: faderHeight,
                               accessibilityLabel: "\(Self.label(model.frequencies[safe: band])) hertz",
-                              accessibilityValue: String(format: "%+.1f dB", model.eq[band] * 12),
+                              accessibilityValue: String(format: "%+.1f dB", gain(band) * 12),
                               onEditingChanged: model.editingChanged)
                 Text(Self.label(model.frequencies[safe: band]))
                     .font(.system(size: 7.5, weight: .medium).monospacedDigit())

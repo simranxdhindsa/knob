@@ -9,4 +9,9 @@ enum PersistKey: String {
     case lastVolume = "knob.audio.lastVolume"
     /// The physical output Knob raised to 100% underneath itself, until it is given back.
     case raisedOutputUID = "knob.audio.raisedOutputUID"
+    /// The power switch as the user last set it. Quitting doesn't change it, so Knob comes back
+    /// the way it was left.
+    case powerOn = "knob.audio.powerOn"
+    /// Knob has asked once for the Accessibility permission its 2% volume keys need.
+    case askedKeyAccess = "knob.audio.askedKeyAccess"
 }

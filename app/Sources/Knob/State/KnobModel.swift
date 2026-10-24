@@ -45,6 +45,10 @@ final class KnobModel: ObservableObject {
     /// What the user asked for with the switch. While ON, Knob keeps itself as the Mac's output.
     private var wantsOn = false
     private var reclaiming = false
+    /// True while the user's pick in the output menu is being applied. The engine hands the Mac
+    /// its old output back for a moment while it switches, and that must not be "followed".
+    private var switchingOutput = false
+    private let volumeKeys = VolumeKeys()
 
     init(engine: SoundEngine, volume: VolumeControl, launcher: EngineLauncher? = nil) {
         self.engine = engine
@@ -65,6 +69,8 @@ final class KnobModel: ObservableObject {
             // A previous run may have stopped while speakers were raised underneath Knob.
             if !knobIsOutput { VolumeHandoff.giveBack() }
             HardwareDevices.observeDefaultOutput { [weak self] in self?.defaultOutputChanged() }
+            volumeKeys.isActive = { [weak self] in self?.knobIsOutput == true }
+            volumeKeys.onStep = { [weak self] direction in self?.stepVolume(direction) }
         }
         presets = Preset.all()
         if let path = UserDefaults.standard.string(forKey: PersistKey.lastPreset.rawValue) {
@@ -132,6 +138,7 @@ final class KnobModel: ObservableObject {
         routingActive = state.routingActive
         // ON means effects are on AND the Mac's sound goes through Knob; anything else is OFF.
         powerOn = !state.bypassed && state.routingActive
+        if powerOn, launcher != nil { volumeKeys.enable() }
         outputUID = state.outputUID
         peakLeft = state.peakLeft
         peakRight = state.peakRight
@@ -150,12 +157,42 @@ final class KnobModel: ObservableObject {
 
     // MARK: Actions
 
+    /// Volume moves in whole percents: turning the knob or typing 50.5 lands on 1% steps.
     func setVolume(_ value: Double) {
-        volume = value
-        volumeControl.setVolume(value)
+        let stepped = (value * 100).rounded() / 100
+        guard stepped != volume else { return }
+        volume = stepped
+        volumeControl.setVolume(stepped)
+    }
+
+    /// A volume key press while Knob is the output: 2% instead of macOS's 6%, with Knob's popup.
+    private func stepVolume(_ direction: Int) {
+        let next = min(max(Int((volume * 100).rounded()) + direction * VolumeKeys.step, 0), 100)
+        setVolume(Double(next) / 100)
+        VolumeOSD.show(volume: Double(next) / 100, muted: next == 0 && muted)
     }
 
     func toggleMute() { volumeControl.setMuted(!muted) }
+
+    /// The switch, flipped by the user: remembered, so the next launch comes back the same way.
+    func userSetPower(_ on: Bool) {
+        guard !starting else { return }
+        Self.rememberPower(on)
+        setPower(on)
+    }
+
+    /// Turns Knob back on at launch if it was ON when it was last quit. Real engine only.
+    func restorePower() {
+        guard launcher != nil, UserDefaults.standard.bool(forKey: PersistKey.powerOn.rawValue) else { return }
+        Task {
+            await refresh()
+            if !powerOn && !starting { setPower(true) }
+        }
+    }
+
+    private static func rememberPower(_ on: Bool) {
+        UserDefaults.standard.set(on, forKey: PersistKey.powerOn.rawValue)
+    }
 
     /// ON starts the engine if needed, turns effects on, and makes Knob the Mac's output.
     /// OFF fully stops the engine Knob started: the speakers are handed back, and macOS stops
@@ -273,6 +310,7 @@ final class KnobModel: ObservableObject {
 
     func retryStartup() {
         guard !starting else { return }
+        Self.rememberPower(true)
         setPower(true) // Re-enumerates devices and chooses the Mac's current physical output.
     }
 
@@ -316,6 +354,7 @@ final class KnobModel: ObservableObject {
             }
             starting = false
             canInstallDevice = false
+            Self.rememberPower(true)
             wantsOn = true
             await startEngine()
         }
@@ -352,6 +391,7 @@ final class KnobModel: ObservableObject {
         guard !knobIsOutput else { return }
         VolumeHandoff.giveBack()
         routingActive = false
+        guard !switchingOutput else { return }
         powerOn = false
         guard wantsOn, connection == .online, !reclaiming, !starting else { return }
         reclaiming = true
@@ -426,9 +466,12 @@ final class KnobModel: ObservableObject {
         _ = try? await engine.send("savePreset", ["path": url.path])
     }
 
+    /// Effects move in whole steps, 0 to 10, one per indicator mark on the knob.
     func setEffect(_ slot: EffectSlot, _ value: Double) {
-        effects[slot.rawValue] = value
-        queue(slot.parameter, value * 10)
+        let stepped = (value * 10).rounded() / 10
+        guard stepped != effects[slot.rawValue] else { return }
+        effects[slot.rawValue] = stepped
+        queue(slot.parameter, stepped * 10)
     }
 
     func setEQ(band: Int, _ value: Double) {
@@ -490,9 +533,31 @@ final class KnobModel: ObservableObject {
         select(presets[(index + offset + presets.count) % presets.count])
     }
 
+    /// Plays through the output picked in Knob's menu. Switching hands the Mac its old output
+    /// back for a moment, so while Knob is ON it takes the output again on the new device.
     func selectOutput(_ device: OutputDevice) {
+        guard !switchingOutput, device.uid != outputUID else { return }
+        let wasOn = powerOn || wantsOn
+        let previous = outputUID
         outputUID = device.uid
-        Task { _ = try? await engine.send("setOutputUID", ["outputUID": device.uid]) }
+        switchingOutput = true
+        Task {
+            defer { switchingOutput = false }
+            if await succeeds("setOutputUID", ["outputUID": device.uid]) {
+                notice = nil
+                // Make it the Mac's output underneath Knob too, so OFF, quitting and the next ON
+                // all use the device picked here, not the one that was playing before.
+                if let hardware = HardwareDevices.device(uid: device.uid) { HardwareDevices.setDefaultOutput(hardware.id) }
+            } else {
+                outputUID = previous
+                notice = "Knob couldn't switch to \(device.name). It is still playing on the previous output."
+            }
+            if wasOn {
+                wantsOn = true
+                await takeOverOutput(followingSystem: false)
+            }
+            await refreshState()
+        }
     }
 
     /// Coalesces fast knob movement into at most one engine message per name every 50ms.

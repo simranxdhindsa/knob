@@ -25,7 +25,11 @@ struct VolumeSection: View {
                          title: { $0.name }, placeholder: "No output") { model.selectOutput($0) }
                     .disabled(model.connection != .online)
                 EngravedLabel(text: "LEVEL").padding(.top, 6)
-                LevelMeter(left: model.peakLeft, right: model.peakRight, height: 74)
+                HStack(alignment: .top, spacing: 6) {
+                    LevelMeter(left: model.peakLeft, right: model.peakRight, height: 74)
+                    VUMeter(level: max(model.peakLeft, model.peakRight))
+                        .padding(.top, 6)
+                }
             }
             .frame(width: 128)
             .padding(.top, 2)
@@ -44,7 +48,8 @@ struct VolumeSection: View {
             .accessibilityLabel(model.muted ? "Unmute" : "Mute")
             if model.volumeControllable {
                 NumericValueField(value: Binding(get: { model.volume * 100 }, set: { model.setVolume($0 / 100) }),
-                                  range: 0...100, label: "Volume", unit: "percent", fontSize: 12)
+                                  range: 0...100, label: "Volume", unit: "percent", fontSize: 12,
+                                  fractionDigits: 0)
                     .frame(width: 42)
                 Text("%").font(.system(size: 10, weight: .semibold)).foregroundStyle(p.label)
             } else {
