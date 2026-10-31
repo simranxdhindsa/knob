@@ -11,7 +11,7 @@ final class KnobShiftDeck {
     let name: String
     let player = AVAudioPlayerNode()
     private let stretch = AVAudioUnitTimePitch()
-    private let filter = AVAudioUnitEQ(numberOfBands: 1)
+    private let filter = AVAudioUnitEQ(numberOfBands: 2)
     /// Where in its file this deck's current segment started.
     var startOffset: TimeInterval = 0
 
@@ -21,6 +21,13 @@ final class KnobShiftDeck {
         band.filterType = .highPass
         band.bypass = false
         band.frequency = Self.restingCutoff
+        // A wide dip where vocals and melody sit, resting at 0 dB (no change).
+        let melody = filter.bands[1]
+        melody.filterType = .parametric
+        melody.frequency = 1_500
+        melody.bandwidth = 2
+        melody.gain = 0
+        melody.bypass = false
         engine.attach(player)
         engine.attach(stretch)
         engine.attach(filter)
@@ -53,6 +60,12 @@ final class KnobShiftDeck {
 
     private static let sweepCutoff: Float = 2_000
 
+    /// 1 holds back the melody and vocal range (12 dB dip around 1.5 kHz) so mostly the beats
+    /// come through; 0 is the full song. Used while a new song enters under the old voice.
+    var beatsOnly: Double = 0 {
+        didSet { filter.bands[1].gain = -12 * Float(min(max(beatsOnly, 0), 1)) }
+    }
+
     private func updateFilter() {
         let bass = Float(min(max(bassCut, 0), 1))
         let lift = Float(min(max(sweep, 0), 1))
@@ -65,6 +78,7 @@ final class KnobShiftDeck {
         rate = 1
         bassCut = 0
         sweep = 0
+        beatsOnly = 0
         volume = 1
     }
 

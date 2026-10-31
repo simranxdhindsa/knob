@@ -32,7 +32,7 @@ enum KnobShiftAnalysisCheck {
             guard let a = try? await KnobShiftAnalyser().track(for: first),
                   let b = try? await KnobShiftAnalyser().track(for: second) else { fail("could not analyse both songs") }
             let plan = KnobShiftPlan.make(from: a, to: b)
-            let sync = KnobShiftSync.make(outgoing: a.analysis, incoming: b.analysis)
+            let sync = KnobShiftSync.make(outgoing: a.analysis, incoming: b.analysis, beatsBeforeVoice: plan.beatsBeforeVoice)
             plan.reasoning.forEach { print("  \($0)") }
             sync.notes.forEach { print("  \($0)") }
             guard plan.duration > 0 else { print("KnobShift sync check: clean handoff, no blend to line up"); return }
@@ -43,14 +43,17 @@ enum KnobShiftAnalysisCheck {
             let music = plan.start + plan.duration - outgoingStart
             // At half or double time only every second beat of the faster grid should line up.
             let ratio = (b.analysis.tempo ?? 1) / max(sync.incomingTempo, 1)
-            let incomingBeats = ratio > 1.5 ? stride(from: 0, to: b.analysis.beatGrid.count, by: 2).map { b.analysis.beatGrid[$0] }
+            // Count every second beat from the one the incoming song really starts on.
+            let firstIncoming = b.analysis.beatGrid.firstIndex { $0 >= plan.incomingOffset } ?? 0
+            let incomingBeats = ratio > 1.5 ? stride(from: firstIncoming, to: b.analysis.beatGrid.count, by: 2).map { b.analysis.beatGrid[$0] }
                 : b.analysis.beatGrid
             let outgoingBeats = ratio < 0.67 ? stride(from: 0, to: a.analysis.beatGrid.count, by: 2).map { a.analysis.beatGrid[$0] }
                 : a.analysis.beatGrid
             for (label, glide) in [("with tempo sync", sync), ("without tempo sync", KnobShiftSync.off)] {
-                let duration = glide.blendLength(forOutgoingMusic: music) { KnobShiftModel.shape($0, .gentle) }
+                let voice = min(max((plan.handoff - outgoingStart) / music, 0), 1)
+                let duration = glide.blendLength(forOutgoingMusic: music, voice: voice)
                 let offsets = beatOffsets(outgoingBeats, from: outgoingStart, incomingBeats, from: incomingStart,
-                                          duration: duration, sync: glide)
+                                          duration: duration, voice: voice, sync: glide)
                 let sorted = offsets.map(abs).sorted()
                 guard !sorted.isEmpty else { continue }
                 let within = Double(sorted.filter { $0 <= 20 }.count) / Double(sorted.count) * 100
@@ -64,7 +67,7 @@ enum KnobShiftAnalysisCheck {
     /// Wall-clock gap from each incoming beat to the nearest outgoing beat during the blend.
     private static func beatOffsets(_ outgoingBeats: [TimeInterval], from outgoingStart: TimeInterval,
                                      _ incomingBeats: [TimeInterval], from incomingStart: TimeInterval,
-                                     duration: TimeInterval, sync: KnobShiftSync) -> [Double] {
+                                     duration: TimeInterval, voice: Double, sync: KnobShiftSync) -> [Double] {
         let step = 0.0005
         var outgoing = outgoingStart, incoming = incomingStart
         var outgoingTimes: [Double] = [], incomingTimes: [Double] = []
@@ -72,7 +75,7 @@ enum KnobShiftAnalysisCheck {
         var nextIncoming = incomingBeats.firstIndex { $0 >= incomingStart } ?? incomingBeats.count
         var time = 0.0
         while time < duration {
-            let rates = sync.rates(at: KnobShiftModel.shape(time / duration, .gentle))
+            let rates = sync.rates(progress: time / duration, voice: voice)
             while nextOutgoing < outgoingBeats.count, outgoingBeats[nextOutgoing] <= outgoing {
                 outgoingTimes.append(time); nextOutgoing += 1
             }
