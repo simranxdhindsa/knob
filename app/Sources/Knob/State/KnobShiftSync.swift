@@ -34,7 +34,10 @@ struct KnobShiftSync {
     let notes: [String]
 
     /// True when the outgoing song first eases to the meeting tempo on its own.
-    var easesBeforeBlend: Bool { isOn && abs(meetingTempo / outgoingTempo - 1) > 0.001 }
+    var easesBeforeBlend: Bool { isOn && abs(meetingTempo / outgoingTempo - 1) > Self.sameTempo }
+
+    /// Tempos closer than this count as the same: no ease, no stretch.
+    static let sameTempo = 0.005
 
     static let off = KnobShiftSync(isOn: false, outgoingTempo: 0, incomingTempo: 0, meetingTempo: 0, notes: [])
 
@@ -64,7 +67,9 @@ struct KnobShiftSync {
         let bar = 4 * 60 / matched
         let incomingBeatsOnly = (beatsBeforeVoice ?? .infinity) >= bar
         var meeting = matched
-        if incomingBeatsOnly {
+        if gap <= sameTempo {
+            meeting = a
+        } else if incomingBeatsOnly {
             meeting = gap <= glideStretch ? a : (a * matched).squareRoot()
             if abs(meeting / matched - 1) > incomingStretch {
                 meeting = matched * (meeting > matched ? 1 + incomingStretch : 1 - incomingStretch)
@@ -72,18 +77,19 @@ struct KnobShiftSync {
         }
         let direction = matched < a ? "slows" : "speeds up"
         var note = String(format: "Tempo sync on: %.1f to %.1f BPM%@, %.1f%% apart. ", a, matched, octave, gap * 100)
-        if abs(meeting - a) > 0.001 {
+        if abs(meeting / a - 1) > sameTempo {
             note += String(format: "%@ to %.1f BPM over its last two bars, ", direction == "slows" ? "The old song slows" : "The old song speeds up", meeting)
         } else {
             note += "The old song starts at its own tempo, "
         }
-        if abs(meeting - matched) > 0.001 {
+        if abs(meeting / matched - 1) > sameTempo {
             note += String(format: "the new song's beats come in at %.1f BPM (%.0f%% off) and reach their own speed by the time its vocals start. ",
                            meeting, abs(meeting / matched - 1) * 100)
         } else {
             note += "the new song plays at its own speed throughout. "
         }
-        note += String(format: "The old song %@ by %.0f%% in all, pitch stays natural.", direction, gap * 100)
+        note += gap <= sameTempo ? "Same tempo, no speed change needed."
+            : String(format: "The old song %@ by %.0f%% in all, pitch stays natural.", direction, gap * 100)
         return KnobShiftSync(isOn: true, outgoingTempo: a, incomingTempo: matched, meetingTempo: meeting, notes: [note])
     }
 

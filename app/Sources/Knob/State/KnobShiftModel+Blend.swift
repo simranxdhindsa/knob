@@ -13,7 +13,7 @@ extension KnobShiftModel {
         return formatter
     }()
 
-    func scheduleNext(style: Style) {
+    func scheduleNext() {
         guard let current = nowPlaying, tracks.count > 1 else {
             mixState = .ready
             transitionDescription = "Playing normally."
@@ -27,7 +27,7 @@ extension KnobShiftModel {
             ? KnobShiftSync.make(outgoing: current.analysis, incoming: next.analysis, beatsBeforeVoice: plan.beatsBeforeVoice)
             : .off
         logSection("\(current.title) → \(next.title)")
-        log("PLAN", "Now at \(Self.seconds(playbackTime)) of \(Self.seconds(current.duration)), \(style.title) curve.")
+        log("PLAN", "Now at \(Self.seconds(playbackTime)) of \(Self.seconds(current.duration)).")
         for line in plan.reasoning { log("PLAN", line) }
         for line in sync.notes { log("SYNC", line) }
         mixState = plan.duration > 0 ? .ready : .preservingEnding
@@ -81,9 +81,9 @@ extension KnobShiftModel {
             self.log("TIMING", "Plan fired \(String(format: "%.0f", late * 1_000)) ms after its target. Clock reads \(Self.seconds(self.playbackTime)), \(self.primaryDeck.name) is at \(self.deckClock(self.primaryDeck)).")
             if blends {
                 self.beginBlend(from: current, to: next, endingAt: end, handoff: plan.handoff,
-                                offset: plan.incomingOffset, sync: sync, style: style)
+                                offset: plan.incomingOffset, sync: sync)
             } else {
-                self.advance(to: next, offset: plan.incomingOffset, style: style)
+                self.advance(to: next, offset: plan.incomingOffset)
             }
         }
     }
@@ -111,7 +111,7 @@ extension KnobShiftModel {
     }
 
     private func beginBlend(from current: Track, to next: Track, endingAt end: TimeInterval, handoff: TimeInterval,
-                            offset: TimeInterval, sync: KnobShiftSync, style: Style) {
+                            offset: TimeInterval, sync: KnobShiftSync) {
         do {
             let lock = beatLock(from: current, to: next, offset: offset, sync: sync)
             let outgoingAt = (primaryDeck.position ?? playbackTime) + lock.delay * primaryDeck.rate
@@ -121,7 +121,7 @@ extension KnobShiftModel {
             let duration = sync.blendLength(forOutgoingMusic: music, voice: pivot)
             mixState = .mixing
             transitionDescription = "MIXING • \(Int(duration.rounded())) second blend into \(next.title)" + (sync.isOn ? ", beats locked." : ".")
-            log("KNOBMIX", "Starting \(Self.seconds(duration)) \(style.title) blend over \(Self.seconds(music)) of \(current.title)'s music. Outgoing \(primaryDeck.name), incoming \(secondaryDeck.name) with \(next.title).")
+            log("KNOBMIX", "Starting \(Self.seconds(duration)) blend over \(Self.seconds(music)) of \(current.title)'s music. Outgoing \(primaryDeck.name), incoming \(secondaryDeck.name) with \(next.title).")
             log("SYNC", lock.note)
             if pivot > 0.02 {
                 log("KNOBMIX", String(format: "Voices hand over %.0f%% of the way in, at %@. Until then %@ keeps singing while only %@'s beats come in underneath.",
@@ -167,7 +167,7 @@ extension KnobShiftModel {
                     if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
                     guard let self, !Task.isCancelled else { return }
                     let progress = Double(step) / Double(steps)
-                    self.applyBlend(progress, pivot: pivot, sync: sync, style: style)
+                    self.applyBlend(progress, pivot: pivot, sync: sync)
                     if !handedOver, progress >= pivot {
                         handedOver = true
                         self.log("KNOBMIX", String(format: "Handoff: %@'s voice is done. %@ opens up fully at its own speed (%.3f), the basslines swap and %@ fades out.",
@@ -181,23 +181,19 @@ extension KnobShiftModel {
                 }
                 guard let self, !Task.isCancelled else { return }
                 self.log("KNOBMIX", String(format: "Envelope took %.2fs (planned %.2fs).", Date().timeIntervalSince(started), duration))
-                self.finishBlend(to: next, style: style)
+                self.finishBlend(to: next)
             }
         } catch {
             mixState = .preservingEnding
             log("ERROR", "Next deck preparation failed: \(error.localizedDescription)")
             notice = "KnobShift could not prepare the next song."
-            advance(to: next, offset: offset, style: style)
+            advance(to: next, offset: offset)
         }
     }
 
-    /// The style's crossfade curve: how far through the blend the sound is at `progress`.
-    nonisolated static func shape(_ progress: Double, _ style: Style) -> Double {
-        switch style {
-        case .gentle: progress * progress * (3 - 2 * progress)
-        case .balanced: progress
-        case .party: sqrt(progress)
-        }
+    /// The crossfade curve: a smooth start and finish (smoothstep).
+    nonisolated static func shape(_ progress: Double) -> Double {
+        progress * progress * (3 - 2 * progress)
     }
 
     /// Sets volume, tempo and EQ on both decks for this point of the blend.
@@ -207,18 +203,18 @@ extension KnobShiftModel {
     /// and melody range are held back and its speed moves to its own. At the handoff the incoming
     /// song opens up fully, the basslines swap and the outgoing song fades out, thinning upward.
     /// Without a handoff it is one equal-power crossfade.
-    private func applyBlend(_ progress: Double, pivot: Double, sync: KnobShiftSync, style: Style) {
+    private func applyBlend(_ progress: Double, pivot: Double, sync: KnobShiftSync) {
         let outgoing: Double, incoming: Double, swap: Double, sweep: Double, beatsOnly: Double
         if pivot > 0.02 {
             if progress < pivot {
-                let rise = Self.shape(progress / pivot, style)
+                let rise = Self.shape(progress / pivot)
                 outgoing = 1 - 0.15 * rise
                 incoming = 0.7 * sin(rise * .pi / 2)
                 swap = 0
                 sweep = 0
                 beatsOnly = 1
             } else {
-                let fall = pivot < 1 ? Self.shape((progress - pivot) / (1 - pivot), style) : 1
+                let fall = pivot < 1 ? Self.shape((progress - pivot) / (1 - pivot)) : 1
                 outgoing = 0.85 * cos(fall * .pi / 2)
                 incoming = 0.7 + 0.3 * sin(fall * .pi / 2)
                 swap = min(fall / 0.25, 1)
@@ -226,7 +222,7 @@ extension KnobShiftModel {
                 beatsOnly = max(0, 1 - fall / 0.25)
             }
         } else {
-            let shaped = Self.shape(progress, style)
+            let shaped = Self.shape(progress)
             outgoing = cos(shaped * .pi / 2)
             incoming = sin(shaped * .pi / 2)
             swap = min(max((shaped - 0.4) / 0.2, 0), 1)
@@ -260,7 +256,7 @@ extension KnobShiftModel {
                                     tempo: sync.isOn ? shared : nil))
     }
 
-    private func finishBlend(to next: Track, style: Style) {
+    private func finishBlend(to next: Track) {
         // The incoming deck has been playing for the whole blend, so the clock continues from
         // where it really is instead of restarting at zero (which made the next mix late).
         let incomingPlayed = min(next.duration, secondaryDeck.position ?? secondaryDeck.startOffset)
@@ -278,17 +274,17 @@ extension KnobShiftModel {
         log("KNOBMIX", "Completed. \(secondaryDeck.name) stopped, \(primaryDeck.name) is primary with \(next.title) at normal speed, full bass, volume 1.")
         log("TIMING", "\(next.title) continues from \(Self.seconds(incomingPlayed)), where its deck really is.")
         startProgressUpdates()
-        scheduleNext(style: style)
+        scheduleNext()
     }
 
-    func advance(to next: Track, offset: TimeInterval, style: Style) {
+    func advance(to next: Track, offset: TimeInterval) {
         primaryDeck.player.stop()
         secondaryDeck.player.stop()
         currentIndex = tracks.firstIndex(of: next) ?? 0
         log("HANDOFF", "No blend used. Both decks stopped, starting \(next.title) at \(Self.seconds(offset)).")
         do {
             try schedulePrimary(next, from: offset, play: true)
-            scheduleNext(style: style)
+            scheduleNext()
         } catch {
             log("ERROR", "Handoff failed: \(error.localizedDescription)")
             notice = "KnobShift could not continue playback."

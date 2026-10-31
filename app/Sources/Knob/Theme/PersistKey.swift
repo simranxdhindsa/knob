@@ -16,8 +16,6 @@ enum PersistKey: String {
     case askedKeyAccess = "knob.audio.askedKeyAccess"
     /// Whether KnobShift is enabled for local music played by Knob.
     case knobShiftEnabled = "knob.shift.enabled"
-    /// The selected transition intensity for KnobShift local playback.
-    case knobShiftStyle = "knob.shift.style"
     /// Paths for the local files the user has added to KnobShift's queue.
     case knobShiftQueue = "knob.shift.queue"
     /// Whether the dedicated KnobShift window was visible when Knob last quit.

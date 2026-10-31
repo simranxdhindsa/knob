@@ -7,7 +7,7 @@ enum KnobShiftAnalysisCheck {
         Task {
             defer { completion.signal() }
             do {
-                let result = try await KnobShiftAnalyser().analyse(file)
+                let result = try await KnobShiftAnalyser().analyse(file, fresh: true)
                 for step in result.steps { print("  \(step)") }
                 let track = result.track
                 guard track.duration > 0 else { fail("analysis returned an empty track") }

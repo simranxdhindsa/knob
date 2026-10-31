@@ -93,7 +93,7 @@ enum KnobShiftBeats {
         // tracker can still land on a different subdivision per section; one whole-song search
         // on the kick removes those jumps.
         let periods = sections.map(\.period)
-        if let lowest = periods.min(), let highest = periods.max(), highest / lowest < 1.005,
+        if let lowest = periods.min(), let highest = periods.max(), highest / lowest < 1.015,
            let first = sections.first?.first, let last = sections.last?.last {
             let counts = sections.map { Double($0.residuals.count) }
             let estimate = zip(periods, counts).map { $0 * $1 }.reduce(0, +) / counts.reduce(0, +)

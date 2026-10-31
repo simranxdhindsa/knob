@@ -14,7 +14,23 @@ actor KnobShiftAnalyser {
         try analyse(url).track
     }
 
-    func analyse(_ url: URL) throws -> Result {
+    /// Uses the saved analysis when the file has not changed since it was analysed, so opening
+    /// Knob does not re-analyse every queued song. `fresh` always measures again.
+    func analyse(_ url: URL, fresh: Bool = false) throws -> Result {
+        let started = Date()
+        if !fresh, let saved = KnobShiftAnalysisCache.load(for: url) {
+            let track = KnobShiftModel.Track(url: url, title: url.deletingPathExtension().lastPathComponent,
+                                             duration: saved.duration, tailSilence: saved.tailSilence, analysis: saved.analysis)
+            let note = String(format: "Saved analysis reused (file unchanged since it was analysed), loaded in %.0f ms.",
+                              Date().timeIntervalSince(started) * 1_000)
+            return Result(track: track, steps: [note] + saved.steps)
+        }
+        let result = try measure(url)
+        KnobShiftAnalysisCache.save(result.track, steps: result.steps)
+        return result
+    }
+
+    private func measure(_ url: URL) throws -> Result {
         let started = Date()
         var steps: [String] = []
         let file = try AVAudioFile(forReading: url)

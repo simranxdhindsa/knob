@@ -254,7 +254,12 @@ KnobShift-mixable.
    very end, so the outgoing vocal can finish over the incoming music. Only the
    intro and outro need separating. Needs a decision on downloading the model
    (about 80 to 400 MB) and a licence check of its weights.
-7. Keep a cache of analysis per file, so a song is analysed once.
+7. Done: each song is analysed once. The result is saved in Knob's Application
+   Support folder (`KnobShift Analysis/`, apart for the dev and installed
+   copies) and reused while the file's path, size and date and the analysis
+   version match, so opening Knob loads a queue in milliseconds instead of 4 to
+   6 seconds per song (`State/KnobShiftAnalysisCache.swift`). Bump its
+   `version` whenever the analysis changes.
 8. Test with varied genres and listen for lyric cuts, beat drift, clipping,
    clicks, dropped frames, sleep and wake, and output changes.
 

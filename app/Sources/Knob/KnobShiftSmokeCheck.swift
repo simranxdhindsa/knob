@@ -15,7 +15,7 @@ enum KnobShiftSmokeCheck {
             guard model.tracks.count == 2 else { fail("could not import both local tracks") }
             let expectedNext = model.tracks[1]
             // Start the way people usually do: by clicking the song in the queue, not Play.
-            model.playForCheck(style: .gentle, volume: volume, bySelecting: model.tracks[0])
+            model.playForCheck(volume: volume, bySelecting: model.tracks[0])
             // Jump to a few seconds before the planned transition, so long real songs are quick
             // to check while the seek-then-plan path is exercised too.
             let plan = KnobShiftPlan.make(from: model.tracks[0], to: expectedNext)

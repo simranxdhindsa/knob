@@ -68,12 +68,9 @@ struct KnobShiftPlayerView: View {
     @Environment(\.colorScheme) private var scheme
     @ObservedObject var model: KnobShiftModel
     @AppStorage(PersistKey.knobShiftEnabled.rawValue) private var enabled = false
-    @AppStorage(PersistKey.knobShiftStyle.rawValue) private var styleName = KnobShiftModel.Style.gentle.rawValue
     @State private var importing = false
     @State private var scrubPosition: TimeInterval = 0
     @State private var isScrubbing = false
-
-    private var style: KnobShiftModel.Style { KnobShiftModel.Style(rawValue: styleName) ?? .gentle }
 
     var body: some View {
         let palette = Palette.of(scheme)
@@ -163,9 +160,6 @@ struct KnobShiftPlayerView: View {
 
     private func playerDeck(showVisualizer: Bool, logHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 13) {
-            SegmentedTabs(options: KnobShiftModel.Style.allCases,
-                          selection: Binding(get: { style }, set: { styleName = $0.rawValue })) { $0.title }
-                .frame(height: 30)
             nowPlaying
             transport
             shiftPlan
@@ -230,7 +224,7 @@ struct KnobShiftPlayerView: View {
     private var transport: some View {
         HStack(spacing: 12) {
             Button { model.previous() } label: { Image(systemName: "backward.end.fill") }
-            Button { model.pauseOrResume(style: style) } label: {
+            Button { model.pauseOrResume() } label: {
                 Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(Palette.accent))

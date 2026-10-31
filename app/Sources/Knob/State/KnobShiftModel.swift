@@ -5,13 +5,6 @@ import Foundation
 /// players are kept entirely outside Knob's system-audio engine, driver and DSP callbacks.
 @MainActor
 final class KnobShiftModel: ObservableObject {
-    enum Style: String, CaseIterable, Identifiable {
-        case gentle, balanced, party
-
-        var id: String { rawValue }
-        var title: String { rawValue.uppercased() }
-    }
-
     enum MixState: String {
         case idle, analyzing, ready, mixing, preservingEnding
 
@@ -28,7 +21,7 @@ final class KnobShiftModel: ObservableObject {
 
     /// Offline local-file features. The confidence values prevent the mixer from presenting a
     /// guess as a musical or lyric-aware decision.
-    struct Analysis: Equatable {
+    struct Analysis: Equatable, Codable {
         let tempo: Double?
         let tempoConfidence: Double
         let beatGrid: [TimeInterval]
@@ -113,7 +106,6 @@ final class KnobShiftModel: ObservableObject {
     var transitionTask: Task<Void, Never>?
     private var progressTask: Task<Void, Never>?
     var playbackStartedAt = Date()
-    private var activeStyle: Style = .gentle
     private var configurationObserver: NSObjectProtocol?
     /// The song the current plan or blend leads into, for the log when it is called off.
     var plannedNext: Track?
@@ -171,14 +163,13 @@ final class KnobShiftModel: ObservableObject {
         }
     }
 
-    func play(style: Style) {
+    func play() {
         guard !tracks.isEmpty else { return }
         stop()
         currentIndex = min(currentIndex, tracks.count - 1)
-        activeStyle = style
-        log("PLAY", "Starting \(tracks[currentIndex].title) with \(style.title) envelope.")
+        log("PLAY", "Starting \(tracks[currentIndex].title).")
         do {
-            try playCurrent(style: style)
+            try playCurrent()
         } catch {
             log("ERROR", "Playback startup failed: \(error.localizedDescription)")
             notice = "KnobShift could not play this file."
@@ -204,11 +195,10 @@ final class KnobShiftModel: ObservableObject {
 
     /// Used only by Knob's command-line smoke check. The audio graph still runs, but its output
     /// is muted so automated checks never make sound or change the system output.
-    func playForCheck(style: Style, volume: Float = 0, bySelecting track: Track? = nil) {
+    func playForCheck(volume: Float = 0, bySelecting track: Track? = nil) {
         audioEngine.mainMixerNode.outputVolume = min(max(volume, 0), 1)
         log("CHECK", String(format: "Check playback at %.0f%% volume.", min(max(volume, 0), 1) * 100))
-        activeStyle = style
-        if let track { select(track) } else { play(style: style) }
+        if let track { select(track) } else { play() }
     }
 
     func remove(_ track: Track) {
@@ -224,9 +214,8 @@ final class KnobShiftModel: ObservableObject {
         }
     }
 
-    func pauseOrResume(style: Style) {
-        guard nowPlaying != nil else { play(style: style); return }
-        activeStyle = style
+    func pauseOrResume() {
+        guard nowPlaying != nil else { play(); return }
         if isPlaying {
             updatePlaybackTime()
             log("PLAY", "Paused at \(Self.seconds(playbackTime)).")
@@ -247,7 +236,7 @@ final class KnobShiftModel: ObservableObject {
             isPlaying = true
             playbackStartedAt = Date().addingTimeInterval(-playbackTime)
             startProgressUpdates()
-            scheduleNext(style: style)
+            scheduleNext()
         }
     }
 
@@ -281,17 +270,17 @@ final class KnobShiftModel: ObservableObject {
         do {
             log("SEEK", "Moving \(track.title) to \(String(format: "%.2f", time))s.")
             try schedulePrimary(track, from: min(max(time, 0), track.duration), play: wasPlaying)
-            if wasPlaying { scheduleNext(style: activeStyle) }
+            if wasPlaying { scheduleNext() }
         } catch {
             log("ERROR", "Seek failed: \(error.localizedDescription)")
             notice = "KnobShift could not move within this song."
         }
     }
 
-    private func playCurrent(style: Style) throws {
+    private func playCurrent() throws {
         let track = tracks[currentIndex]
         try schedulePrimary(track, from: 0, play: true)
-        scheduleNext(style: style)
+        scheduleNext()
     }
 
     func schedulePrimary(_ track: Track, from time: TimeInterval, play: Bool) throws {
@@ -342,7 +331,7 @@ final class KnobShiftModel: ObservableObject {
         cancelPlan("You switched to \(tracks.indices.contains(currentIndex) ? tracks[currentIndex].title : "another song")")
         secondaryDeck.player.stop()
         guard !tracks.isEmpty else { return }
-        do { try playCurrent(style: activeStyle) }
+        do { try playCurrent() }
         catch {
             log("ERROR", "Restart failed: \(error.localizedDescription)")
             notice = "KnobShift could not play this file."
@@ -423,7 +412,7 @@ final class KnobShiftModel: ObservableObject {
         logSection("Ghostface Killah → Shaukeen")
         log("PLAN", "Ghostface Killah: its last vocal line ends at 1:59.25, leaving 15.43s of music.")
         log("PLAN", "Shaukeen: its voice enters 10.45s in, at 68% of the blend, over the old music only.")
-        log("KNOBMIX", "Starting 15.43s GENTLE blend. Outgoing Deck 1, incoming Deck 2 with Shaukeen.")
+        log("KNOBMIX", "Starting 15.43s blend. Outgoing Deck 1, incoming Deck 2 with Shaukeen.")
         log("SYNC", "Tempo sync on: 100.0 to 102.7 BPM, 2.7% apart. Both glide to a shared tempo, pitch stays natural.")
         log("KNOBMIX", "+7.46s 50% done", blend: Diagnostic.Blend(progress: 0.5, outgoing: 0.70, incoming: 0.71, tempo: 101.3))
     }
