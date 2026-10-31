@@ -60,6 +60,42 @@ final class KnobShiftModel: ObservableObject {
         let duration: TimeInterval
         let tailSilence: TimeInterval
         let analysis: Analysis
+
+        /// "Title - Artist" file names show as a title with the artist underneath.
+        var name: String { Self.split(title).name }
+        var artist: String? { Self.split(title).artist }
+        static func split(_ title: String) -> (name: String, artist: String?) {
+            guard let range = title.range(of: " - ", options: .backwards) else { return (title, nil) }
+            let name = title[..<range.lowerBound].trimmingCharacters(in: .whitespaces)
+            let artist = title[range.upperBound...].trimmingCharacters(in: .whitespaces)
+            return name.isEmpty || artist.isEmpty ? (title, nil) : (name, artist)
+        }
+    }
+
+    /// A song added to the queue that is still being prepared (or failed to be).
+    struct PendingSong: Identifiable, Equatable {
+        let id = UUID()
+        let url: URL
+        /// 0...1 through the analysis; 0 while waiting its turn.
+        var progress: Double = 0
+        var isActive = false
+        /// Set when preparing failed; the queue offers Retry.
+        var failure: String?
+        var title: String { url.deletingPathExtension().lastPathComponent }
+        /// "Title - Artist" file names split the same way as ready songs.
+        var name: String { Track.split(title).name }
+        var artist: String? { Track.split(title).artist }
+    }
+
+    /// The planned transition, as the player shows it.
+    struct NextMix: Equatable {
+        let next: Track
+        /// Position in the current song where the next one comes in, and where the blend ends.
+        let startsAt: TimeInterval
+        let endsAt: TimeInterval
+        /// Clock time the mix starts.
+        let at: Date
+        let blends: Bool
     }
 
     /// Recent entries are available to the player UI; the complete history is written to disk.
@@ -91,8 +127,13 @@ final class KnobShiftModel: ObservableObject {
     @Published internal(set) var playbackDuration: TimeInterval = 0
     @Published internal(set) var mixState: MixState = .idle
     @Published private(set) var diagnostics: [Diagnostic] = []
-    /// Real-time energy bars sampled from KnobShift's own audio mixer for the player visualizer.
-    @Published private(set) var visualizerLevels = Array(repeating: Float(0.08), count: 42)
+    /// The next transition as planned, for the player's Up Next card and mix marker.
+    @Published internal(set) var nextMix: NextMix?
+    /// The song coming in while a blend runs, and how far the blend is (0...1).
+    @Published internal(set) var mixingInto: Track?
+    @Published internal(set) var blendProgress: Double = 0
+    /// Songs added but not ready yet, prepared one at a time in the order they were added.
+    @Published private(set) var pending: [PendingSong] = []
 
     private let analyser = KnobShiftAnalyser()
     private let audioEngine = AVAudioEngine()
@@ -109,6 +150,7 @@ final class KnobShiftModel: ObservableObject {
     private var configurationObserver: NSObjectProtocol?
     /// The song the current plan or blend leads into, for the log when it is called off.
     var plannedNext: Track?
+    private var isProcessing = false
 
     private var outputFormatDescription: String {
         let format = audioEngine.outputNode.outputFormat(forBus: 0)
@@ -121,7 +163,6 @@ final class KnobShiftModel: ObservableObject {
         deckTwo = KnobShiftDeck(name: "Deck 2", engine: engine)
         primaryDeck = deckOne
         secondaryDeck = deckTwo
-        installVisualizerTap()
         log("SESSION", "Local mixer initialized with Deck 1 and Deck 2.")
         // The engine stops itself when the Mac's output device changes; log it so a silent or
         // stalled mix can be matched to the device change that caused it.
@@ -138,29 +179,89 @@ final class KnobShiftModel: ObservableObject {
         }
     }
 
+    /// Adds songs to the queue at once; they are prepared one by one in the background. Returns
+    /// once every waiting song has been prepared (or has failed).
     func addTracks(_ urls: [URL]) async {
-        guard !urls.isEmpty else { return }
-        log("IMPORT", "Preparing \(urls.count) local file(s).")
+        let new = urls.filter { url in !isQueued(url) }
+        guard !new.isEmpty else { return }
+        log("IMPORT", "Added \(new.count) song(s) to the queue. Preparing them one by one.")
+        pending.append(contentsOf: new.map { PendingSong(url: $0) })
+        persistQueue()
+        await processPending()
+    }
+
+    func retry(_ song: PendingSong) {
+        guard let index = pending.firstIndex(where: { $0.id == song.id }) else { return }
+        pending[index].failure = nil
+        pending[index].progress = 0
+        log("IMPORT", "Retrying \(song.title).")
+        Task { await processPending() }
+    }
+
+    func removePending(_ song: PendingSong) {
+        pending.removeAll { $0.id == song.id }
+        persistQueue()
+    }
+
+    private func isQueued(_ url: URL) -> Bool {
+        let path = url.standardizedFileURL
+        return tracks.contains { $0.url.standardizedFileURL == path } || pending.contains { $0.url.standardizedFileURL == path }
+    }
+
+    /// Prepares waiting songs in order. A second call while this runs returns at once; the
+    /// running loop picks up anything added meanwhile.
+    private func processPending() async {
+        guard !isProcessing else { return }
+        isProcessing = true
         isPreparing = true
-        mixState = .analyzing
-        defer { isPreparing = false }
-        for url in urls where !tracks.contains(where: { $0.url.standardizedFileURL == url.standardizedFileURL }) {
+        if !isPlaying { mixState = .analyzing }
+        defer {
+            isProcessing = false
+            isPreparing = false
+        }
+        while let index = pending.firstIndex(where: { $0.failure == nil }) {
+            let song = pending[index]
+            pending[index].isActive = true
+            pending[index].progress = 0.02
+            log("ANALYSIS", "Analysing \(song.url.lastPathComponent).")
             do {
-                log("ANALYSIS", "Analysing \(url.lastPathComponent).")
-                let result = try await analyser.analyse(url)
+                let id = song.id
+                let result = try await analyser.analyse(song.url) { [weak self] value in
+                    Task { @MainActor [weak self] in self?.setProgress(value, for: id) }
+                }
+                pending.removeAll { $0.id == song.id }
                 tracks.append(result.track)
                 logAnalysis(result)
+                refreshPlanIfNeeded()
             } catch {
-                log("ERROR", "Analysis failed for \(url.lastPathComponent): \(error.localizedDescription)")
-                notice = "One or more files could not be prepared for KnobShift."
+                if let failed = pending.firstIndex(where: { $0.id == song.id }) {
+                    pending[failed].isActive = false
+                    pending[failed].failure = "Could not read this file"
+                }
+                log("ERROR", "Analysis failed for \(song.url.lastPathComponent): \(error.localizedDescription)")
             }
+            persistQueue()
         }
-        persistQueue()
         if !tracks.isEmpty, !isPlaying {
             mixState = .ready
-            transitionDescription = "Local analysis is ready. Choose a track to begin."
-            log("READY", "Analysis completed for \(tracks.count) queued track(s).")
+            transitionDescription = "Ready. Choose a song to begin."
+            log("READY", "Prepared \(tracks.count) song(s).")
         }
+    }
+
+    private func setProgress(_ value: Double, for id: UUID) {
+        guard let index = pending.firstIndex(where: { $0.id == id }) else { return }
+        pending[index].progress = max(pending[index].progress, value)
+    }
+
+    /// When a newly ready song becomes the next one while music plays, plan the mix into it.
+    private func refreshPlanIfNeeded() {
+        guard isPlaying, mixState != .mixing, nowPlaying != nil, tracks.count > 1,
+              abs(primaryDeck.rate - 1) < 0.001 else { return }
+        let expected = tracks[(currentIndex + 1) % tracks.count]
+        guard plannedNext != expected else { return }
+        cancelPlan("The queue changed")
+        scheduleNext()
     }
 
     func play() {
@@ -189,7 +290,9 @@ final class KnobShiftModel: ObservableObject {
         nowPlaying = nil
         playbackTime = 0
         playbackDuration = 0
-        visualizerLevels = Array(repeating: 0.08, count: visualizerLevels.count)
+        nextMix = nil
+        mixingInto = nil
+        blendProgress = 0
         mixState = tracks.isEmpty ? .idle : .ready
     }
 
@@ -318,6 +421,9 @@ final class KnobShiftModel: ObservableObject {
         guard let task = transitionTask else { return }
         task.cancel()
         transitionTask = nil
+        nextMix = nil
+        mixingInto = nil
+        blendProgress = 0
         guard let next = plannedNext else { return }
         if mixState == .mixing {
             log("KNOBMIX", "\(reason), so the blend into \(next.title) stops here.")
@@ -356,47 +462,6 @@ final class KnobShiftModel: ObservableObject {
         playbackTime = min(playbackDuration, max(0, position))
     }
 
-    /// Mirrors the source-driven 21st.dev visualizer using only KnobShift's local playback graph.
-    /// The tap never reads or changes Knob's system audio engine, audio driver or DSP callback.
-    private func installVisualizerTap() {
-        // The mixer can invoke its tap far faster than SwiftUI can render. One frame in flight
-        // prevents queued UI tasks from building up while preserving a live response.
-        let frameGate = DispatchSemaphore(value: 1)
-        audioEngine.mainMixerNode.installTap(onBus: 0, bufferSize: 2_048, format: nil) { [weak self, frameGate] buffer, _ in
-            guard frameGate.wait(timeout: .now()) == .success else { return }
-            guard let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 else {
-                frameGate.signal()
-                return
-            }
-            let bars = 42
-            let framesPerBar = max(1, Int(buffer.frameLength) / bars)
-            var levels = [Float]()
-            levels.reserveCapacity(bars)
-            for bar in 0..<bars {
-                let start = min(Int(buffer.frameLength) - 1, bar * framesPerBar)
-                let end = min(Int(buffer.frameLength), start + framesPerBar)
-                var power: Float = 0
-                for index in start..<end { power += samples[index] * samples[index] }
-                let rms = sqrt(power / Float(max(1, end - start)))
-                levels.append(min(1, sqrt(rms) * 2.4))
-            }
-            Task { @MainActor [weak self] in
-                self?.receiveVisualizerLevels(levels)
-                frameGate.signal()
-            }
-        }
-    }
-
-    private func receiveVisualizerLevels(_ levels: [Float]) {
-        guard isPlaying else { return }
-        visualizerLevels = levels
-    }
-
-    func openDiagnosticLog() {
-        log("LOG", "Opening KnobShift diagnostics.")
-        KnobShiftLog.open()
-    }
-
     func log(_ stage: String, _ message: String, blend: Diagnostic.Blend? = nil) {
         let entry = Diagnostic(timestamp: Date(), stage: stage, message: message, blend: blend)
         diagnostics.append(entry)
@@ -404,17 +469,28 @@ final class KnobShiftModel: ObservableObject {
         KnobShiftLog.append(stage: stage, message: message, at: entry.timestamp)
     }
 
-    /// Screenshot only: one of each kind of log row, so the log's look can be checked in PNGs.
-    func showSampleLogForSnapshot() {
-        logSection("Analysis • Ghostface Killah")
-        log("ANALYSIS", "Tempo: 96 BPM, confidence 63% (accepted, minimum 12%).")
-        log("ANALYSIS", "Vocal end: 119.25s, where the last steady line fades out. Ignored short sounds after it at 125.2s, 128.2s.")
-        logSection("Ghostface Killah → Shaukeen")
-        log("PLAN", "Ghostface Killah: its last vocal line ends at 1:59.25, leaving 15.43s of music.")
-        log("PLAN", "Shaukeen: its voice enters 10.45s in, at 68% of the blend, over the old music only.")
-        log("KNOBMIX", "Starting 15.43s blend. Outgoing Deck 1, incoming Deck 2 with Shaukeen.")
-        log("SYNC", "Tempo sync on: 100.0 to 102.7 BPM, 2.7% apart. Both glide to a shared tempo, pitch stays natural.")
-        log("KNOBMIX", "+7.46s 50% done", blend: Diagnostic.Blend(progress: 0.5, outgoing: 0.70, incoming: 0.71, tempo: 101.3))
+    /// Screenshot only: a queue with one song playing and its next mix planned, or mid-mix.
+    func showPreviewForSnapshot(mixing: Bool) {
+        let titles = ["Ghostface Killah - Sidhu Moose Wala", "No Luck - Prem Dhillon", "Shaukeen - Karan Aujla",
+                      "Why So - Shubh", "Daaru Sasti - Arjan Dhillon"]
+        tracks = titles.enumerated().map { index, title in
+            Track(url: URL(fileURLWithPath: "/nonexistent/\(title).mp3"), title: title, duration: 160 + Double(index * 17),
+                  tailSilence: 1, analysis: Analysis(tempo: [100, 145, 102.7, 90, 88][index], tempoConfidence: 0.9, beatGrid: [],
+                                                     leadingSilence: 0, trailingSilence: 1, fadeOutCue: nil, safeOutroCue: nil,
+                                                     vocalOnset: 5, vocalEnd: 140))
+        }
+        currentIndex = 0
+        nowPlaying = tracks[0]
+        playbackDuration = tracks[0].duration
+        playbackTime = mixing ? 117 : 64
+        isPlaying = true
+        nextMix = NextMix(next: tracks[1], startsAt: 114.4, endsAt: 124.1, at: Date().addingTimeInterval(mixing ? 0 : 83), blends: true)
+        mixState = mixing ? .mixing : .ready
+        mixingInto = mixing ? tracks[1] : nil
+        blendProgress = mixing ? 0.45 : 0
+        pending = [PendingSong(url: URL(fileURLWithPath: "/nonexistent/Nagni - TEJAY.mp3"), progress: 0.6, isActive: true),
+                   PendingSong(url: URL(fileURLWithPath: "/nonexistent/18 Lakh - Rehal.mp3")),
+                   PendingSong(url: URL(fileURLWithPath: "/nonexistent/Broken File.mp3"), failure: "Could not read this file")]
     }
 
     func logSection(_ title: String) {
@@ -436,36 +512,19 @@ final class KnobShiftModel: ObservableObject {
     private func restoreQueue() async {
         let paths = UserDefaults.standard.stringArray(forKey: PersistKey.knobShiftQueue.rawValue) ?? []
         guard !paths.isEmpty else { return }
-        log("RESTORE", "Restoring \(paths.count) local file reference(s).")
-        isPreparing = true
-        defer { isPreparing = false }
+        log("RESTORE", "Restoring \(paths.count) song(s).")
+        var urls: [URL] = []
         for path in paths {
             let url = URL(fileURLWithPath: path)
-            guard FileManager.default.fileExists(atPath: url.path) else {
-                log("RESTORE", "Skipped \(url.lastPathComponent): the file is no longer there.")
-                continue
-            }
-            do {
-                let result = try await analyser.analyse(url)
-                if !tracks.contains(where: { $0.url.standardizedFileURL == url.standardizedFileURL }) {
-                    tracks.append(result.track)
-                    logAnalysis(result)
-                }
-            }
-            catch {
-                log("ERROR", "Restore analysis failed for \(url.lastPathComponent): \(error.localizedDescription)")
-                continue
-            }
+            if FileManager.default.fileExists(atPath: url.path) { urls.append(url) }
+            else { log("RESTORE", "Skipped \(url.lastPathComponent): the file is no longer there.") }
         }
-        persistQueue()
-        if !tracks.isEmpty {
-            mixState = .ready
-            transitionDescription = "Local analysis is ready. Choose a track to begin."
-        }
+        await addTracks(urls)
     }
 
     private func persistQueue() {
-        UserDefaults.standard.set(tracks.map { $0.url.path }, forKey: PersistKey.knobShiftQueue.rawValue)
+        let paths = tracks.map { $0.url.path } + pending.map { $0.url.path }
+        UserDefaults.standard.set(paths, forKey: PersistKey.knobShiftQueue.rawValue)
     }
 
     enum PlayerError: Error { case invalidSegment }

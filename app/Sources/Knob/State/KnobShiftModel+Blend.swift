@@ -59,6 +59,7 @@ extension KnobShiftModel {
         } else {
             log("PLAN", "Decision: clean handoff at \(mixClock), in \(Self.duration(wait)).")
         }
+        nextMix = NextMix(next: next, startsAt: startsAt, endsAt: blends ? end : startsAt, at: mixAt, blends: blends)
         transitionDescription = plan.description + " • at \(mixClock)" +
             (sync.isOn ? String(format: " • tempo %.0f to %.0f BPM", sync.outgoingTempo, sync.incomingTempo) : "")
 
@@ -120,6 +121,8 @@ extension KnobShiftModel {
             let pivot = min(max((handoff - outgoingAt) / music, 0), 1)
             let duration = sync.blendLength(forOutgoingMusic: music, voice: pivot)
             mixState = .mixing
+            mixingInto = next
+            blendProgress = 0
             transitionDescription = "MIXING • \(Int(duration.rounded())) second blend into \(next.title)" + (sync.isOn ? ", beats locked." : ".")
             log("KNOBMIX", "Starting \(Self.seconds(duration)) blend over \(Self.seconds(music)) of \(current.title)'s music. Outgoing \(primaryDeck.name), incoming \(secondaryDeck.name) with \(next.title).")
             log("SYNC", lock.note)
@@ -168,6 +171,7 @@ extension KnobShiftModel {
                     guard let self, !Task.isCancelled else { return }
                     let progress = Double(step) / Double(steps)
                     self.applyBlend(progress, pivot: pivot, sync: sync)
+                    self.blendProgress = progress
                     if !handedOver, progress >= pivot {
                         handedOver = true
                         self.log("KNOBMIX", String(format: "Handoff: %@'s voice is done. %@ opens up fully at its own speed (%.3f), the basslines swap and %@ fades out.",
@@ -268,6 +272,8 @@ extension KnobShiftModel {
         primaryDeck.resetEffects()
         currentIndex = tracks.firstIndex(of: next) ?? 0
         nowPlaying = next
+        mixingInto = nil
+        blendProgress = 0
         playbackTime = incomingPlayed
         playbackDuration = next.duration
         playbackStartedAt = Date().addingTimeInterval(-incomingPlayed)

@@ -16,7 +16,8 @@ actor KnobShiftAnalyser {
 
     /// Uses the saved analysis when the file has not changed since it was analysed, so opening
     /// Knob does not re-analyse every queued song. `fresh` always measures again.
-    func analyse(_ url: URL, fresh: Bool = false) throws -> Result {
+    /// `progress` hears 0...1 as the analysis moves through its steps (for the queue's ring).
+    func analyse(_ url: URL, fresh: Bool = false, progress: (@Sendable (Double) -> Void)? = nil) throws -> Result {
         let started = Date()
         if !fresh, let saved = KnobShiftAnalysisCache.load(for: url) {
             let track = KnobShiftModel.Track(url: url, title: url.deletingPathExtension().lastPathComponent,
@@ -25,12 +26,13 @@ actor KnobShiftAnalyser {
                               Date().timeIntervalSince(started) * 1_000)
             return Result(track: track, steps: [note] + saved.steps)
         }
-        let result = try measure(url)
+        let result = try measure(url, progress: progress ?? { _ in })
         KnobShiftAnalysisCache.save(result.track, steps: result.steps)
         return result
     }
 
-    private func measure(_ url: URL) throws -> Result {
+    private func measure(_ url: URL, progress: @Sendable (Double) -> Void) throws -> Result {
+        progress(0.05)
         let started = Date()
         var steps: [String] = []
         let file = try AVAudioFile(forReading: url)
@@ -42,6 +44,7 @@ actor KnobShiftAnalyser {
         guard duration.isFinite, duration > 0 else { throw AnalysisError.invalidFile }
 
         let windows = try energyWindows(in: file, sampleRate: sampleRate)
+        progress(0.3)
         let peak = windows.map(\.rms).max() ?? 0
         let windowLength = windows.first?.duration ?? 0
         steps.append(String(format: "Energy: %d RMS windows of %.0f ms, peak RMS %.4f.",
@@ -53,6 +56,7 @@ actor KnobShiftAnalyser {
                             Self.silenceRMS, leading, trailing))
 
         let rhythm = KnobShiftBeats.analyse(url)
+        progress(0.6)
         steps.append(contentsOf: rhythm.steps)
 
         // A quiet tail is the only safe cue available without supplied timed lyrics. The cue
@@ -61,6 +65,7 @@ actor KnobShiftAnalyser {
         let fade = fadeOutStart(in: windows, quietStart: quietStart)
         steps.append(fade.note)
         let vocals = KnobShiftVocals.detect(in: url)
+        progress(0.95)
         steps.append(contentsOf: vocals.steps)
         if let end = vocals.end {
             steps.append(String(format: "Outro after the voice: %.2fs of music before the audible end.", max(0, quietStart - end)))

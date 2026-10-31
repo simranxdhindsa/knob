@@ -27,18 +27,32 @@ enum Snapshot {
                            to: folder.appendingPathComponent("panel-\(name)-\(tab.rawValue).png"))
                 }
             }
+            // KnobShift's tab as a mini player, playing and mid-mix.
+            UserDefaults.standard.set(ScreenSection.Tab.knobShift.rawValue, forKey: PersistKey.selectedTab.rawValue)
+            for mixing in [false, true] {
+                model.knobShift.showPreviewForSnapshot(mixing: mixing)
+                for (name, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {
+                    render(PanelView(model: model).environment(\.colorScheme, scheme), scheme: scheme,
+                           to: folder.appendingPathComponent("panel-\(name)-knobShift-\(mixing ? "mixing" : "playing").png"))
+                }
+            }
+            model.knobShift.stop()
 
             // KnobShift is a separate, resizable player. Render its two responsive breakpoints.
             let savedShiftEnabled = UserDefaults.standard.object(forKey: PersistKey.knobShiftEnabled.rawValue)
             UserDefaults.standard.set(true, forKey: PersistKey.knobShiftEnabled.rawValue)
-            let shift = KnobShiftModel(restoresQueue: false)
-            shift.showSampleLogForSnapshot()
-            for (name, size) in [("compact", CGSize(width: 460, height: 440)),
-                                 ("wide", CGSize(width: 980, height: 600))] {
-                render(KnobShiftPlayerView(model: shift)
-                    .frame(width: size.width, height: size.height)
-                    .environment(\.colorScheme, .dark), scheme: .dark,
-                       to: folder.appendingPathComponent("knobshift-\(name).png"))
+            // Both sizes, light and dark, playing and mid-mix.
+            for mixing in [false, true] {
+                let shift = KnobShiftModel(restoresQueue: false)
+                shift.showPreviewForSnapshot(mixing: mixing)
+                for (name, size) in [("compact", CGSize(width: 460, height: 720)), ("wide", CGSize(width: 900, height: 620))] {
+                    for (schemeName, scheme) in [("dark", ColorScheme.dark), ("light", ColorScheme.light)] {
+                        render(KnobShiftPlayerView(model: shift)
+                            .frame(width: size.width, height: size.height)
+                            .environment(\.colorScheme, scheme), scheme: scheme,
+                               to: folder.appendingPathComponent("knobshift-\(name)-\(schemeName)\(mixing ? "-mixing" : "").png"))
+                    }
+                }
             }
             if let savedShiftEnabled {
                 UserDefaults.standard.set(savedShiftEnabled, forKey: PersistKey.knobShiftEnabled.rawValue)

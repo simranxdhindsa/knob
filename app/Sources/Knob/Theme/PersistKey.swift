@@ -20,6 +20,4 @@ enum PersistKey: String {
     case knobShiftQueue = "knob.shift.queue"
     /// Whether the dedicated KnobShift window was visible when Knob last quit.
     case knobShiftWindowOpen = "knob.shift.windowOpen"
-    /// Whether the KnobShift player shows its live diagnostic log.
-    case knobShiftLogOpen = "knob.shift.logOpen"
 }
