@@ -25,8 +25,10 @@ struct KnobLauncher {
             return
         }
         if let index = arguments.firstIndex(of: "--knobshift-check"), index + 2 < arguments.count {
+            // Optional third value: listening volume from 0 to 100 (default muted).
+            let volume = index + 3 < arguments.count ? (Float(arguments[index + 3]) ?? 0) / 100 : 0
             KnobShiftSmokeCheck.run(first: URL(fileURLWithPath: arguments[index + 1]),
-                                    second: URL(fileURLWithPath: arguments[index + 2]))
+                                    second: URL(fileURLWithPath: arguments[index + 2]), volume: volume)
             return
         }
         if let index = arguments.firstIndex(of: "--knobshift-analysis-check"), index + 1 < arguments.count {

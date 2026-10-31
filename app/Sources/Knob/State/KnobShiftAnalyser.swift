@@ -1,0 +1,201 @@
+import AVFoundation
+import Foundation
+
+/// Offline analysis of one local file, entirely off the playback and driver callbacks. Every
+/// decision is also written as a plain step, so the KnobShift log shows why a cue was or was not
+/// found instead of only the final numbers.
+actor KnobShiftAnalyser {
+    struct Result {
+        let track: KnobShiftModel.Track
+        let steps: [String]
+    }
+
+    func track(for url: URL) throws -> KnobShiftModel.Track {
+        try analyse(url).track
+    }
+
+    func analyse(_ url: URL) throws -> Result {
+        let started = Date()
+        var steps: [String] = []
+        let file = try AVAudioFile(forReading: url)
+        let format = file.processingFormat
+        let sampleRate = format.sampleRate
+        let duration = Double(file.length) / sampleRate
+        steps.append(String(format: "File: %.0f Hz, %d channel(s), %lld frames, %.2fs.",
+                            sampleRate, Int(format.channelCount), file.length, duration))
+        guard duration.isFinite, duration > 0 else { throw AnalysisError.invalidFile }
+
+        let windows = try energyWindows(in: file, sampleRate: sampleRate)
+        let peak = windows.map(\.rms).max() ?? 0
+        let windowLength = windows.first?.duration ?? 0
+        steps.append(String(format: "Energy: %d RMS windows of %.0f ms, peak RMS %.4f.",
+                            windows.count, windowLength * 1_000, peak))
+
+        let trailing = silenceDuration(in: windows.reversed())
+        let leading = silenceDuration(in: windows)
+        steps.append(String(format: "Silence (RMS < %.3f): leading %.2fs, trailing %.2fs.",
+                            Self.silenceRMS, leading, trailing))
+
+        let tempo = estimateTempo(from: windows)
+        steps.append(tempo.note)
+        let beats = beatGrid(tempo: tempo.value, windows: windows, duration: duration)
+        if let first = beats.first, let tempoValue = tempo.value {
+            steps.append(String(format: "Beat grid: %d beats every %.3fs, first at %.2fs.",
+                                beats.count, 60 / tempoValue, first))
+        } else {
+            steps.append("Beat grid: none, because there is no confident tempo.")
+        }
+
+        // A quiet tail is the only safe cue available without supplied timed lyrics. The cue
+        // begins at the measured quiet boundary, not at an arbitrary number of seconds.
+        let quietStart = duration - trailing
+        let fade = fadeOutStart(in: windows, quietStart: quietStart)
+        steps.append(fade.note)
+        let vocals = KnobShiftVocals.detect(in: url)
+        steps.append(contentsOf: vocals.steps)
+        if let end = vocals.end {
+            steps.append(String(format: "Outro after the voice: %.2fs of music before the audible end.", max(0, quietStart - end)))
+        }
+        let safeOutroCue = fade.cue ?? (trailing >= 1 ? quietStart : nil)
+        if let safeOutroCue {
+            let source = fade.cue != nil ? "fade start" : "start of the trailing silence"
+            steps.append(String(format: "Safe outro cue: %.2fs (%@), %.2fs before the end.",
+                                safeOutroCue, source, duration - safeOutroCue))
+        } else {
+            steps.append("Safe outro cue: none. No sustained fade and under 1s of trailing silence.")
+        }
+
+        let analysis = KnobShiftModel.Analysis(tempo: tempo.value, tempoConfidence: tempo.confidence,
+                                               beatGrid: beats, leadingSilence: leading,
+                                               trailingSilence: trailing, fadeOutCue: fade.cue,
+                                               safeOutroCue: safeOutroCue,
+                                               vocalOnset: vocals.onset, vocalEnd: vocals.end)
+        steps.append(String(format: "Finished in %.0f ms.", Date().timeIntervalSince(started) * 1_000))
+        let track = KnobShiftModel.Track(url: url, title: url.deletingPathExtension().lastPathComponent,
+                                         duration: duration, tailSilence: trailing, analysis: analysis)
+        return Result(track: track, steps: steps)
+    }
+
+    private static let silenceRMS: Float = 0.006
+
+    private struct EnergyWindow {
+        let time: TimeInterval
+        let duration: TimeInterval
+        let rms: Float
+    }
+
+    /// Uses short RMS windows. This supplies conservative silence and rhythmic-onset candidates,
+    /// not a claim of lyric recognition.
+    private func energyWindows(in file: AVAudioFile, sampleRate: Double) throws -> [EnergyWindow] {
+        let frames = AVAudioFrameCount(max(512, min(2_048, Int(sampleRate / 20))))
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: frames) else {
+            throw AnalysisError.invalidFile
+        }
+        var windows: [EnergyWindow] = []
+        while file.framePosition < file.length {
+            buffer.frameLength = 0
+            let start = Double(file.framePosition) / sampleRate
+            try file.read(into: buffer, frameCount: frames)
+            guard buffer.frameLength > 0, let samples = buffer.floatChannelData?[0] else { continue }
+            var power: Float = 0
+            for index in 0..<Int(buffer.frameLength) { power += samples[index] * samples[index] }
+            let length = Double(buffer.frameLength) / sampleRate
+            windows.append(EnergyWindow(time: start, duration: length,
+                                        rms: sqrt(power / Float(buffer.frameLength))))
+        }
+        return windows
+    }
+
+    private func silenceDuration<S: Sequence>(in windows: S) -> TimeInterval where S.Element == EnergyWindow {
+        var total: TimeInterval = 0
+        for window in windows {
+            guard window.rms < Self.silenceRMS else { break }
+            total += window.duration
+        }
+        return total
+    }
+
+    private func estimateTempo(from windows: [EnergyWindow]) -> (value: Double?, confidence: Double, note: String) {
+        guard windows.count > 80 else {
+            return (nil, 0, "Tempo: skipped, only \(windows.count) windows (needs more than 80).")
+        }
+        let step = windows.map(\.duration).reduce(0, +) / Double(windows.count)
+        guard step > 0 else { return (nil, 0, "Tempo: skipped, windows have no length.") }
+        let energy = windows.map { Double($0.rms) }
+        var onsets = [Double](repeating: 0, count: energy.count)
+        for index in 1..<energy.count { onsets[index] = max(0, energy[index] - energy[index - 1]) }
+        let mean = onsets.reduce(0, +) / Double(onsets.count)
+        let variance = onsets.reduce(0) { $0 + pow($1 - mean, 2) } / Double(onsets.count)
+        let deviation = sqrt(variance)
+        guard deviation > 0 else { return (nil, 0, "Tempo: skipped, the energy never changes.") }
+        onsets = onsets.map { max(0, ($0 - mean) / deviation) }
+
+        var bestBPM: Double?
+        var bestScore = 0.0
+        for bpm in stride(from: 70.0, through: 180.0, by: 1.0) {
+            let lag = Int((60 / (bpm * step)).rounded())
+            guard lag > 0, lag < onsets.count / 3 else { continue }
+            var score = 0.0
+            for index in lag..<onsets.count { score += onsets[index] * onsets[index - lag] }
+            if score > bestScore { bestScore = score; bestBPM = bpm }
+        }
+        guard let bestBPM else { return (nil, 0, "Tempo: no candidate between 70 and 180 BPM scored.") }
+        let onsetPower = onsets.reduce(0) { $0 + $1 * $1 }
+        let confidence = min(1, bestScore / max(0.0001, onsetPower))
+        if confidence >= 0.12 {
+            return (bestBPM, confidence, String(format: "Tempo: %.0f BPM, confidence %.0f%% (accepted, minimum 12%%).",
+                                                bestBPM, confidence * 100))
+        }
+        return (nil, confidence, String(format: "Tempo: best guess %.0f BPM rejected, confidence %.0f%% is under 12%%.",
+                                        bestBPM, confidence * 100))
+    }
+
+    /// Finds a sustained end-of-track energy descent before silence. This is deliberately more
+    /// conservative than choosing a random final window: it only returns a cue when the envelope
+    /// stays substantially below the immediately preceding musical section through the ending.
+    private func fadeOutStart(in windows: [EnergyWindow], quietStart: TimeInterval) -> (cue: TimeInterval?, note: String) {
+        let active = windows.filter { $0.time < quietStart && $0.rms >= Self.silenceRMS }
+        guard active.count > 20, let first = active.first, let last = active.last else {
+            return (nil, "Fade: skipped, only \(active.count) non-silent windows.")
+        }
+        let span = last.time - first.time
+        guard span > 2 else { return (nil, String(format: "Fade: skipped, music lasts only %.2fs.", span)) }
+        let referenceStart = first.time + span * 0.45
+        let reference = active.filter { $0.time >= referenceStart }.map { Double($0.rms) }
+        guard reference.count > 10 else { return (nil, "Fade: skipped, too little music after the midpoint.") }
+        let baseline = reference.sorted()[Int(Double(reference.count - 1) * 0.8)]
+        guard baseline > 0 else { return (nil, "Fade: skipped, reference loudness is zero.") }
+        let windowLength = active.map(\.duration).reduce(0, +) / Double(active.count)
+        let confirmation = max(1, Int((0.6 / max(windowLength, 0.001)).rounded()))
+        for index in 0..<(active.count - confirmation) {
+            let local = active[index..<(index + confirmation)].map { Double($0.rms) }
+            let localAverage = local.reduce(0, +) / Double(local.count)
+            guard localAverage < baseline * 0.55 else { continue }
+            let remaining = active[index...].map { Double($0.rms) }
+            let lowerFrames = remaining.filter { $0 < baseline * 0.82 }.count
+            let lowerShare = Double(lowerFrames) / Double(remaining.count)
+            if lowerShare >= 0.82 {
+                let cue = active[index].time
+                return (cue, String(format: "Fade: starts at %.2fs. Loudness %.4f vs baseline %.4f (under 55%%), %.0f%% of the rest stays quieter.",
+                                    cue, localAverage, baseline, lowerShare * 100))
+            }
+        }
+        return (nil, String(format: "Fade: none. No 0.6s stretch held under 55%% of the baseline %.4f through to the end.", baseline))
+    }
+
+    private func beatGrid(tempo: Double?, windows: [EnergyWindow], duration: TimeInterval) -> [TimeInterval] {
+        guard let tempo, !windows.isEmpty else { return [] }
+        let interval = 60 / tempo
+        let energies = windows.map { Double($0.rms) }
+        guard let strongest = energies.indices.max(by: { energies[$0] < energies[$1] }) else { return [] }
+        let anchor = windows[strongest].time
+        var beats: [TimeInterval] = []
+        var backward = anchor
+        while backward > 0 { beats.append(backward); backward -= interval }
+        var forward = anchor + interval
+        while forward < duration { beats.append(forward); forward += interval }
+        return beats.sorted()
+    }
+
+    private enum AnalysisError: Error { case invalidFile }
+}

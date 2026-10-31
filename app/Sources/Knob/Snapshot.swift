@@ -32,6 +32,7 @@ enum Snapshot {
             let savedShiftEnabled = UserDefaults.standard.object(forKey: PersistKey.knobShiftEnabled.rawValue)
             UserDefaults.standard.set(true, forKey: PersistKey.knobShiftEnabled.rawValue)
             let shift = KnobShiftModel(restoresQueue: false)
+            shift.showSampleLogForSnapshot()
             for (name, size) in [("compact", CGSize(width: 460, height: 440)),
                                  ("wide", CGSize(width: 980, height: 600))] {
                 render(KnobShiftPlayerView(model: shift)

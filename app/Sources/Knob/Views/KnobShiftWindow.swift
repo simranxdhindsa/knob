@@ -142,26 +142,26 @@ struct KnobShiftPlayerView: View {
         let isMedium = width >= 610
         if isWide {
             HStack(alignment: .top, spacing: 20) {
-                playerDeck(showVisualizer: true)
+                playerDeck(showVisualizer: true, logHeight: height - 470)
                 Divider().overlay(Screen.textTertiary.opacity(0.35))
                 queue(maxHeight: max(180, height - 120))
                     .frame(width: min(320, width * 0.34))
             }
         } else if isMedium {
             HStack(alignment: .top, spacing: 18) {
-                playerDeck(showVisualizer: true)
+                playerDeck(showVisualizer: true, logHeight: height - 470)
                 queue(maxHeight: max(160, height - 120))
                     .frame(width: min(260, width * 0.38))
             }
         } else {
             VStack(alignment: .leading, spacing: 12) {
-                playerDeck(showVisualizer: false)
+                playerDeck(showVisualizer: false, logHeight: 110)
                 queue(maxHeight: max(90, height - 260))
             }
         }
     }
 
-    private func playerDeck(showVisualizer: Bool) -> some View {
+    private func playerDeck(showVisualizer: Bool, logHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 13) {
             SegmentedTabs(options: KnobShiftModel.Style.allCases,
                           selection: Binding(get: { style }, set: { styleName = $0.rawValue })) { $0.title }
@@ -170,6 +170,7 @@ struct KnobShiftPlayerView: View {
             transport
             shiftPlan
             if showVisualizer { visualizer }
+            KnobShiftLogView(model: model, maxHeight: logHeight)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
