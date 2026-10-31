@@ -22,7 +22,8 @@ enum KnobShiftSmokeCheck {
             let lead = min(plan.start, 6)
             if plan.start - lead > 1 { model.seek(to: plan.start - lead) }
             // Wait for the handoff itself rather than a fixed time, with a few seconds of slack.
-            let deadline = Date().addingTimeInterval(lead + plan.duration + 3)
+            // Slowed-down blends take longer than their music, so allow for that too.
+            let deadline = Date().addingTimeInterval(lead * 1.3 + plan.duration * 1.3 + 4)
             while model.nowPlaying != expectedNext, Date() < deadline {
                 try? await Task.sleep(for: .milliseconds(50))
             }

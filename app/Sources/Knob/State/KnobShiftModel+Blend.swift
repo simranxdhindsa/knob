@@ -34,11 +34,31 @@ extension KnobShiftModel {
         log("PLAN", blends
             ? "Decision: blend in \(Self.seconds(wait)), ending at \(Analysis.clock(end))."
             : "Decision: clean handoff in \(Self.seconds(wait)).")
+        // Meeting in the middle: the outgoing song first eases to the meeting tempo on its own
+        // over its last two bars before the blend.
+        let easeMusic = blends && sync.easesBeforeBlend ? min(8 * 60 / sync.outgoingTempo, max(0, startsAt - playbackTime)) : 0
+        let easeWall = easeMusic / ((1 + sync.easeRate(at: 1)) / 2)
+        let easeStartsIn = max(0, wait - easeMusic)
+        if easeMusic > 0 {
+            log("SYNC", String(format: "Ease: %@ moves from %.1f to %.1f BPM over its last %.2fs before the blend.",
+                               current.title, sync.outgoingTempo, sync.meetingTempo, easeMusic))
+        }
         let scheduledAt = Date()
         transitionTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(wait))
+            try? await Task.sleep(for: .seconds(easeStartsIn))
             guard let self, !Task.isCancelled else { return }
-            let late = Date().timeIntervalSince(scheduledAt) - wait
+            if easeWall > 0 {
+                self.log("SYNC", "Easing \(current.title) toward \(String(format: "%.1f", sync.meetingTempo)) BPM.")
+                let easeStarted = Date()
+                let steps = max(1, Int((easeWall * 20).rounded()))
+                for step in 0...steps {
+                    let delay = easeWall * Double(step) / Double(steps) - Date().timeIntervalSince(easeStarted)
+                    if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+                    guard !Task.isCancelled else { return }
+                    self.primaryDeck.rate = sync.easeRate(at: Double(step) / Double(steps))
+                }
+            }
+            let late = Date().timeIntervalSince(scheduledAt) - (easeStartsIn + easeWall)
             self.log("TIMING", "Plan fired \(String(format: "%.0f", late * 1_000)) ms after its target. Clock reads \(Self.seconds(self.playbackTime)), \(self.primaryDeck.name) is at \(self.deckClock(self.primaryDeck)).")
             if blends {
                 self.beginBlend(from: current, to: next, endingAt: end, handoff: plan.handoff,
@@ -64,15 +84,18 @@ extension KnobShiftModel {
               let incomingBeat = next.analysis.beatGrid.first(where: { $0 >= offset }) else {
             return (0, offset, "No beat lock: no beat found close enough, so \(next.title) starts now.")
         }
-        return (outgoingBeat - now, incomingBeat,
-                "Beat lock: \(next.title)'s beat at \(Self.seconds(incomingBeat)) lands on \(current.title)'s beat at \(Analysis.clock(outgoingBeat)), \(String(format: "%.0f", (outgoingBeat - now) * 1_000)) ms from now.")
+        // The outgoing song may already be playing faster or slower, so its next beat arrives
+        // after its music distance divided by its speed.
+        let delay = (outgoingBeat - now) / max(primaryDeck.rate, 0.1)
+        return (delay, incomingBeat,
+                "Beat lock: \(next.title)'s beat at \(Self.seconds(incomingBeat)) lands on \(current.title)'s beat at \(Analysis.clock(outgoingBeat)), \(String(format: "%.0f", delay * 1_000)) ms from now.")
     }
 
     private func beginBlend(from current: Track, to next: Track, endingAt end: TimeInterval, handoff: TimeInterval,
                             offset: TimeInterval, sync: KnobShiftSync, style: Style) {
         do {
             let lock = beatLock(from: current, to: next, offset: offset, sync: sync)
-            let outgoingAt = (primaryDeck.position ?? playbackTime) + lock.delay
+            let outgoingAt = (primaryDeck.position ?? playbackTime) + lock.delay * primaryDeck.rate
             let music = max(0.5, end - outgoingAt)
             let duration = sync.blendLength(forOutgoingMusic: music) { Self.shape($0, style) }
             // How far through the blend the voices hand over, as a share of the outgoing music.
@@ -136,7 +159,7 @@ extension KnobShiftModel {
                 }
                 guard let self, !Task.isCancelled else { return }
                 self.log("KNOBMIX", String(format: "Envelope took %.2fs (planned %.2fs).", Date().timeIntervalSince(started), duration))
-                self.finishBlend(to: next, style: style)
+                self.finishBlend(to: next, sync: sync, style: style)
             }
         } catch {
             mixState = .preservingEnding
@@ -165,23 +188,26 @@ extension KnobShiftModel {
     @discardableResult
     private func applyBlend(_ progress: Double, pivot: Double, sync: KnobShiftSync, style: Style) -> Double {
         let shaped = Self.shape(progress, style)
-        let outgoing: Double, incoming: Double, swap: Double
+        let outgoing: Double, incoming: Double, swap: Double, sweep: Double
         if pivot > 0.02 {
             if progress < pivot {
                 let rise = Self.shape(progress / pivot, style)
                 outgoing = 1 - 0.15 * rise
                 incoming = 0.7 * sin(rise * .pi / 2)
                 swap = 0
+                sweep = 0
             } else {
                 let fall = pivot < 1 ? Self.shape((progress - pivot) / (1 - pivot), style) : 1
                 outgoing = 0.85 * cos(fall * .pi / 2)
                 incoming = 0.7 + 0.3 * sin(fall * .pi / 2)
                 swap = min(fall / 0.25, 1)
+                sweep = fall
             }
         } else {
             outgoing = cos(shaped * .pi / 2)
             incoming = sin(shaped * .pi / 2)
             swap = min(max((shaped - 0.4) / 0.2, 0), 1)
+            sweep = max(0, (shaped - 0.5) / 0.5)
         }
         primaryDeck.volume = Float(outgoing)
         secondaryDeck.volume = Float(incoming)
@@ -191,12 +217,14 @@ extension KnobShiftModel {
         // Bass swap so two basslines never stack.
         primaryDeck.bassCut = swap
         secondaryDeck.bassCut = 1 - swap
+        // The leaving song thins out upward as it fades.
+        primaryDeck.sweep = sweep
         return shaped
     }
 
     private func logBlendStep(progress: Double, shaped: Double, elapsed: TimeInterval, sync: KnobShiftSync) {
         let tempo = sync.isOn ? String(format: "  •  %.1f BPM, speeds %.3f / %.3f", sync.tempo(at: shaped), primaryDeck.rate, secondaryDeck.rate) : ""
-        let bass = String(format: "  •  bass out %.0f%% in %.0f%%", (1 - primaryDeck.bassCut) * 100, (1 - secondaryDeck.bassCut) * 100)
+        let bass = String(format: "  •  bass out %.0f%% in %.0f%%, sweep %.0f%%", (1 - primaryDeck.bassCut) * 100, (1 - secondaryDeck.bassCut) * 100, primaryDeck.sweep * 100)
         log("KNOBMIX", String(format: "+%.2fs  %3.0f%% done, curve %3.0f%%  •  out %@ %.2f  •  in %@ %.2f",
                               elapsed, progress * 100, shaped * 100,
                               primaryDeck.name, primaryDeck.volume, secondaryDeck.name, secondaryDeck.volume) + tempo + bass,
@@ -205,7 +233,7 @@ extension KnobShiftModel {
                                     tempo: sync.isOn ? sync.tempo(at: shaped) : nil))
     }
 
-    private func finishBlend(to next: Track, style: Style) {
+    private func finishBlend(to next: Track, sync: KnobShiftSync, style: Style) {
         // The incoming deck has been playing for the whole blend, so the clock continues from
         // where it really is instead of restarting at zero (which made the next mix late).
         let incomingPlayed = min(next.duration, secondaryDeck.position ?? secondaryDeck.startOffset)
@@ -214,16 +242,41 @@ extension KnobShiftModel {
         let outgoing = primaryDeck
         primaryDeck = secondaryDeck
         secondaryDeck = outgoing
+        // After meeting in the middle the incoming song is still off its own speed; it keeps
+        // that speed for now and eases back below. Everything else returns to normal.
+        let heldRate = primaryDeck.rate
         primaryDeck.resetEffects()
+        if sync.easesBeforeBlend { primaryDeck.rate = heldRate }
         currentIndex = tracks.firstIndex(of: next) ?? 0
         nowPlaying = next
         playbackTime = incomingPlayed
         playbackDuration = next.duration
         playbackStartedAt = Date().addingTimeInterval(-incomingPlayed)
-        log("KNOBMIX", "Completed. \(secondaryDeck.name) stopped, \(primaryDeck.name) is primary with \(next.title) at normal speed, full bass, volume 1.")
+        log("KNOBMIX", "Completed. \(secondaryDeck.name) stopped, \(primaryDeck.name) is primary with \(next.title) at " +
+            (sync.easesBeforeBlend ? String(format: "the meeting speed %.3f", primaryDeck.rate) : "normal speed") + ", full bass, volume 1.")
         log("TIMING", "\(next.title) continues from \(Self.seconds(incomingPlayed)), where its deck really is.")
         startProgressUpdates()
-        scheduleNext(style: style)
+        guard sync.easesBeforeBlend else {
+            scheduleNext(style: style)
+            return
+        }
+        let easeMusic = 8 * 60 / sync.incomingTempo
+        let easeWall = easeMusic / ((sync.incomingEase(at: 0) + 1) / 2)
+        log("SYNC", String(format: "Ease back: %@ returns from %.1f BPM to its own %.1f BPM over two bars.",
+                           next.title, sync.meetingTempo, sync.incomingTempo))
+        transitionTask = Task { [weak self] in
+            let started = Date()
+            let steps = max(1, Int((easeWall * 20).rounded()))
+            for step in 0...steps {
+                let delay = easeWall * Double(step) / Double(steps) - Date().timeIntervalSince(started)
+                if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+                guard let self, !Task.isCancelled else { return }
+                self.primaryDeck.rate = sync.incomingEase(at: Double(step) / Double(steps))
+            }
+            guard let self, !Task.isCancelled else { return }
+            self.log("SYNC", "\(next.title) is back at its own speed.")
+            self.scheduleNext(style: style)
+        }
     }
 
     func advance(to next: Track, offset: TimeInterval, style: Style) {

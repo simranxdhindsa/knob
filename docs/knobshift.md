@@ -67,30 +67,32 @@ Example, measured on real files:
 The vocal handoff:
 
 1. The handoff point is where the outgoing song's last vocal line ends.
-2. The incoming music comes in before that: at least two bars (8 beats at the
-   outgoing song's own tempo, about 5 seconds at 96 to 100 BPM), or earlier
-   still when the incoming intro is longer, so the incoming voice can start as
-   the outgoing one ends. It never comes in before that last line begins.
-3. Until the handoff the outgoing voice stays up front (dipping only to 85%)
+2. The incoming song's main verse is the first steady line at that song's
+   normal singing level. Quieter intro ad-libs and spoken bits before it do
+   not count (No Luck: ad-libs from 0s, main verse at 12s).
+3. The incoming music comes in before the handoff: at least two bars (8 beats
+   at the outgoing song's own tempo, about 5 seconds at 96 to 100 BPM), or
+   earlier still when the incoming intro is longer, so the main verse starts
+   around the handoff. It never comes in before the last line begins.
+4. Until the handoff the outgoing voice stays up front (dipping only to 85%)
    while the incoming music rises underneath to 70% with its bass held back.
-   An incoming song that sings from its first second is heard quietly under
-   the outgoing voice for those two bars.
-4. At the handoff the basslines swap and the outgoing music fades out under the
-   new voice until the outgoing song's last audible moment. Trailing silence
-   and the incoming song's silent lead-in are skipped.
-5. Songs without vocals use their measured fade. With no voice and no fade,
+5. At the handoff the basslines swap and the outgoing song fades out, thinning
+   upward through a rising filter. It is gone before the incoming main verse
+   (with at least one bar of fade), so leftover shouts or ad-libs after its
+   last line are never heard over the new verse.
+6. Songs without vocals use their measured fade. With no voice and no fade,
    the songs meet cleanly at the audible end: `PRESERVING ENDING`.
-6. Seeking past the planned start still blends over whatever music is left.
+7. Seeking past the planned start still blends over whatever music is left.
 
 Measured on the playlist (Ghostface Killah, No Luck, Shaukeen, Why So, looping
 back to the first song):
 
-| Pair | New song comes in | Blend | Tempo |
+| Pair | New song comes in | Old song gone by | Tempo |
 | --- | --- | --- | --- |
-| Ghostface Killah into No Luck | 4.80s before the old voice ends | 20.2s | 28% apart, no glide |
-| No Luck into Shaukeen | 10.45s before, Shaukeen sings as No Luck stops | 25.6s | 29% apart, no glide |
-| Shaukeen into Why So | 4.67s before | 16.0s | glides 102.7 to 90 BPM, beats locked |
-| Why So into Ghostface Killah | 5.33s before (Why So sings to its last second) | 6.1s | glides 90 to 100 BPM, beats locked |
+| Ghostface Killah into No Luck | 7.50s before the old voice ends | No Luck's main verse (its shouts at 2:05 and 2:08 fall after) | meet in the middle at 85 BPM |
+| No Luck into Shaukeen | 11.95s before | one bar after the handoff | meet in the middle at 122 BPM |
+| Shaukeen into Why So | 5.25s before | one bar after the handoff | glides 102.7 to 90 BPM |
+| Why So into Ghostface Killah | 11.25s before | Why So's end | glides 90 to 100 BPM |
 
 The volumes, tempo and bass are updated about 20 times a second. Each update
 waits for its own deadline from the blend start, so the handoff lands exactly
@@ -112,20 +114,26 @@ made at exactly 120 BPM reads 120.0, with every beat within 3 ms.
 
 During a blend (`State/KnobShiftSync.swift`, `State/KnobShiftModel+Blend.swift`):
 
-- **Tempo sync:** when the two tempos (or double or half time) are within 15%,
-  both songs play at one shared tempo that glides from the outgoing tempo to
-  the incoming one on the same curve as the volumes. Pitch stays natural
-  (`AVAudioUnitTimePitch`). The incoming song ends at its own normal speed, so
-  nothing stays stretched. The big speed change always falls on the quiet song
-  (the outgoing one near its end, the incoming one near its start), which hides
-  it, so the old song audibly eases toward the new tempo. Beyond 15% stretching
-  sounds processed even at low volume, so those pairs blend at their own speeds
-  and the log says why.
+- **Tempo glide (up to 15% apart):** both songs play at one shared tempo that
+  glides from the outgoing tempo to the incoming one on the same curve as the
+  volumes, so the old song audibly eases toward the new tempo. The big speed
+  change falls on whichever song is quiet at the time. Pitch stays natural
+  (`AVAudioUnitTimePitch`).
+- **Meet in the middle (further apart, up to 20% per song):** over its last two
+  bars before the blend the outgoing song slows or speeds to a tempo between
+  the two. The incoming song comes in at that tempo, both stay locked there
+  while they overlap, and once the outgoing song has gone the incoming song
+  eases back to its own speed over two bars. Ghostface Killah (100 BPM) into
+  No Luck (145, counted at half time as 72.4) meets at 85.1: Ghostface slows by
+  15%, No Luck starts 18% fast. Pairs that would need more than 20% from
+  either song blend at their own speeds and the log says why.
 - **Beat lock:** the incoming song starts on one of its own beats, scheduled
   sample-accurately to land on the outgoing song's next beat.
 - **Bass swap:** the incoming song's bass is held back with a high-pass filter
-  (`AVAudioUnitEQ`, up to 200 Hz), and around the middle of the blend the two
-  basslines swap, so two kicks and basslines never stack.
+  (`AVAudioUnitEQ`, up to 200 Hz), and at the handoff the two basslines swap,
+  so two kicks and basslines never stack.
+- **Rising filter:** as the outgoing song fades, its filter keeps rising to
+  2 kHz, so it thins out upward into the next song.
 - The blend still ends when the outgoing music runs out, even though that song
   plays slightly faster or slower during the glide.
 

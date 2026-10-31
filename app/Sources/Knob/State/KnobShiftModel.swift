@@ -41,6 +41,10 @@ final class KnobShiftModel: ObservableObject {
         let vocalEnd: TimeInterval?
         /// Where the last steady vocal line begins.
         var lastLineStart: TimeInterval? = nil
+        /// Where the main verse starts (after any intro ad-libs).
+        var mainVocalOnset: TimeInterval? = nil
+        /// Short vocal sounds after the last steady line.
+        var vocalStrays: [TimeInterval] = []
 
         /// Where the song is actually heard, without leading or trailing silence.
         func audibleEnd(duration: TimeInterval) -> TimeInterval { max(0, duration - trailingSilence) }
@@ -355,9 +359,12 @@ final class KnobShiftModel: ObservableObject {
         }
     }
 
+    /// Reads where the song really is from its deck, which stays right while KnobShift slows or
+    /// speeds it up; the wall clock is only a fallback before the deck has rendered.
     private func updatePlaybackTime() {
         guard isPlaying else { return }
-        playbackTime = min(playbackDuration, max(0, Date().timeIntervalSince(playbackStartedAt)))
+        let position = primaryDeck.position ?? Date().timeIntervalSince(playbackStartedAt)
+        playbackTime = min(playbackDuration, max(0, position))
     }
 
     /// Mirrors the source-driven 21st.dev visualizer using only KnobShift's local playback graph.

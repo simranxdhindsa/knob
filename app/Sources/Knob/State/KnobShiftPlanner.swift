@@ -32,7 +32,8 @@ struct KnobShiftPlan {
         if incomingOffset > 0.05 {
             reasoning.append("\(next.title) starts at \(seconds(incomingOffset)), skipping its silent lead-in.")
         }
-        let intro = incoming.vocalOnset.map { max(0, $0 - incomingOffset) }
+        // Time from the incoming song's start to its main verse (intro ad-libs do not count).
+        let intro = (incoming.mainVocalOnset ?? incoming.vocalOnset).map { max(0, $0 - incomingOffset) }
 
         // Songs with vocals: hand the voice over.
         if let vocalEnd = outgoing.vocalEnd {
@@ -46,7 +47,7 @@ struct KnobShiftPlan {
             if let twoBars {
                 reasoning.append("Two bars of \(current.title) last \(seconds(twoBars)), the least the new song comes in early.")
             }
-            if let intro { reasoning.append("\(next.title): its voice enters \(seconds(intro)) into the song.") }
+            if let intro { reasoning.append("\(next.title): its main verse starts \(seconds(intro)) into the song.") }
             else { reasoning.append("\(next.title): no vocals found.") }
             let lead = max(intro ?? 0, twoBars ?? 0)
             let start = max(handoff - lead, lastLine)
@@ -66,13 +67,31 @@ struct KnobShiftPlan {
             } else {
                 reasoning.append("\(next.title)'s music comes in as the old voice ends.")
             }
-            let duration = audibleEnd - start
+            // The old song must be gone before the new main verse, so none of its leftover
+            // shouts or ad-libs sing over it. It still gets at least one bar to fade.
+            var fadeEnd = audibleEnd
+            if let intro, start + intro < audibleEnd {
+                let oneBar = outgoing.tempo.map { 4 * 60 / $0 } ?? 0
+                fadeEnd = min(audibleEnd, max(start + intro, handoff + oneBar))
+                reasoning.append(fadeEnd <= start + intro + 0.01
+                    ? "\(current.title) fades out by \(clock(fadeEnd)), before \(next.title)'s main verse at \(clock(start + intro))."
+                    : "\(current.title) fades out by \(clock(fadeEnd)), one bar after the handoff, so its music is only a quiet tail under the first words of \(next.title)'s main verse at \(clock(start + intro)).")
+            }
+            let strays = outgoing.vocalStrays.filter { $0 > handoff }
+            let heard = strays.filter { $0 < fadeEnd }
+            if !strays.isEmpty {
+                let list = strays.map { clock($0) }.joined(separator: ", ")
+                reasoning.append(heard.isEmpty
+                    ? "Its short vocal sounds after the last line (\(list)) fall after the fade, so they are not heard."
+                    : "Its short vocal sounds at \(heard.map { clock($0) }.joined(separator: ", ")) fall inside the fade, under the new song's intro.")
+            }
+            let duration = fadeEnd - start
             guard duration > 0.05 else {
                 reasoning.append("Nothing is left to blend, so the songs meet cleanly at \(clock(audibleEnd)).")
                 return clean(at: audibleEnd, offset: incomingOffset, reasoning: reasoning)
             }
             appendTempo(outgoing, incoming, to: &reasoning)
-            reasoning.append("Blend: \(clock(start)) to \(clock(audibleEnd)), \(seconds(duration)), voices hand over at \(clock(handoff)).")
+            reasoning.append("Blend: \(clock(start)) to \(clock(fadeEnd)), \(seconds(duration)), voices hand over at \(clock(handoff)).")
             return KnobShiftPlan(start: start, duration: duration, handoff: handoff, incomingOffset: incomingOffset,
                                  description: "READY • blend at \(clock(start)) for \(Int(duration.rounded()))s, voices hand over at \(clock(handoff))",
                                  reasoning: reasoning)

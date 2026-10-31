@@ -41,9 +41,15 @@ enum KnobShiftAnalysisCheck {
                 fail("no beats near the blend start")
             }
             let music = plan.start + plan.duration - outgoingStart
+            // At half or double time only every second beat of the faster grid should line up.
+            let ratio = (b.analysis.tempo ?? 1) / max(sync.incomingTempo, 1)
+            let incomingBeats = ratio > 1.5 ? stride(from: 0, to: b.analysis.beatGrid.count, by: 2).map { b.analysis.beatGrid[$0] }
+                : b.analysis.beatGrid
+            let outgoingBeats = ratio < 0.67 ? stride(from: 0, to: a.analysis.beatGrid.count, by: 2).map { a.analysis.beatGrid[$0] }
+                : a.analysis.beatGrid
             for (label, glide) in [("with tempo sync", sync), ("without tempo sync", KnobShiftSync.off)] {
                 let duration = glide.blendLength(forOutgoingMusic: music) { KnobShiftModel.shape($0, .gentle) }
-                let offsets = beatOffsets(a.analysis.beatGrid, from: outgoingStart, b.analysis.beatGrid, from: incomingStart,
+                let offsets = beatOffsets(outgoingBeats, from: outgoingStart, incomingBeats, from: incomingStart,
                                           duration: duration, sync: glide)
                 let sorted = offsets.map(abs).sorted()
                 guard !sorted.isEmpty else { continue }

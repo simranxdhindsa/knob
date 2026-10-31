@@ -45,17 +45,26 @@ final class KnobShiftDeck {
     }
 
     /// 0 keeps the full bass, 1 removes it (used to swap basslines during a blend).
-    var bassCut: Double = 0 {
-        didSet {
-            let amount = Float(min(max(bassCut, 0), 1))
-            filter.bands[0].frequency = Self.restingCutoff * powf(Self.swapCutoff / Self.restingCutoff, amount)
-        }
+    var bassCut: Double = 0 { didSet { updateFilter() } }
+
+    /// Rising filter on a song that is leaving: 0 stops at the bass, 1 thins it out up to
+    /// 2 kHz so its beats seem to float upward into the next song.
+    var sweep: Double = 0 { didSet { updateFilter() } }
+
+    private static let sweepCutoff: Float = 2_000
+
+    private func updateFilter() {
+        let bass = Float(min(max(bassCut, 0), 1))
+        let lift = Float(min(max(sweep, 0), 1))
+        let base = Self.restingCutoff * powf(Self.swapCutoff / Self.restingCutoff, bass)
+        filter.bands[0].frequency = base * powf(Self.sweepCutoff / Self.swapCutoff, lift)
     }
 
     /// Back to plain playback after a blend.
     func resetEffects() {
         rate = 1
         bassCut = 0
+        sweep = 0
         volume = 1
     }
 
