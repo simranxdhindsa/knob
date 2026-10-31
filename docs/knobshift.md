@@ -64,25 +64,39 @@ Example, measured on real files:
 
 ### How a transition is planned (`State/KnobShiftPlanner.swift`)
 
-1. The outgoing song keeps its voice: the blend starts where its last vocal
-   line ends. With no vocals, it starts where the song's fade starts.
-2. The blend runs until the outgoing song's last audible moment, so its length
-   is simply the music left after the voice. Trailing silence is skipped.
-3. The incoming song starts after its own silent lead-in and rises under the
-   outgoing music. Its voice enters at its own first line, over the outgoing
-   music only, so two vocals never overlap.
-4. With no vocal end and no fade (for example a song sung to the very end),
+The vocal handoff:
+
+1. The handoff point is where the outgoing song's last vocal line ends.
+2. The incoming music comes in before that: at least two bars (8 beats at the
+   outgoing song's own tempo, about 5 seconds at 96 to 100 BPM), or earlier
+   still when the incoming intro is longer, so the incoming voice can start as
+   the outgoing one ends. It never comes in before that last line begins.
+3. Until the handoff the outgoing voice stays up front (dipping only to 85%)
+   while the incoming music rises underneath to 70% with its bass held back.
+   An incoming song that sings from its first second is heard quietly under
+   the outgoing voice for those two bars.
+4. At the handoff the basslines swap and the outgoing music fades out under the
+   new voice until the outgoing song's last audible moment. Trailing silence
+   and the incoming song's silent lead-in are skipped.
+5. Songs without vocals use their measured fade. With no voice and no fade,
    the songs meet cleanly at the audible end: `PRESERVING ENDING`.
-5. Seeking past the planned start still blends over whatever music is left.
+6. Seeking past the planned start still blends over whatever music is left.
 
-Ghostface Killah into Shaukeen therefore blends from 1:59.25 to 2:14.68
-(15.43s), 18.4 seconds before the end of the file, and Shaukeen's voice
-arrives at 68% of the blend.
+Measured on the playlist (Ghostface Killah, No Luck, Shaukeen, Why So, looping
+back to the first song):
 
-The blend is an equal-power curve, updated about 20 times a second. Each update
+| Pair | New song comes in | Blend | Tempo |
+| --- | --- | --- | --- |
+| Ghostface Killah into No Luck | 4.80s before the old voice ends | 20.2s | 28% apart, no glide |
+| No Luck into Shaukeen | 10.45s before, Shaukeen sings as No Luck stops | 25.6s | 29% apart, no glide |
+| Shaukeen into Why So | 4.67s before | 16.0s | glides 102.7 to 90 BPM, beats locked |
+| Why So into Ghostface Killah | 5.33s before (Why So sings to its last second) | 6.1s | glides 90 to 100 BPM, beats locked |
+
+The volumes, tempo and bass are updated about 20 times a second. Each update
 waits for its own deadline from the blend start, so the handoff lands exactly
 on the planned end. After the handoff the incoming song's clock carries on from
-where its deck really is, so the next plan is on time.
+where its deck really is, so the next plan is on time. The queue loops: the
+last song mixes into the first.
 
 ### Tempo sync, beat lock and bass swap
 
@@ -98,12 +112,15 @@ made at exactly 120 BPM reads 120.0, with every beat within 3 ms.
 
 During a blend (`State/KnobShiftSync.swift`, `State/KnobShiftModel+Blend.swift`):
 
-- **Tempo sync:** when the two tempos (or double or half time) are within 8%,
+- **Tempo sync:** when the two tempos (or double or half time) are within 15%,
   both songs play at one shared tempo that glides from the outgoing tempo to
   the incoming one on the same curve as the volumes. Pitch stays natural
   (`AVAudioUnitTimePitch`). The incoming song ends at its own normal speed, so
-  nothing stays stretched. Beyond 8% stretching starts to sound processed, so
-  those pairs blend at their own speeds and the log says why.
+  nothing stays stretched. The big speed change always falls on the quiet song
+  (the outgoing one near its end, the incoming one near its start), which hides
+  it, so the old song audibly eases toward the new tempo. Beyond 15% stretching
+  sounds processed even at low volume, so those pairs blend at their own speeds
+  and the log says why.
 - **Beat lock:** the incoming song starts on one of its own beats, scheduled
   sample-accurately to land on the outgoing song's next beat.
 - **Bass swap:** the incoming song's bass is held back with a high-pass filter

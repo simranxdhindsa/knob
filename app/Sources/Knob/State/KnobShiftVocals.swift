@@ -11,6 +11,8 @@ enum KnobShiftVocals {
     struct Result {
         let onset: TimeInterval?
         let end: TimeInterval?
+        /// Where the last steady vocal line begins: the earliest the next song may come in.
+        var lastLineStart: TimeInterval? = nil
         /// The song's typical confidence while someone is singing or rapping, 0...1.
         let level: Double
         let steps: [String]
@@ -69,13 +71,15 @@ enum KnobShiftVocals {
         }
         let onset = max(0, frames[first.lowerBound].time - hop)
         let end = frames[last.upperBound].time + hop
+        let lastLineStart = max(0, frames[last.lowerBound].time - hop)
         steps.append(String(format: "Vocal start: %.2fs, the first steady vocal line.", onset))
         let strays = frames.indices
             .filter { $0 > last.upperBound && frames[$0].voice >= floor }
             .map { String(format: "%.1fs", frames[$0].time) }
         let strayNote = strays.isEmpty ? "" : " Ignored short sounds after it at \(strays.prefix(4).joined(separator: ", "))."
         steps.append(String(format: "Vocal end: %.2fs, where the last steady line fades out.", end) + strayNote)
-        return Result(onset: onset, end: end, level: level, steps: steps)
+        steps.append(String(format: "Last vocal line: %.2fs to %.2fs.", lastLineStart, end))
+        return Result(onset: onset, end: end, lastLineStart: lastLineStart, level: level, steps: steps)
     }
 
     /// Index ranges where smoothed voice stays at or above `floor` for at least `minimumRun`.

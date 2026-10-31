@@ -3,15 +3,20 @@ import Foundation
 /// When and how KnobShift moves from one song to the next. There is no fixed crossfade length:
 /// every time here comes from the two songs' own analysis.
 ///
-/// - The outgoing song keeps its voice: the blend starts where its last vocal line ends.
-/// - The outgoing music then fades under the incoming song's intro until the outgoing audible end.
-/// - The incoming voice enters at its own first line, over the outgoing music only.
-/// - With no vocal end and no measured fade, the songs meet cleanly at the audible end.
+/// The vocal handoff, as in the product intent:
+/// 1. The outgoing voice keeps singing its last line at full volume.
+/// 2. The incoming music rises underneath, starting early enough that the incoming intro ends
+///    exactly where the outgoing voice ends (never before that last line begins).
+/// 3. At that handoff the incoming voice starts, the basslines swap and the outgoing music fades
+///    out under the new voice until its audible end. Two voices never sing at once.
+/// Songs without vocals use their measured fade; with neither, the songs meet cleanly.
 struct KnobShiftPlan {
     /// Position in the outgoing song where the incoming song starts.
     let start: TimeInterval
-    /// Length of the blend; 0 means a clean handoff at `start`.
+    /// Length of the blend in the outgoing song's music; 0 means a clean handoff at `start`.
     let duration: TimeInterval
+    /// Position in the outgoing song where its voice ends and the incoming voice takes over.
+    let handoff: TimeInterval
     /// Where the incoming song is started from (its leading silence is skipped).
     let incomingOffset: TimeInterval
     let description: String
@@ -27,53 +32,80 @@ struct KnobShiftPlan {
         if incomingOffset > 0.05 {
             reasoning.append("\(next.title) starts at \(seconds(incomingOffset)), skipping its silent lead-in.")
         }
+        let intro = incoming.vocalOnset.map { max(0, $0 - incomingOffset) }
 
-        let outroStart: TimeInterval
-        let outroSource: String
-        if let vocalEnd = outgoing.vocalEnd, vocalEnd < audibleEnd {
-            outroStart = vocalEnd
-            outroSource = "its last vocal line ends"
-        } else if let fade = outgoing.fadeOutCue, fade < audibleEnd {
-            outroStart = fade
-            outroSource = outgoing.vocalEnd == nil ? "its fade starts (no vocals found)" : "its fade starts"
-        } else {
-            let why = outgoing.vocalEnd != nil
-                ? "The voice runs to the very end and there is no fade"
-                : "No voice and no fade were found"
-            reasoning.append("\(why), so the songs meet cleanly at \(clock(audibleEnd)).")
-            return KnobShiftPlan(start: audibleEnd, duration: 0, incomingOffset: incomingOffset,
-                                 description: "READY • clean handoff at \(clock(audibleEnd)), the ending is kept whole.",
+        // Songs with vocals: hand the voice over.
+        if let vocalEnd = outgoing.vocalEnd {
+            let handoff = min(vocalEnd, audibleEnd)
+            let lastLine = min(outgoing.lastLineStart ?? handoff, handoff)
+            reasoning.append("\(current.title): its last vocal line runs \(clock(lastLine)) to \(clock(handoff)), then \(seconds(audibleEnd - handoff)) of music.")
+            // The new song always comes in a little before the old voice ends: at least two bars
+            // (8 beats at the old song's own tempo), or earlier still if the new intro is longer,
+            // so the new voice can start as the old one ends. Never before the last line begins.
+            let twoBars = outgoing.tempo.map { 8 * 60 / $0 }
+            if let twoBars {
+                reasoning.append("Two bars of \(current.title) last \(seconds(twoBars)), the least the new song comes in early.")
+            }
+            if let intro { reasoning.append("\(next.title): its voice enters \(seconds(intro)) into the song.") }
+            else { reasoning.append("\(next.title): no vocals found.") }
+            let lead = max(intro ?? 0, twoBars ?? 0)
+            let start = max(handoff - lead, lastLine)
+            if start < handoff {
+                let newVoiceAt = intro.map { start + $0 }
+                let detail: String
+                if let newVoiceAt, newVoiceAt < handoff - 0.05 {
+                    detail = ". Its voice comes in quietly \(seconds(handoff - newVoiceAt)) before the old voice ends and takes over at the handoff."
+                } else if let newVoiceAt, newVoiceAt > handoff + 0.05 {
+                    detail = ", and its voice enters \(seconds(newVoiceAt - handoff)) after the old voice ends."
+                } else if newVoiceAt != nil {
+                    detail = ", so its voice starts exactly as the old voice ends."
+                } else {
+                    detail = "."
+                }
+                reasoning.append("\(next.title)'s music comes in at \(clock(start)), \(seconds(handoff - start)) before \(current.title)'s voice ends" + detail)
+            } else {
+                reasoning.append("\(next.title)'s music comes in as the old voice ends.")
+            }
+            let duration = audibleEnd - start
+            guard duration > 0.05 else {
+                reasoning.append("Nothing is left to blend, so the songs meet cleanly at \(clock(audibleEnd)).")
+                return clean(at: audibleEnd, offset: incomingOffset, reasoning: reasoning)
+            }
+            appendTempo(outgoing, incoming, to: &reasoning)
+            reasoning.append("Blend: \(clock(start)) to \(clock(audibleEnd)), \(seconds(duration)), voices hand over at \(clock(handoff)).")
+            return KnobShiftPlan(start: start, duration: duration, handoff: handoff, incomingOffset: incomingOffset,
+                                 description: "READY • blend at \(clock(start)) for \(Int(duration.rounded()))s, voices hand over at \(clock(handoff))",
                                  reasoning: reasoning)
         }
-        let outro = audibleEnd - outroStart
-        reasoning.append("\(current.title): \(outroSource) at \(clock(outroStart)), leaving \(seconds(outro)) of music.")
 
-        // The new music rises as soon as the old voice is done; the new voice may arrive during
-        // the blend, but only over the old song's music, never over its voice.
-        let start = outroStart
-        if let onset = incoming.vocalOnset {
-            let intro = max(0, onset - incomingOffset)
-            if intro < outro {
-                reasoning.append("\(next.title): its voice enters \(seconds(intro)) in, at \(Int((intro / outro * 100).rounded()))% of the blend, over the old music only.")
-            } else {
-                reasoning.append("\(next.title): its voice enters \(seconds(intro)) in, after the old song has gone.")
-            }
-        } else {
-            reasoning.append("\(next.title): no vocals found, so its intro simply rises under the outro.")
+        // No vocals in the outgoing song: its measured fade is the cue.
+        if let fade = outgoing.fadeOutCue, fade < audibleEnd {
+            reasoning.append("\(current.title): no vocals found, its fade starts at \(clock(fade)).")
+            if let intro { reasoning.append("\(next.title): its voice enters \(seconds(intro)) into the song.") }
+            appendTempo(outgoing, incoming, to: &reasoning)
+            let duration = audibleEnd - fade
+            reasoning.append("Blend: \(clock(fade)) to \(clock(audibleEnd)), \(seconds(duration)).")
+            return KnobShiftPlan(start: fade, duration: duration, handoff: fade, incomingOffset: incomingOffset,
+                                 description: "READY • blend at \(clock(fade)) for \(Int(duration.rounded()))s, over the fade",
+                                 reasoning: reasoning)
         }
-
-        let duration = audibleEnd - start
-        if let a = outgoing.tempo, let b = incoming.tempo {
-            let apart = abs(a - b) / max(a, b) * 100
-            reasoning.append(String(format: "Tempo %.0f to %.0f BPM, %.1f%% apart. Played as is, no stretching yet.", a, b, apart))
-        }
-        reasoning.append("Blend: \(clock(start)) to \(clock(audibleEnd)), \(seconds(duration)), all from these two songs.")
-        return KnobShiftPlan(start: start, duration: duration, incomingOffset: incomingOffset,
-                             description: "READY • blend at \(clock(start)) for \(Int(duration.rounded()))s, after \(outroSource.replacingOccurrences(of: "its ", with: "the "))",
-                             reasoning: reasoning)
+        reasoning.append("No voice and no fade were found, so the songs meet cleanly at \(clock(audibleEnd)).")
+        return clean(at: audibleEnd, offset: incomingOffset, reasoning: reasoning)
     }
 
-    private static func clock(_ value: TimeInterval) -> String {
+    private static func clean(at end: TimeInterval, offset: TimeInterval, reasoning: [String]) -> KnobShiftPlan {
+        KnobShiftPlan(start: end, duration: 0, handoff: end, incomingOffset: offset,
+                      description: "READY • clean handoff at \(clock(end)), the ending is kept whole.",
+                      reasoning: reasoning)
+    }
+
+    private static func appendTempo(_ outgoing: KnobShiftModel.Analysis, _ incoming: KnobShiftModel.Analysis,
+                                    to reasoning: inout [String]) {
+        guard let a = outgoing.tempo, let b = incoming.tempo else { return }
+        reasoning.append(String(format: "Tempo %.1f and %.1f BPM.", a, b))
+    }
+
+    static func clock(_ value: TimeInterval) -> String {
         String(format: "%d:%05.2f", Int(value) / 60, value.truncatingRemainder(dividingBy: 60))
     }
 

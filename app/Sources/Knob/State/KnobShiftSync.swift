@@ -8,8 +8,10 @@ import Foundation
 /// outgoing tempo and ends at its own normal speed, so nothing is stretched once the blend is
 /// over. Pairs too far apart to stretch cleanly blend without tempo sync.
 struct KnobShiftSync {
-    /// Largest speed change that still sounds natural with Apple's time-stretch unit.
-    static let maxStretch = 0.08
+    /// Largest tempo gap to glide across. The big speed change always falls on the quiet deck
+    /// (the outgoing song near its end, the incoming song near its start), which hides it; past
+    /// this the stretched song starts to sound processed even at low volume.
+    static let maxStretch = 0.15
     /// Both songs need a beat grid at least this trustworthy before beats are lined up.
     static let minimumConfidence = 0.6
 
@@ -36,7 +38,7 @@ struct KnobShiftSync {
         let octave = matched == b ? "" : (matched > b ? " (counted at double time)" : " (counted at half time)")
         guard stretch <= maxStretch else {
             return KnobShiftSync(isOn: false, outgoingTempo: a, incomingTempo: matched, notes: [String(
-                format: "Tempo sync off: %.1f to %.1f BPM%@ is %.1f%% apart, beyond the %.0f%% that stays natural.",
+                format: "Tempo sync off: %.1f to %.1f BPM%@ is %.1f%% apart, beyond the %.0f%% that can glide naturally.",
                 a, matched, octave, stretch * 100, maxStretch * 100)])
         }
         return KnobShiftSync(isOn: true, outgoingTempo: a, incomingTempo: matched, notes: [String(

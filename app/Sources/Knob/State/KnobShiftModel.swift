@@ -39,6 +39,8 @@ final class KnobShiftModel: ObservableObject {
         /// Where the first steady vocal line starts and the last one really ends.
         let vocalOnset: TimeInterval?
         let vocalEnd: TimeInterval?
+        /// Where the last steady vocal line begins.
+        var lastLineStart: TimeInterval? = nil
 
         /// Where the song is actually heard, without leading or trailing silence.
         func audibleEnd(duration: TimeInterval) -> TimeInterval { max(0, duration - trailingSilence) }

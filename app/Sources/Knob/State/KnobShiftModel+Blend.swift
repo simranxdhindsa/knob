@@ -41,7 +41,8 @@ extension KnobShiftModel {
             let late = Date().timeIntervalSince(scheduledAt) - wait
             self.log("TIMING", "Plan fired \(String(format: "%.0f", late * 1_000)) ms after its target. Clock reads \(Self.seconds(self.playbackTime)), \(self.primaryDeck.name) is at \(self.deckClock(self.primaryDeck)).")
             if blends {
-                self.beginBlend(from: current, to: next, endingAt: end, offset: plan.incomingOffset, sync: sync, style: style)
+                self.beginBlend(from: current, to: next, endingAt: end, handoff: plan.handoff,
+                                offset: plan.incomingOffset, sync: sync, style: style)
             } else {
                 self.advance(to: next, offset: plan.incomingOffset, style: style)
             }
@@ -67,17 +68,23 @@ extension KnobShiftModel {
                 "Beat lock: \(next.title)'s beat at \(Self.seconds(incomingBeat)) lands on \(current.title)'s beat at \(Analysis.clock(outgoingBeat)), \(String(format: "%.0f", (outgoingBeat - now) * 1_000)) ms from now.")
     }
 
-    private func beginBlend(from current: Track, to next: Track, endingAt end: TimeInterval, offset: TimeInterval,
-                            sync: KnobShiftSync, style: Style) {
+    private func beginBlend(from current: Track, to next: Track, endingAt end: TimeInterval, handoff: TimeInterval,
+                            offset: TimeInterval, sync: KnobShiftSync, style: Style) {
         do {
             let lock = beatLock(from: current, to: next, offset: offset, sync: sync)
             let outgoingAt = (primaryDeck.position ?? playbackTime) + lock.delay
             let music = max(0.5, end - outgoingAt)
             let duration = sync.blendLength(forOutgoingMusic: music) { Self.shape($0, style) }
+            // How far through the blend the voices hand over, as a share of the outgoing music.
+            let pivot = min(max((handoff - outgoingAt) / music, 0), 1)
             mixState = .mixing
             transitionDescription = "MIXING • \(Int(duration.rounded())) second blend into \(next.title)" + (sync.isOn ? ", beats locked." : ".")
             log("KNOBMIX", "Starting \(Self.seconds(duration)) \(style.title) blend over \(Self.seconds(music)) of \(current.title)'s music. Outgoing \(primaryDeck.name), incoming \(secondaryDeck.name) with \(next.title).")
             log("SYNC", lock.note)
+            if pivot > 0.02 {
+                log("KNOBMIX", String(format: "Voices hand over %.0f%% of the way in: until then %@ keeps singing at full level while %@'s music rises underneath.",
+                                      pivot * 100, current.title, next.title))
+            }
 
             let file = try AVAudioFile(forReading: next.url)
             let sampleRate = file.processingFormat.sampleRate
@@ -108,6 +115,7 @@ extension KnobShiftModel {
             let steps = max(1, Int((duration * 20).rounded()))
             transitionTask = Task { [weak self] in
                 var lastLogged = -1
+                var handedOver = pivot <= 0.02
                 for step in 0...steps {
                     // Each step waits for its own deadline from the blend start, so small sleep
                     // overshoots never add up and the handoff lands on the planned end.
@@ -115,7 +123,11 @@ extension KnobShiftModel {
                     if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
                     guard let self, !Task.isCancelled else { return }
                     let progress = Double(step) / Double(steps)
-                    let shaped = self.applyBlend(progress, sync: sync, style: style)
+                    let shaped = self.applyBlend(progress, pivot: pivot, sync: sync, style: style)
+                    if !handedOver, progress >= pivot {
+                        handedOver = true
+                        self.log("KNOBMIX", "Handoff: \(current.title)'s voice is done, \(next.title) takes the lead and the basslines swap.")
+                    }
                     let bucket = Int(progress * 20)
                     if bucket != lastLogged {
                         lastLogged = bucket
@@ -144,16 +156,39 @@ extension KnobShiftModel {
     }
 
     /// Sets volume, tempo and bass on both decks for this point of the blend.
+    ///
+    /// With a vocal handoff the blend has two stages. Before the handoff the outgoing voice stays
+    /// up front (dipping only slightly) while the incoming music rises underneath with its bass
+    /// held back. After it the basslines swap and the outgoing music fades under the new voice.
+    /// The tempo glides across the whole blend, so the old song audibly eases toward the new
+    /// tempo while it finishes. Without a handoff it is one equal-power crossfade.
     @discardableResult
-    private func applyBlend(_ progress: Double, sync: KnobShiftSync, style: Style) -> Double {
+    private func applyBlend(_ progress: Double, pivot: Double, sync: KnobShiftSync, style: Style) -> Double {
         let shaped = Self.shape(progress, style)
-        primaryDeck.volume = Float(cos(shaped * .pi / 2))
-        secondaryDeck.volume = Float(sin(shaped * .pi / 2))
+        let outgoing: Double, incoming: Double, swap: Double
+        if pivot > 0.02 {
+            if progress < pivot {
+                let rise = Self.shape(progress / pivot, style)
+                outgoing = 1 - 0.15 * rise
+                incoming = 0.7 * sin(rise * .pi / 2)
+                swap = 0
+            } else {
+                let fall = pivot < 1 ? Self.shape((progress - pivot) / (1 - pivot), style) : 1
+                outgoing = 0.85 * cos(fall * .pi / 2)
+                incoming = 0.7 + 0.3 * sin(fall * .pi / 2)
+                swap = min(fall / 0.25, 1)
+            }
+        } else {
+            outgoing = cos(shaped * .pi / 2)
+            incoming = sin(shaped * .pi / 2)
+            swap = min(max((shaped - 0.4) / 0.2, 0), 1)
+        }
+        primaryDeck.volume = Float(outgoing)
+        secondaryDeck.volume = Float(incoming)
         let rates = sync.rates(at: shaped)
         primaryDeck.rate = rates.outgoing
         secondaryDeck.rate = rates.incoming
-        // Bass swap around the middle of the blend, so two basslines never stack.
-        let swap = min(max((shaped - 0.4) / 0.2, 0), 1)
+        // Bass swap so two basslines never stack.
         primaryDeck.bassCut = swap
         secondaryDeck.bassCut = 1 - swap
         return shaped
