@@ -36,15 +36,8 @@ actor KnobShiftAnalyser {
         steps.append(String(format: "Silence (RMS < %.3f): leading %.2fs, trailing %.2fs.",
                             Self.silenceRMS, leading, trailing))
 
-        let tempo = estimateTempo(from: windows)
-        steps.append(tempo.note)
-        let beats = beatGrid(tempo: tempo.value, windows: windows, duration: duration)
-        if let first = beats.first, let tempoValue = tempo.value {
-            steps.append(String(format: "Beat grid: %d beats every %.3fs, first at %.2fs.",
-                                beats.count, 60 / tempoValue, first))
-        } else {
-            steps.append("Beat grid: none, because there is no confident tempo.")
-        }
+        let rhythm = KnobShiftBeats.analyse(url)
+        steps.append(contentsOf: rhythm.steps)
 
         // A quiet tail is the only safe cue available without supplied timed lyrics. The cue
         // begins at the measured quiet boundary, not at an arbitrary number of seconds.
@@ -65,8 +58,8 @@ actor KnobShiftAnalyser {
             steps.append("Safe outro cue: none. No sustained fade and under 1s of trailing silence.")
         }
 
-        let analysis = KnobShiftModel.Analysis(tempo: tempo.value, tempoConfidence: tempo.confidence,
-                                               beatGrid: beats, leadingSilence: leading,
+        let analysis = KnobShiftModel.Analysis(tempo: rhythm.tempo, tempoConfidence: rhythm.confidence,
+                                               beatGrid: rhythm.beats, leadingSilence: leading,
                                                trailingSilence: trailing, fadeOutCue: fade.cue,
                                                safeOutroCue: safeOutroCue,
                                                vocalOnset: vocals.onset, vocalEnd: vocals.end)
@@ -115,41 +108,6 @@ actor KnobShiftAnalyser {
         return total
     }
 
-    private func estimateTempo(from windows: [EnergyWindow]) -> (value: Double?, confidence: Double, note: String) {
-        guard windows.count > 80 else {
-            return (nil, 0, "Tempo: skipped, only \(windows.count) windows (needs more than 80).")
-        }
-        let step = windows.map(\.duration).reduce(0, +) / Double(windows.count)
-        guard step > 0 else { return (nil, 0, "Tempo: skipped, windows have no length.") }
-        let energy = windows.map { Double($0.rms) }
-        var onsets = [Double](repeating: 0, count: energy.count)
-        for index in 1..<energy.count { onsets[index] = max(0, energy[index] - energy[index - 1]) }
-        let mean = onsets.reduce(0, +) / Double(onsets.count)
-        let variance = onsets.reduce(0) { $0 + pow($1 - mean, 2) } / Double(onsets.count)
-        let deviation = sqrt(variance)
-        guard deviation > 0 else { return (nil, 0, "Tempo: skipped, the energy never changes.") }
-        onsets = onsets.map { max(0, ($0 - mean) / deviation) }
-
-        var bestBPM: Double?
-        var bestScore = 0.0
-        for bpm in stride(from: 70.0, through: 180.0, by: 1.0) {
-            let lag = Int((60 / (bpm * step)).rounded())
-            guard lag > 0, lag < onsets.count / 3 else { continue }
-            var score = 0.0
-            for index in lag..<onsets.count { score += onsets[index] * onsets[index - lag] }
-            if score > bestScore { bestScore = score; bestBPM = bpm }
-        }
-        guard let bestBPM else { return (nil, 0, "Tempo: no candidate between 70 and 180 BPM scored.") }
-        let onsetPower = onsets.reduce(0) { $0 + $1 * $1 }
-        let confidence = min(1, bestScore / max(0.0001, onsetPower))
-        if confidence >= 0.12 {
-            return (bestBPM, confidence, String(format: "Tempo: %.0f BPM, confidence %.0f%% (accepted, minimum 12%%).",
-                                                bestBPM, confidence * 100))
-        }
-        return (nil, confidence, String(format: "Tempo: best guess %.0f BPM rejected, confidence %.0f%% is under 12%%.",
-                                        bestBPM, confidence * 100))
-    }
-
     /// Finds a sustained end-of-track energy descent before silence. This is deliberately more
     /// conservative than choosing a random final window: it only returns a cue when the envelope
     /// stays substantially below the immediately preceding musical section through the ending.
@@ -181,20 +139,6 @@ actor KnobShiftAnalyser {
             }
         }
         return (nil, String(format: "Fade: none. No 0.6s stretch held under 55%% of the baseline %.4f through to the end.", baseline))
-    }
-
-    private func beatGrid(tempo: Double?, windows: [EnergyWindow], duration: TimeInterval) -> [TimeInterval] {
-        guard let tempo, !windows.isEmpty else { return [] }
-        let interval = 60 / tempo
-        let energies = windows.map { Double($0.rms) }
-        guard let strongest = energies.indices.max(by: { energies[$0] < energies[$1] }) else { return [] }
-        let anchor = windows[strongest].time
-        var beats: [TimeInterval] = []
-        var backward = anchor
-        while backward > 0 { beats.append(backward); backward -= interval }
-        var forward = anchor + interval
-        while forward < duration { beats.append(forward); forward += interval }
-        return beats.sorted()
     }
 
     private enum AnalysisError: Error { case invalidFile }

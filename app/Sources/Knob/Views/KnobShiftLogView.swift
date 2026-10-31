@@ -108,7 +108,8 @@ struct KnobShiftLogView: View {
             HStack(spacing: 7) {
                 Image(systemName: Self.icon(entry.stage))
                     .font(.system(size: 9, weight: .semibold)).foregroundStyle(Palette.accent).frame(width: 12)
-                Text(String(format: "Blending, %.0f%% done", blend.progress * 100))
+                Text(String(format: "Blending, %.0f%% done", blend.progress * 100)
+                     + (blend.tempo.map { String(format: "  •  %.1f BPM", $0) } ?? ""))
                     .font(.system(size: 10, weight: .bold)).foregroundStyle(Screen.text)
                 Spacer()
             }
@@ -156,6 +157,7 @@ struct KnobShiftLogView: View {
         case "ANALYSIS": "waveform"
         case "PLAN": "point.topleft.down.to.point.bottomright.curvepath"
         case "TIMING": "clock"
+        case "SYNC": "metronome"
         case "KNOBMIX": "arrow.left.arrow.right"
         case "DECK": "opticaldisc"
         case "HANDOFF": "arrow.right.to.line"

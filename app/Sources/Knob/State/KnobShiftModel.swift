@@ -70,6 +70,7 @@ final class KnobShiftModel: ObservableObject {
             let progress: Double
             let outgoing: Double
             let incoming: Double
+            var tempo: Double?
         }
 
         let id = UUID()
@@ -82,34 +83,34 @@ final class KnobShiftModel: ObservableObject {
     }
 
     @Published private(set) var tracks: [Track] = []
-    @Published private(set) var nowPlaying: Track?
-    @Published private(set) var transitionDescription = "Add local music to begin."
+    @Published internal(set) var nowPlaying: Track?
+    @Published internal(set) var transitionDescription = "Add local music to begin."
     @Published private(set) var isPreparing = false
     @Published private(set) var isPlaying = false
-    @Published private(set) var notice: String?
-    @Published private(set) var playbackTime: TimeInterval = 0
-    @Published private(set) var playbackDuration: TimeInterval = 0
-    @Published private(set) var mixState: MixState = .idle
+    @Published internal(set) var notice: String?
+    @Published internal(set) var playbackTime: TimeInterval = 0
+    @Published internal(set) var playbackDuration: TimeInterval = 0
+    @Published internal(set) var mixState: MixState = .idle
     @Published private(set) var diagnostics: [Diagnostic] = []
     /// Real-time energy bars sampled from KnobShift's own audio mixer for the player visualizer.
     @Published private(set) var visualizerLevels = Array(repeating: Float(0.08), count: 42)
 
     private let analyser = KnobShiftAnalyser()
     private let audioEngine = AVAudioEngine()
-    private let deckOne = AVAudioPlayerNode()
-    private let deckTwo = AVAudioPlayerNode()
-    private var primaryDeck: AVAudioPlayerNode
-    private var secondaryDeck: AVAudioPlayerNode
-    private var currentIndex = 0
-    private var transitionTask: Task<Void, Never>?
+    private let deckOne: KnobShiftDeck
+    private let deckTwo: KnobShiftDeck
+    /// The deck the listener hears now; the other one brings in the next song. They swap roles
+    /// after every blend. Set only here and in KnobShiftModel+Blend.swift.
+    var primaryDeck: KnobShiftDeck
+    var secondaryDeck: KnobShiftDeck
+    var currentIndex = 0
+    var transitionTask: Task<Void, Never>?
     private var progressTask: Task<Void, Never>?
-    private var playbackStartedAt = Date()
+    var playbackStartedAt = Date()
     private var activeStyle: Style = .gentle
     private var configurationObserver: NSObjectProtocol?
-    /// Where the incoming song was started from, so its clock includes the skipped lead-in.
-    private var secondaryOffset: TimeInterval = 0
     /// The song the current plan or blend leads into, for the log when it is called off.
-    private var plannedNext: Track?
+    var plannedNext: Track?
 
     private var outputFormatDescription: String {
         let format = audioEngine.outputNode.outputFormat(forBus: 0)
@@ -117,12 +118,11 @@ final class KnobShiftModel: ObservableObject {
     }
 
     init(restoresQueue: Bool = true) {
+        let engine = audioEngine
+        deckOne = KnobShiftDeck(name: "Deck 1", engine: engine)
+        deckTwo = KnobShiftDeck(name: "Deck 2", engine: engine)
         primaryDeck = deckOne
         secondaryDeck = deckTwo
-        audioEngine.attach(deckOne)
-        audioEngine.attach(deckTwo)
-        audioEngine.connect(deckOne, to: audioEngine.mainMixerNode, format: nil)
-        audioEngine.connect(deckTwo, to: audioEngine.mainMixerNode, format: nil)
         installVisualizerTap()
         log("SESSION", "Local mixer initialized with Deck 1 and Deck 2.")
         // The engine stops itself when the Mac's output device changes; log it so a silent or
@@ -182,8 +182,10 @@ final class KnobShiftModel: ObservableObject {
     func stop() {
         if isPlaying { log("STOP", "Stopped local playback.") }
         cancelPlan("Playback stopped")
-        deckOne.stop()
-        deckTwo.stop()
+        for deck in [deckOne, deckTwo] {
+            deck.player.stop()
+            deck.resetEffects()
+        }
         progressTask?.cancel()
         progressTask = nil
         isPlaying = false
@@ -223,8 +225,8 @@ final class KnobShiftModel: ObservableObject {
             updatePlaybackTime()
             log("PLAY", "Paused at \(Self.seconds(playbackTime)).")
             cancelPlan("Paused")
-            secondaryDeck.stop()
-            primaryDeck.pause()
+            secondaryDeck.player.stop()
+            primaryDeck.player.pause()
             progressTask?.cancel()
             isPlaying = false
         } else {
@@ -235,7 +237,7 @@ final class KnobShiftModel: ObservableObject {
                 notice = "KnobShift could not play this file."
                 return
             }
-            primaryDeck.play()
+            primaryDeck.player.play()
             isPlaying = true
             playbackStartedAt = Date().addingTimeInterval(-playbackTime)
             startProgressUpdates()
@@ -269,7 +271,7 @@ final class KnobShiftModel: ObservableObject {
         guard let track = nowPlaying else { return }
         let wasPlaying = isPlaying
         cancelPlan("You moved to \(Analysis.clock(time))")
-        secondaryDeck.stop()
+        secondaryDeck.player.stop()
         do {
             log("SEEK", "Moving \(track.title) to \(String(format: "%.2f", time))s.")
             try schedulePrimary(track, from: min(max(time, 0), track.duration), play: wasPlaying)
@@ -286,14 +288,15 @@ final class KnobShiftModel: ObservableObject {
         scheduleNext(style: style)
     }
 
-    private func schedulePrimary(_ track: Track, from time: TimeInterval, play: Bool) throws {
+    func schedulePrimary(_ track: Track, from time: TimeInterval, play: Bool) throws {
         let file = try AVAudioFile(forReading: track.url)
         let start = AVAudioFramePosition((time * file.processingFormat.sampleRate).rounded())
         let remaining = max(0, file.length - start)
         guard remaining > 0, remaining <= AVAudioFramePosition(UInt32.max) else { throw PlayerError.invalidSegment }
-        primaryDeck.stop()
-        primaryDeck.volume = 1
-        primaryDeck.scheduleSegment(file, startingFrame: start, frameCount: AVAudioFrameCount(remaining), at: nil)
+        primaryDeck.player.stop()
+        primaryDeck.resetEffects()
+        primaryDeck.startOffset = time
+        primaryDeck.player.scheduleSegment(file, startingFrame: start, frameCount: AVAudioFrameCount(remaining), at: nil)
         nowPlaying = track
         playbackDuration = track.duration
         playbackTime = time
@@ -301,15 +304,15 @@ final class KnobShiftModel: ObservableObject {
         isPlaying = play
         if play {
             try startEngineIfNeeded()
-            primaryDeck.play()
+            primaryDeck.player.play()
             startProgressUpdates()
         }
-        log("DECK", "\(name(primaryDeck)) is primary: \(track.title) from \(Self.seconds(time)) of \(Self.seconds(track.duration)), \(remaining) frames, \(play ? "playing" : "paused").")
+        log("DECK", "\(primaryDeck.name) is primary: \(track.title) from \(Self.seconds(time)) of \(Self.seconds(track.duration)), \(remaining) frames, \(play ? "playing" : "paused").")
     }
 
     /// Every way of making sound goes through here: Play, clicking a song, Next, Previous,
     /// Resume and the incoming deck of a blend. The engine only starts when something plays.
-    private func startEngineIfNeeded() throws {
+    func startEngineIfNeeded() throws {
         guard !audioEngine.isRunning else { return }
         try audioEngine.start()
         log("ENGINE", "Local audio engine started, \(outputFormatDescription).")
@@ -331,7 +334,7 @@ final class KnobShiftModel: ObservableObject {
 
     private func restartCurrent() {
         cancelPlan("You switched to \(tracks.indices.contains(currentIndex) ? tracks[currentIndex].title : "another song")")
-        secondaryDeck.stop()
+        secondaryDeck.player.stop()
         guard !tracks.isEmpty else { return }
         do { try playCurrent(style: activeStyle) }
         catch {
@@ -340,7 +343,7 @@ final class KnobShiftModel: ObservableObject {
         }
     }
 
-    private func startProgressUpdates() {
+    func startProgressUpdates() {
         progressTask?.cancel()
         progressTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -396,7 +399,7 @@ final class KnobShiftModel: ObservableObject {
         KnobShiftLog.open()
     }
 
-    private func log(_ stage: String, _ message: String, blend: Diagnostic.Blend? = nil) {
+    func log(_ stage: String, _ message: String, blend: Diagnostic.Blend? = nil) {
         let entry = Diagnostic(timestamp: Date(), stage: stage, message: message, blend: blend)
         diagnostics.append(entry)
         if diagnostics.count > 400 { diagnostics.removeFirst(diagnostics.count - 400) }
@@ -412,10 +415,11 @@ final class KnobShiftModel: ObservableObject {
         log("PLAN", "Ghostface Killah: its last vocal line ends at 1:59.25, leaving 15.43s of music.")
         log("PLAN", "Shaukeen: its voice enters 10.45s in, at 68% of the blend, over the old music only.")
         log("KNOBMIX", "Starting 15.43s GENTLE blend. Outgoing Deck 1, incoming Deck 2 with Shaukeen.")
-        log("KNOBMIX", "+7.74s 50% done", blend: Diagnostic.Blend(progress: 0.5, outgoing: 0.70, incoming: 0.71))
+        log("SYNC", "Tempo sync on: 100.0 to 102.7 BPM, 2.7% apart. Both glide to a shared tempo, pitch stays natural.")
+        log("KNOBMIX", "+7.46s 50% done", blend: Diagnostic.Blend(progress: 0.5, outgoing: 0.70, incoming: 0.71, tempo: 101.3))
     }
 
-    private func logSection(_ title: String) {
+    func logSection(_ title: String) {
         log("SECTION", title)
     }
 
@@ -425,12 +429,7 @@ final class KnobShiftModel: ObservableObject {
         log("ANALYSIS", "Result: \(result.track.analysis.summary).")
     }
 
-    /// Names the physical player, since the primary and secondary roles swap after every mix.
-    private func name(_ deck: AVAudioPlayerNode) -> String {
-        deck === deckOne ? "Deck 1" : "Deck 2"
-    }
-
-    private static func seconds(_ value: TimeInterval) -> String {
+    static func seconds(_ value: TimeInterval) -> String {
         String(format: "%.2fs", value)
     }
 
@@ -471,158 +470,5 @@ final class KnobShiftModel: ObservableObject {
         UserDefaults.standard.set(tracks.map { $0.url.path }, forKey: PersistKey.knobShiftQueue.rawValue)
     }
 
-    private func scheduleNext(style: Style) {
-        guard let current = nowPlaying, tracks.count > 1 else {
-            mixState = .ready
-            transitionDescription = "Playing normally."
-            log("PLAN", "No next track in the queue. Playing normally with no mix.")
-            return
-        }
-        let next = tracks[(currentIndex + 1) % tracks.count]
-        plannedNext = next
-        let plan = KnobShiftPlan.make(from: current, to: next)
-        logSection("\(current.title) → \(next.title)")
-        log("PLAN", "Now at \(Self.seconds(playbackTime)) of \(Self.seconds(current.duration)), \(style.title) curve.")
-        for line in plan.reasoning { log("PLAN", line) }
-        transitionDescription = plan.description
-        mixState = plan.duration > 0 ? .ready : .preservingEnding
-
-        // A seek past the planned start still blends over whatever music is left.
-        let end = plan.start + plan.duration
-        let startsAt = max(plan.start, playbackTime)
-        let duration = plan.duration > 0 ? max(0, end - startsAt) : 0
-        let wait = max(0, startsAt - playbackTime)
-        if playbackTime > plan.start, plan.duration > 0 {
-            log("PLAN", "Already past the planned start, so the blend begins now over the remaining \(Self.seconds(duration)).")
-        }
-        log("PLAN", duration > 0
-            ? "Decision: blend in \(Self.seconds(wait)), lasting \(Self.seconds(duration))."
-            : "Decision: clean handoff in \(Self.seconds(wait)).")
-        let scheduledAt = Date()
-        transitionTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(wait))
-            guard let self else { return }
-            guard !Task.isCancelled else { return }
-            let late = Date().timeIntervalSince(scheduledAt) - wait
-            self.log("TIMING", "Plan fired \(String(format: "%.0f", late * 1_000)) ms after its target. Clock reads \(Self.seconds(self.playbackTime)), \(self.name(self.primaryDeck)) has played \(self.deckClock(self.primaryDeck)).")
-            if duration > 0 { self.beginBlend(to: next, duration: duration, offset: plan.incomingOffset, style: style) }
-            else { self.advance(to: next, offset: plan.incomingOffset, style: style) }
-        }
-    }
-
-    private func beginBlend(to next: Track, duration: TimeInterval, offset: TimeInterval, style: Style) {
-        do {
-            mixState = .mixing
-            transitionDescription = "MIXING • \(Int(duration.rounded())) second blend into \(next.title)."
-            log("KNOBMIX", "Starting \(Self.seconds(duration)) \(style.title) blend. Outgoing \(name(primaryDeck)), incoming \(name(secondaryDeck)) with \(next.title).")
-            let file = try AVAudioFile(forReading: next.url)
-            let startFrame = AVAudioFramePosition((offset * file.processingFormat.sampleRate).rounded())
-            let frames = max(0, file.length - startFrame)
-            guard frames > 0, frames <= AVAudioFramePosition(UInt32.max) else { throw PlayerError.invalidSegment }
-            secondaryDeck.stop()
-            secondaryDeck.volume = 0
-            secondaryDeck.scheduleSegment(file, startingFrame: startFrame, frameCount: AVAudioFrameCount(frames), at: nil)
-            try startEngineIfNeeded()
-            secondaryDeck.play()
-            secondaryOffset = offset
-            log("DECK", "\(name(secondaryDeck)) loaded \(next.title) from \(Self.seconds(offset)) at volume 0 and started.")
-            let started = Date()
-            // About 20 volume updates a second keep the curve smooth at any blend length.
-            let steps = max(1, Int((duration * 20).rounded()))
-            transitionTask = Task { [weak self] in
-                var lastLogged = -1
-                for step in 0...steps {
-                    // Each step waits for its own deadline from the blend start, so small sleep
-                    // overshoots never add up and the handoff lands on the planned end.
-                    let delay = duration * Double(step) / Double(steps) - Date().timeIntervalSince(started)
-                    if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
-                    guard let self else { return }
-                    let progress = Double(step) / Double(steps)
-                    guard !Task.isCancelled else { return }
-                    let shaped = self.setBlend(progress, style: style)
-                    let bucket = Int(progress * 20)
-                    if bucket != lastLogged {
-                        lastLogged = bucket
-                        self.log("KNOBMIX", String(format: "+%.2fs  %3.0f%% done, curve %3.0f%%  •  out %@ %.2f  •  in %@ %.2f",
-                                                   Date().timeIntervalSince(started), progress * 100, shaped * 100,
-                                                   self.name(self.primaryDeck), self.primaryDeck.volume,
-                                                   self.name(self.secondaryDeck), self.secondaryDeck.volume),
-                                 blend: Diagnostic.Blend(progress: progress,
-                                                         outgoing: Double(self.primaryDeck.volume),
-                                                         incoming: Double(self.secondaryDeck.volume)))
-                    }
-                }
-                guard !Task.isCancelled else { return }
-                self?.log("KNOBMIX", String(format: "Envelope took %.2fs (planned %.2fs).",
-                                            Date().timeIntervalSince(started), duration))
-                self?.finishBlend(to: next, style: style)
-            }
-        } catch {
-            mixState = .preservingEnding
-            log("ERROR", "Next deck preparation failed: \(error.localizedDescription)")
-            notice = "KnobShift could not prepare the next song."
-            advance(to: next, offset: offset, style: style)
-        }
-    }
-
-    @discardableResult
-    private func setBlend(_ progress: Double, style: Style) -> Double {
-        let shaped: Double
-        switch style {
-        case .gentle: shaped = progress * progress * (3 - 2 * progress)
-        case .balanced: shaped = progress
-        case .party: shaped = sqrt(progress)
-        }
-        primaryDeck.volume = Float(cos(shaped * .pi / 2))
-        secondaryDeck.volume = Float(sin(shaped * .pi / 2))
-        return shaped
-    }
-
-    private func finishBlend(to next: Track, style: Style) {
-        // The incoming deck has been playing for the whole blend, so the clock continues from
-        // where it really is instead of restarting at zero (which made the next mix late).
-        let incomingPlayed = min(next.duration, secondaryOffset + (deckSeconds(secondaryDeck) ?? 0))
-        primaryDeck.stop()
-        let outgoing = primaryDeck
-        primaryDeck = secondaryDeck
-        secondaryDeck = outgoing
-        primaryDeck.volume = 1
-        currentIndex = tracks.firstIndex(of: next) ?? 0
-        nowPlaying = next
-        playbackTime = incomingPlayed
-        playbackDuration = next.duration
-        playbackStartedAt = Date().addingTimeInterval(-incomingPlayed)
-        log("KNOBMIX", "Completed. \(name(secondaryDeck)) stopped, \(name(primaryDeck)) is primary with \(next.title) at volume 1.")
-        log("TIMING", "\(next.title) continues from \(Self.seconds(incomingPlayed)), where its deck really is.")
-        startProgressUpdates()
-        scheduleNext(style: style)
-    }
-
-    private func advance(to next: Track, offset: TimeInterval, style: Style) {
-        primaryDeck.stop()
-        secondaryDeck.stop()
-        currentIndex = tracks.firstIndex(of: next) ?? 0
-        log("HANDOFF", "No blend used. Both decks stopped, starting \(next.title) at \(Self.seconds(offset)).")
-        do {
-            try schedulePrimary(next, from: offset, play: true)
-            scheduleNext(style: style)
-        } catch {
-            log("ERROR", "Handoff failed: \(error.localizedDescription)")
-            notice = "KnobShift could not continue playback."
-        }
-    }
-
-    /// How long a deck has rendered since it last started, read from the audio engine itself
-    /// rather than the wall-clock estimate the progress bar uses.
-    private func deckSeconds(_ deck: AVAudioPlayerNode) -> TimeInterval? {
-        guard let nodeTime = deck.lastRenderTime, let playerTime = deck.playerTime(forNodeTime: nodeTime),
-              playerTime.sampleRate > 0 else { return nil }
-        return max(0, Double(playerTime.sampleTime) / playerTime.sampleRate)
-    }
-
-    private func deckClock(_ deck: AVAudioPlayerNode) -> String {
-        deckSeconds(deck).map(Self.seconds) ?? "nothing (not rendering)"
-    }
-
-    private enum PlayerError: Error { case invalidSegment }
+    enum PlayerError: Error { case invalidSegment }
 }

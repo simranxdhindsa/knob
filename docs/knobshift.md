@@ -46,7 +46,7 @@ two songs being mixed. There is no fixed crossfade length anywhere.
 | Leading and trailing silence | Short RMS windows | Skipping dead air at both ends |
 | Vocal start and vocal end | macOS's built-in on-device sound classifier (`SoundAnalysis`, labels singing, rapping, speech, choir and humming) | Where the mix may start, and when the new voice arrives |
 | Fade start | A sustained drop in loudness before the end | Fallback for songs without vocals |
-| Tempo and beat grid | Onset autocorrelation | Shown in the log only for now (not yet accurate enough to beat-match) |
+| Tempo and beat grid | Spectral flux, autocorrelation and a beat-path search (`State/KnobShiftBeats.swift`), then one grid placed on the kick drum | Tempo sync and lining up the first beats |
 
 The vocal detector judges voice against each song's own typical vocal level, so
 a quiet ad-lib outro still counts as voice while a single shout after the last
@@ -84,6 +84,45 @@ waits for its own deadline from the blend start, so the handoff lands exactly
 on the planned end. After the handoff the incoming song's clock carries on from
 where its deck really is, so the next plan is on time.
 
+### Tempo sync, beat lock and bass swap
+
+Each song gets an exact beat grid. The beat tracker can follow the kick in one
+section and a hi-hat triplet or off-beat in the next, so its beats jump by part
+of a beat between sections. Produced tracks keep one tempo, so KnobShift then
+searches for one continuous grid across the whole song, trying tempos within
+±0.3% and 96 positions within the beat, and keeps the grid with the most kick
+drum (bass below about 170 Hz) on its beats. Measured: Ghostface Killah 100.00
+BPM, Why So 90.00, Shaukeen 102.68, with drum hits 3 to 4 ms from the grid.
+Songs whose tempo really changes keep one grid per drum section. A test track
+made at exactly 120 BPM reads 120.0, with every beat within 3 ms.
+
+During a blend (`State/KnobShiftSync.swift`, `State/KnobShiftModel+Blend.swift`):
+
+- **Tempo sync:** when the two tempos (or double or half time) are within 8%,
+  both songs play at one shared tempo that glides from the outgoing tempo to
+  the incoming one on the same curve as the volumes. Pitch stays natural
+  (`AVAudioUnitTimePitch`). The incoming song ends at its own normal speed, so
+  nothing stays stretched. Beyond 8% stretching starts to sound processed, so
+  those pairs blend at their own speeds and the log says why.
+- **Beat lock:** the incoming song starts on one of its own beats, scheduled
+  sample-accurately to land on the outgoing song's next beat.
+- **Bass swap:** the incoming song's bass is held back with a high-pass filter
+  (`AVAudioUnitEQ`, up to 200 Hz), and around the middle of the blend the two
+  basslines swap, so two kicks and basslines never stack.
+- The blend still ends when the outgoing music runs out, even though that song
+  plays slightly faster or slower during the glide.
+
+Each deck is player → time-stretch → bass filter → mixer (`State/KnobShiftDeck.swift`).
+At normal speed the time-stretch unit is sample-identical to its input, and the
+filter rests at 10 Hz, so both stay connected all the time; switching effects in
+and out mid-song would cause a jump. Measured offline: no clicks while gliding
+the speed, and under 5 ms of added delay at ±3%.
+
+Ghostface Killah into Shaukeen: tempo sync 100.0 to 102.7 BPM, Shaukeen starts
+at 0.974 speed on a Ghostface beat and ends at 1.000, bass swaps at the middle.
+In simulation the beats stay within 1 ms for the whole blend, against 140 to 200
+ms apart without sync.
+
 KnobShift must never claim to detect a last lyric from plain audio. The vocal
 end is where steady voice stops, not a lyric reading.
 
@@ -105,6 +144,7 @@ Checks from Terminal (the second one is muted unless a volume is given):
 ```bash
 build/Knob.app/Contents/MacOS/Knob --knobshift-analysis-check SONG       # every analysis step
 build/Knob.app/Contents/MacOS/Knob --knobshift-check SONG_A SONG_B [VOL] # real two-song mix, VOL 0 to 100
+build/Knob.app/Contents/MacOS/Knob --knobshift-sync-check SONG_A SONG_B  # beat alignment through the blend, no audio needed
 ```
 
 The two-song check jumps to six seconds before the planned blend, waits for the
@@ -180,10 +220,9 @@ KnobShift-mixable.
 2. Done: vocal-aware planning with no fixed crossfade length, and the honest
    `ANALYZING`, `READY`, `KNOBMIX` and `PRESERVING ENDING` states.
 3. Done: full diagnostics in the player and in `knobshift.log`.
-4. Next: accurate tempo, beats and downbeats, then beat-aligned starts and a
-   bounded tempo ramp (`AVAudioUnitTimePitch`) when two songs are close.
-5. Next: a bass swap during the blend (`AVAudioUnitEQ`), so two basslines never
-   stack.
+4. Done: exact beat grids on the kick drum, tempo sync with natural pitch, and
+   beat-locked starts.
+5. Done: a bass swap during the blend.
 6. Later: on-device vocal and accompaniment separation for songs sung to the
    very end, so the outgoing vocal can finish over the incoming music. Only the
    intro and outro need separating. Needs a decision on downloading the model

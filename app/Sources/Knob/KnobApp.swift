@@ -31,6 +31,11 @@ struct KnobLauncher {
                                     second: URL(fileURLWithPath: arguments[index + 2]), volume: volume)
             return
         }
+        if let index = arguments.firstIndex(of: "--knobshift-sync-check"), index + 2 < arguments.count {
+            KnobShiftAnalysisCheck.runSync(first: URL(fileURLWithPath: arguments[index + 1]),
+                                           second: URL(fileURLWithPath: arguments[index + 2]))
+            return
+        }
         if let index = arguments.firstIndex(of: "--knobshift-analysis-check"), index + 1 < arguments.count {
             KnobShiftAnalysisCheck.run(file: URL(fileURLWithPath: arguments[index + 1]))
             return
