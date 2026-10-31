@@ -7,6 +7,7 @@ import SwiftUI
 ///   --snapshot DIR      render the panel in light and dark mode to PNG files, then quit
 ///   --icons DIR         render the app icon (1024px) and the About window, then quit
 ///   --volume-check SEC  print real Mac volume changes for SEC seconds, set and restore, then quit
+///   --knobshift-analysis-check FILE  analyse a local file without opening an audio output device
 @main
 struct KnobLauncher {
     static func main() {
@@ -21,6 +22,15 @@ struct KnobLauncher {
         }
         if let index = arguments.firstIndex(of: "--volume-check"), index + 1 < arguments.count {
             VolumeCheck.run(seconds: Double(arguments[index + 1]) ?? 3)
+            return
+        }
+        if let index = arguments.firstIndex(of: "--knobshift-check"), index + 2 < arguments.count {
+            KnobShiftSmokeCheck.run(first: URL(fileURLWithPath: arguments[index + 1]),
+                                    second: URL(fileURLWithPath: arguments[index + 2]))
+            return
+        }
+        if let index = arguments.firstIndex(of: "--knobshift-analysis-check"), index + 1 < arguments.count {
+            KnobShiftAnalysisCheck.run(file: URL(fileURLWithPath: arguments[index + 1]))
             return
         }
         KnobApp.main()
@@ -41,7 +51,10 @@ struct KnobApp: App {
         model.start()
         model.restorePower()
         Updater.shared.start()
-        DispatchQueue.main.async { DevWindow.showIfRequested(model: model) }
+        DispatchQueue.main.async {
+            DevWindow.showIfRequested(model: model)
+            KnobShiftWindow.restoreIfNeeded(model: model.knobShift)
+        }
         ProcessInfo.processInfo.disableAutomaticTermination("Knob lives in the menu bar")
         if ProcessInfo.processInfo.environment["KNOB_DEV_OPEN_POPOVER"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { StatusItemPanel.open() }

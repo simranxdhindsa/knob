@@ -5,24 +5,35 @@ struct ScreenSection: View {
     @ObservedObject var model: KnobModel
     @AppStorage(PersistKey.selectedTab.rawValue) private var tab = Tab.effects
 
-    enum Tab: String, CaseIterable { case effects, equalizer }
+    enum Tab: String, CaseIterable { case effects, equalizer, knobShift }
 
     var body: some View {
         InsetScreen(glow: model.powerOn ? LevelMeter.position(max(model.peakLeft, model.peakRight)) : 0) {
             VStack(spacing: 10) {
-                SegmentedTabs(options: Tab.allCases, selection: $tab) { $0 == .effects ? "EFFECTS" : "EQUALIZER" }
-                ZStack {
-                    SpectrumView(bands: model.spectrum, showsGrid: tab == .equalizer,
-                                 intensity: tab == .effects ? 0.45 : 0.8)
-                        .opacity((model.powerOn ? 1 : 0.35) * (tab == .equalizer ? 0.45 : 1))
-                    if tab == .effects {
-                        EffectsGrid(model: model)
-                    } else {
-                        EqualizerBank(model: model)
+                SegmentedTabs(options: Tab.allCases, selection: $tab) {
+                    switch $0 {
+                    case .effects: "EFFECTS"
+                    case .equalizer: "EQUALIZER"
+                    case .knobShift: "KNOBSHIFT"
                     }
                 }
-                .frame(height: 176)
-                .disabled(model.connection != .online)
+                if tab == .knobShift {
+                    KnobShiftScreen(model: model.knobShift)
+                        .frame(height: 176)
+                } else {
+                    ZStack {
+                        SpectrumView(bands: model.spectrum, showsGrid: tab == .equalizer,
+                                     intensity: tab == .effects ? 0.45 : 0.8)
+                            .opacity((model.powerOn ? 1 : 0.35) * (tab == .equalizer ? 0.45 : 1))
+                        if tab == .effects {
+                            EffectsGrid(model: model)
+                        } else {
+                            EqualizerBank(model: model)
+                        }
+                    }
+                    .frame(height: 176)
+                    .disabled(model.connection != .online)
+                }
                 if let notice = model.notice {
                     statusNote(notice, attention: !model.starting,
                                showsInstall: model.canInstallDevice && !model.starting)

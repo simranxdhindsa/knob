@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Quit from the Dock, ⌘Q or the app menu: save the sound, give the speakers back, stop the
     /// engine, then quit. Dev mode relaunches on every save, so it keeps the engine running.
     @MainActor func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        KnobShiftWindow.prepareForTermination()
         guard ProcessInfo.processInfo.environment["KNOB_DEV_OPEN_POPOVER"] != "1", let model = Self.model
         else { return .terminateNow }
         Task { @MainActor in

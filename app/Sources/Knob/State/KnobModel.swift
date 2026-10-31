@@ -31,6 +31,8 @@ final class KnobModel: ObservableObject {
     @Published private(set) var canInstallDevice = false
     /// True when the Mac's sound actually goes through Knob (Knob is the default output).
     @Published private(set) var routingActive = false
+    /// Local-file playback and transition planning. It never controls streaming-service players.
+    let knobShift = KnobShiftModel()
 
     private let engine: SoundEngine
     private let volumeControl: VolumeControl
