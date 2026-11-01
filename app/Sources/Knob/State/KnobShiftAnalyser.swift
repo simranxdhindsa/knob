@@ -64,9 +64,19 @@ actor KnobShiftAnalyser {
         let quietStart = duration - trailing
         let fade = fadeOutStart(in: windows, quietStart: quietStart)
         steps.append(fade.note)
-        let vocals = KnobShiftVocals.detect(in: url)
+        let sections = KnobShiftSections.find(bass: bassReadings(windows), beats: rhythm.beats)
+        steps.append(contentsOf: sections.steps)
+        // A beat that only comes in very late is a long sung intro, not a tag before the beat.
+        let beatEntry = sections.beatEntry.flatMap { $0 <= 40 ? $0 : nil }
+        let vocals = KnobShiftVocals.detect(in: url, beatEntry: beatEntry)
         progress(0.95)
         steps.append(contentsOf: vocals.steps)
+        var mainVerse = vocals.mainOnset
+        if let onset = mainVerse, let beatEntry {
+            let placed = KnobShiftSections.placeVerse(onset, entry: beatEntry, tempo: rhythm.tempo, beats: rhythm.beats)
+            steps.append(String(format: "Main verse on the phrase grid: %.2fs (heard from %.2fs).", placed, onset))
+            mainVerse = placed
+        }
         if let end = vocals.end {
             steps.append(String(format: "Outro after the voice: %.2fs of music before the audible end.", max(0, quietStart - end)))
         }
@@ -85,7 +95,8 @@ actor KnobShiftAnalyser {
                                                safeOutroCue: safeOutroCue,
                                                vocalOnset: vocals.onset, vocalEnd: vocals.end,
                                                lastLineStart: vocals.lastLineStart,
-                                               mainVocalOnset: vocals.mainOnset, vocalStrays: vocals.strays)
+                                               mainVocalOnset: mainVerse, vocalStrays: vocals.strays,
+                                               beatEntry: sections.beatEntry, musicBreaks: sections.breaks)
         steps.append(String(format: "Finished in %.0f ms.", Date().timeIntervalSince(started) * 1_000))
         let track = KnobShiftModel.Track(url: url, title: url.deletingPathExtension().lastPathComponent,
                                          duration: duration, tailSilence: trailing, analysis: analysis)
@@ -98,6 +109,8 @@ actor KnobShiftAnalyser {
         let time: TimeInterval
         let duration: TimeInterval
         let rms: Float
+        /// Loudness under about 120 Hz: the kick drum and bass.
+        let bass: Float
     }
 
     /// Uses short RMS windows. This supplies conservative silence and rhythmic-onset candidates,
@@ -108,18 +121,39 @@ actor KnobShiftAnalyser {
             throw AnalysisError.invalidFile
         }
         var windows: [EnergyWindow] = []
+        var lowPass: Float = 0
+        let lowPassAmount = Float(1 - exp(-2 * Double.pi * 120 / sampleRate))
         while file.framePosition < file.length {
             buffer.frameLength = 0
             let start = Double(file.framePosition) / sampleRate
             try file.read(into: buffer, frameCount: frames)
             guard buffer.frameLength > 0, let samples = buffer.floatChannelData?[0] else { continue }
             var power: Float = 0
-            for index in 0..<Int(buffer.frameLength) { power += samples[index] * samples[index] }
+            var bassPower: Float = 0
+            for index in 0..<Int(buffer.frameLength) {
+                power += samples[index] * samples[index]
+                lowPass += lowPassAmount * (samples[index] - lowPass)
+                bassPower += lowPass * lowPass
+            }
             let length = Double(buffer.frameLength) / sampleRate
             windows.append(EnergyWindow(time: start, duration: length,
-                                        rms: sqrt(power / Float(buffer.frameLength))))
+                                        rms: sqrt(power / Float(buffer.frameLength)),
+                                        bass: sqrt(bassPower / Float(buffer.frameLength))))
         }
         return windows
+    }
+
+    /// Bass loudness in `KnobShiftSections.step` second readings.
+    private func bassReadings(_ windows: [EnergyWindow]) -> [Double] {
+        guard let last = windows.last else { return [] }
+        var sums = [Double](repeating: 0, count: Int((last.time + last.duration) / KnobShiftSections.step) + 1)
+        var counts = sums
+        for window in windows {
+            let slot = Int(window.time / KnobShiftSections.step)
+            sums[slot] += Double(window.bass * window.bass)
+            counts[slot] += 1
+        }
+        return sums.indices.map { counts[$0] > 0 ? sqrt(sums[$0] / counts[$0]) : 0 }
     }
 
     private func silenceDuration<S: Sequence>(in windows: S) -> TimeInterval where S.Element == EnergyWindow {

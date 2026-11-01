@@ -36,7 +36,8 @@ struct KnobShiftUpNext: View {
     }
 }
 
-/// The queue: every song with its cover, tempo and length; the playing one highlighted.
+/// The queue: every song with its cover and length, the playing one highlighted. Songs can be
+/// dragged into a new order, and shuffle shows the shuffled order so what plays next is visible.
 struct KnobShiftQueue: View {
     @ObservedObject var model: KnobShiftModel
     var onAdd: () -> Void
@@ -49,6 +50,19 @@ struct KnobShiftQueue: View {
                     Text("\(model.tracks.count + model.pending.count)").font(.system(size: 9, weight: .bold)).foregroundStyle(Screen.textTertiary)
                 }
                 Spacer()
+                Button { model.toggleShuffle() } label: {
+                    Image(systemName: "shuffle")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(model.isShuffled ? Palette.accent : Screen.textTertiary)
+                        .frame(width: 24, height: 20)
+                        .background(Capsule().fill(model.isShuffled ? Palette.accent.opacity(0.14) : .clear))
+                        .shadow(color: model.isShuffled ? Palette.accentGlow.opacity(0.5) : .clear, radius: 4)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.tracks.count < 2)
+                .help(model.isShuffled ? "Shuffle is on. Click to go back to your order." : "Shuffle the queue")
+                .accessibilityLabel(model.isShuffled ? "Shuffle on" : "Shuffle off")
+                .padding(.trailing, 8)
                 Button(action: onAdd) {
                     Label("ADD MUSIC", systemImage: "plus")
                         .font(.system(size: 9, weight: .bold)).tracking(0.6)
@@ -59,18 +73,30 @@ struct KnobShiftQueue: View {
             if model.tracks.isEmpty && model.pending.isEmpty {
                 empty
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 4) {
-                        ForEach(model.tracks) { track in row(track) }
-                        ForEach(model.pending) { song in pendingRow(song) }
-                    }
+                // A List gives native drag to reorder, in your order and in shuffle alike.
+                List {
+                    ForEach(model.tracks) { track in queueRow(row(track)) }
+                        .onMove { model.move(fromOffsets: $0, toOffset: $1) }
+                    ForEach(model.pending) { song in queueRow(pendingRow(song)) }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .animation(Motion.gentle, value: model.tracks.map(\.id))
             }
             if let notice = model.notice {
                 Text(notice).font(.system(size: 10)).foregroundStyle(Palette.accent).lineLimit(2)
             }
         }
         .screenCard(radius: 16, padding: 14)
+    }
+
+    /// Strips the list's own look, and leaves room on the right for the scroll bar so it never
+    /// sits on top of the remove buttons.
+    private func queueRow<Content: View>(_ content: Content) -> some View {
+        content
+            .listRowInsets(EdgeInsets(top: 2, leading: -8, bottom: 2, trailing: 6))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
     }
 
     private func row(_ track: KnobShiftModel.Track) -> some View {

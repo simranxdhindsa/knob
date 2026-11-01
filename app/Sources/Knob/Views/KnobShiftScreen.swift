@@ -71,9 +71,7 @@ struct KnobShiftScreen: View {
     }
 
     @ViewBuilder private var status: some View {
-        if model.mixState == .mixing {
-            KnobMixBanner(progress: model.blendProgress)
-        } else if let mix = model.nextMix {
+        if let mix = model.nextMix, model.mixState != .mixing {
             HStack(spacing: 6) {
                 Text("NEXT").font(.system(size: 9, weight: .bold)).tracking(0.9).foregroundStyle(Screen.textTertiary)
                 Text(mix.next.name).font(.system(size: 11, weight: .semibold)).foregroundStyle(Screen.text).lineLimit(1)

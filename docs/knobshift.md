@@ -47,6 +47,7 @@ two songs being mixed. There is no fixed crossfade length anywhere.
 | Vocal start and vocal end | macOS's built-in on-device sound classifier (`SoundAnalysis`, labels singing, rapping, speech, choir and humming) | Where the mix may start, and when the new voice arrives |
 | Fade start | A sustained drop in loudness before the end | Fallback for songs without vocals |
 | Tempo and beat grid | Spectral flux, autocorrelation and a beat-path search (`State/KnobShiftBeats.swift`), then one grid placed on the kick drum | Tempo sync and lining up the first beats |
+| Beat entry and music breaks | Bass loudness under about 120 Hz in half second steps (`State/KnobShiftSections.swift`): the beat enters where the bass comes in and stays for 4 seconds; a break is where it drops out for a second after 4 seconds of music | Ignoring a voice tag before the drums, and leaving a song that sings to the end at its last break |
 
 The vocal detector judges voice against each song's own typical vocal level, so
 a quiet ad-lib outro still counts as voice while a single shout after the last
@@ -66,9 +67,18 @@ Example, measured on real files:
 
 The vocal handoff, counted in bars of the outgoing song's own tempo:
 
-1. The handoff point is where the outgoing song's last vocal line ends.
+1. The handoff point is where the outgoing song's last vocal line ends. When
+   the singing runs right to the end (under a bar of music after it), the
+   handoff moves to the last music break at least four bars before the end
+   and within the last minute. Example: Putt Jam Te Lau sings to 3:42, so it
+   hands over at its 3:30 break instead of mixing in its last 4 seconds.
 2. The incoming song's main verse is the first steady line at that song's
-   normal singing level; quieter intro ad-libs do not count.
+   normal singing level; quieter intro ad-libs do not count, and neither does
+   any voice before the beat comes in (a tag or shout over the intro). The
+   verse is then placed on the four bar phrase grid counted from the beat
+   entry, because the classifier hears a line up to a bar late.
+   Example: Sardaari has a loud tag at 0:02 to 0:05 and drums from 0:06, so
+   its verse lands at 0:17.6, not 0:01.5.
 3. Two bars before the handoff the incoming song comes in, started two bars
    before its own main verse rather than from its beginning, so only its beats
    play under the old voice and its verse lands on the handoff. With a shorter

@@ -30,7 +30,9 @@ enum KnobShiftVocals {
     /// Voice must hold this long to count as a vocal line rather than a stray sound.
     private static let steadyVoice = 3.0
 
-    static func detect(in url: URL) -> Result {
+    /// `beatEntry` is where the song's beat comes in: voice before it (a tag or shout over the
+    /// intro) is never taken for the main verse.
+    static func detect(in url: URL, beatEntry: TimeInterval? = nil) -> Result {
         let started = Date()
         let observer = Observer()
         do {
@@ -87,9 +89,11 @@ enum KnobShiftVocals {
         // The main verse: a steady line at the song's normal singing level, not just above the
         // quieter threshold that also catches intro ad-libs.
         let mainRuns = voicedRuns(smoothed, floor: max(floor, level * 0.6), minimumRun: minimumRun)
-        let mainOnset = mainRuns.first.map { max(0, frames[$0.lowerBound].time - hop) } ?? onset
+        let entry = beatEntry ?? 0
+        let mainRun = mainRuns.first { frames[$0.upperBound].time + hop >= entry + steadyVoice }
+        let mainOnset = mainRun.map { max(entry, frames[$0.lowerBound].time - hop) } ?? onset
         if mainOnset > onset + 0.5 {
-            steps.append(String(format: "Main verse: %.2fs. The voice before it (from %.2fs) is quieter intro ad-libs.", mainOnset, onset))
+            steps.append(String(format: "Main verse: %.2fs. The voice before it (from %.2fs) is intro ad-libs or a tag before the beat.", mainOnset, onset))
         } else {
             steps.append(String(format: "Main verse: %.2fs.", mainOnset))
         }

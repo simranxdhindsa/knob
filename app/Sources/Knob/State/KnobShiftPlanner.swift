@@ -39,9 +39,17 @@ struct KnobShiftPlan {
 
         // Songs with vocals: hand the voice over.
         if let vocalEnd = outgoing.vocalEnd {
-            let handoff = min(vocalEnd, audibleEnd)
+            var handoff = min(vocalEnd, audibleEnd)
             let lastLine = min(outgoing.lastLineStart ?? handoff, handoff)
             reasoning.append("\(current.title): its last vocal line runs \(clock(lastLine)) to \(clock(handoff)).")
+            // Singing that runs right up to the end leaves no room to mix, so the handoff moves
+            // to the last break in the music (where the bass drops out) at least four bars from
+            // the end, as a DJ would leave a song before its final section.
+            if audibleEnd - handoff < bar,
+               let lastBreak = outgoing.musicBreaks.last(where: { $0 <= audibleEnd - 4 * bar && $0 >= audibleEnd - 60 && $0 > lastLine }) {
+                reasoning.append("Its singing runs to the end, so the voices hand over at its last break, \(clock(lastBreak)), instead.")
+                handoff = lastBreak
+            }
             // Two bars of beats under the old voice; less if the new song has a shorter run-up
             // to its main verse, but at least one bar so the change never feels abrupt.
             let runUp = mainVerse.map { max(0, $0 - leadIn) }

@@ -38,6 +38,10 @@ final class KnobShiftModel: ObservableObject {
         var mainVocalOnset: TimeInterval? = nil
         /// Short vocal sounds after the last steady line.
         var vocalStrays: [TimeInterval] = []
+        /// Where the kick and bass first come in and stay.
+        var beatEntry: TimeInterval? = nil
+        /// Where the bass drops out for a moment: the breaks between sections.
+        var musicBreaks: [TimeInterval] = []
 
         /// Where the song is actually heard, without leading or trailing silence.
         func audibleEnd(duration: TimeInterval) -> TimeInterval { max(0, duration - trailingSilence) }
@@ -117,7 +121,11 @@ final class KnobShiftModel: ObservableObject {
         var isSection: Bool { stage == "SECTION" }
     }
 
-    @Published private(set) var tracks: [Track] = []
+    /// The queue in play order: the user's order, or the shuffled one (KnobShiftModel+Queue.swift).
+    @Published internal(set) var tracks: [Track] = []
+    @Published internal(set) var isShuffled = false
+    /// The user's own order while shuffle is on, so turning it off brings that order back.
+    var unshuffled: [Track] = []
     @Published internal(set) var nowPlaying: Track?
     @Published internal(set) var transitionDescription = "Add local music to begin."
     @Published private(set) var isPreparing = false
@@ -231,6 +239,7 @@ final class KnobShiftModel: ObservableObject {
                 }
                 pending.removeAll { $0.id == song.id }
                 tracks.append(result.track)
+                if isShuffled { unshuffled.append(result.track) }
                 logAnalysis(result)
                 refreshPlanIfNeeded()
             } catch {
@@ -255,7 +264,7 @@ final class KnobShiftModel: ObservableObject {
     }
 
     /// When a newly ready song becomes the next one while music plays, plan the mix into it.
-    private func refreshPlanIfNeeded() {
+    func refreshPlanIfNeeded() {
         guard isPlaying, mixState != .mixing, nowPlaying != nil, tracks.count > 1,
               abs(primaryDeck.rate - 1) < 0.001 else { return }
         let expected = tracks[(currentIndex + 1) % tracks.count]
@@ -308,6 +317,7 @@ final class KnobShiftModel: ObservableObject {
         guard let index = tracks.firstIndex(of: track) else { return }
         if nowPlaying == track { stop() }
         tracks.remove(at: index)
+        unshuffled.removeAll { $0 == track }
         log("QUEUE", "Removed \(track.title).")
         currentIndex = min(currentIndex, max(0, tracks.count - 1))
         persistQueue()
@@ -522,8 +532,9 @@ final class KnobShiftModel: ObservableObject {
         await addTracks(urls)
     }
 
-    private func persistQueue() {
-        let paths = tracks.map { $0.url.path } + pending.map { $0.url.path }
+    /// Saves the user's own order; shuffle starts off again on the next launch.
+    func persistQueue() {
+        let paths = (isShuffled ? unshuffled : tracks).map { $0.url.path } + pending.map { $0.url.path }
         UserDefaults.standard.set(paths, forKey: PersistKey.knobShiftQueue.rawValue)
     }
 

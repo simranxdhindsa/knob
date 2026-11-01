@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// KnobShift's now-playing deck: cover art, title and artist, the live KNOBMIX indicator, a
-/// timeline that marks where the next mix happens, and the transport. Layout follows the
+/// timeline, and the transport. Layout follows the
 /// 21st.dev MusicPlayerCard by dhileepkumargm (large art, track details, time slider, centred
 /// controls), rebuilt in SwiftUI on Knob's dark screen finish with its orange accent.
 struct KnobShiftNowPlaying: View {
@@ -22,9 +22,6 @@ struct KnobShiftNowPlaying: View {
                 AlbumArtwork(url: model.nowPlaying?.url, size: 188, lit: model.mixState == .mixing)
                     .padding(.top, 4)
                 details(alignment: .center)
-            }
-            if model.mixState == .mixing {
-                KnobMixBanner(progress: model.blendProgress)
             }
             timeline
             transport
@@ -48,7 +45,6 @@ struct KnobShiftNowPlaying: View {
                 .lineLimit(1)
             if let track {
                 HStack(spacing: 6) {
-                    if let tempo = track.analysis.tempo { chip(String(format: "%.0f BPM", tempo), lit: false) }
                     statusChip
                 }
                 .padding(.top, 3)
@@ -125,39 +121,5 @@ struct KnobShiftNowPlaying: View {
 
     static func clock(_ value: TimeInterval) -> String {
         String(format: "%d:%02d", Int(value) / 60, Int(value) % 60)
-    }
-}
-
-/// Shown while a mix is happening: a breathing KNOBMIX badge and how far the mix has gone.
-struct KnobMixBanner: View {
-    let progress: Double
-    @State private var breathe = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Circle().fill(Palette.accent)
-                    .frame(width: 8, height: 8)
-                    .shadow(color: Palette.accentGlow, radius: breathe ? 7 : 2)
-                    .opacity(breathe ? 1 : 0.55)
-                Text("KNOBMIX").font(.system(size: 11, weight: .heavy)).tracking(1.2).foregroundStyle(Palette.accent)
-                Spacer(minLength: 0)
-            }
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Screen.grid)
-                    Capsule().fill(LinearGradient(colors: [Palette.accent, Palette.accentGlow], startPoint: .leading, endPoint: .trailing))
-                        .frame(width: geometry.size.width * min(max(progress, 0), 1))
-                        .shadow(color: Palette.accentGlow.opacity(0.7), radius: 4)
-                }
-            }
-            .frame(height: 4)
-        }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Palette.accent.opacity(0.10)))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Palette.accent.opacity(0.35), lineWidth: 1))
-        .onAppear { withAnimation(Motion.pulse) { breathe = true } }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("KnobMix, \(Int(progress * 100)) percent")
     }
 }
