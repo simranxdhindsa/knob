@@ -137,8 +137,16 @@ enum KnobShiftStems {
         let read: (Int) -> Float
         switch output.dataType {
         case .float16:
-            let pointer = output.dataPointer.bindMemory(to: Float16.self, capacity: output.count)
-            read = { Float(pointer[$0]) }
+            // Half precision converted with vImage, which works on Intel Macs too.
+            let span = output.strides[0].intValue * output.shape[0].intValue
+            var floats = [Float](repeating: 0, count: span)
+            var source = vImage_Buffer(data: output.dataPointer, height: 1, width: vImagePixelCount(span), rowBytes: span * 2)
+            floats.withUnsafeMutableBytes {
+                var target = vImage_Buffer(data: $0.baseAddress, height: 1, width: vImagePixelCount(span), rowBytes: span * 4)
+                _ = vImageConvert_Planar16FtoPlanarF(&source, &target, vImage_Flags(kvImageNoFlags))
+            }
+            let converted = floats
+            read = { converted[$0] }
         default:
             let pointer = output.dataPointer.bindMemory(to: Float.self, capacity: output.count)
             read = { pointer[$0] }
