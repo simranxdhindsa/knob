@@ -48,6 +48,8 @@ sign "$sparkle/Updater.app"
 sign "$bundle/Contents/Frameworks/Sparkle.framework"
 cp "$repo_dir/presets/"*.fac "$bundle/Contents/Resources/presets/"
 cp "$app_dir/Resources/AppIcon.icns" "$bundle/Contents/Resources/AppIcon.icns"
+# KnobShift's on-device vocal separation model (Open-Unmix, MIT) and its licence.
+ditto "$app_dir/Resources/KnobShift" "$bundle/Contents/Resources/KnobShift"
 cat > "$bundle/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

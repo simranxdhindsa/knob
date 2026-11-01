@@ -70,7 +70,7 @@ struct RealisticKnob: View {
         .accessibilityElement()
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(accessibilityValue)
-        .help("Drag to turn. Hold Shift for fine adjustment. Double-click to reset when available.")
+        .help("Drag to turn. Hold Shift for fine adjustment. Double click to reset when available.")
         .accessibilityAdjustableAction { direction in
             set(value + (direction == .increment ? 0.05 : -0.05), animated: true)
         }

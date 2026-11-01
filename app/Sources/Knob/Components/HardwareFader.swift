@@ -67,7 +67,7 @@ struct HardwareFader: View {
         .accessibilityElement()
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(accessibilityValue)
-        .help("Drag to adjust. Hold Shift for fine adjustment. Double-click to reset to 0 dB.")
+        .help("Drag to adjust. Hold Shift for fine adjustment. Double click to reset to 0 dB.")
         .accessibilityAdjustableAction { direction in
             withAnimation(Motion.snappy) { value = min(max(value + (direction == .increment ? 0.083 : -0.083), -1), 1) }
         }

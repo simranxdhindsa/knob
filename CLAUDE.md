@@ -216,7 +216,7 @@ If the same UI pattern is needed in 2+ places, extract it into `Components/`; ne
 Precision controls and startup recovery: [`docs/precision-and-recovery.md`](docs/precision-and-recovery.md). Knobs and faders support Shift-drag at one-tenth speed. Startup diagnosis must read only the current launch's log bytes, never historical errors. Regression checks: `sh tests/precision-startup-build.sh`.
 
 ### 11. UI copy
-Never use em dashes (`—`) or double dashes (`--`) in user-facing text: headings, labels, tips, errors, menu items, anything on screen. Rewrite as two sentences, or join with a comma, "and" or "so". This doesn't apply to code, comments or commit messages.
+Never use any dash in user-facing text: no hyphens (`-`), en dashes (`–`), em dashes (`—`) or double dashes (`--`) in headings, labels, tips, tooltips, buttons, errors, menu items, anything on screen. Write "beat matched", "Double click", "2:40 left" rather than "beat-matched", "Double-click", "-2:40". Rewrite as two sentences, or join with a comma, "and" or "so". Numeric minus signs on meter scales (-48 dB) are values, not text. This doesn't apply to code, comments, log files or commit messages.
 
 ## MCP Tools and Connectors
 
@@ -265,3 +265,6 @@ Brief, dated record of what was worked on per day, in the `Knob: <summary>` form
 - Knob: fixed the preset and output dropdowns opening empty when clicking their name
 - Knob: delete your own presets from the preset strip (factory presets can't be deleted)
 - Knob: the version shows beside the wordmark, with the updater's status next to it while it checks, downloads or installs
+
+### 2026-10-31
+- Knob: started KnobShift, a local-music transition player with safe outro detection, two audio decks and Gentle, Balanced and Party modes; streaming services remain outside KnobShift because their players do not provide the audio access or permission it needs
