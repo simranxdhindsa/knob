@@ -10,6 +10,10 @@ import AVFoundation
 final class KnobShiftDeck {
     let name: String
     let player = AVAudioPlayerNode()
+    /// Plays a song's separated voice beside `player` (which then plays its music), so the voice
+    /// can be held back on its own while a new song comes in. Silent the rest of the time.
+    let voice = AVAudioPlayerNode()
+    private let submix = AVAudioMixerNode()
     private let stretch = AVAudioUnitTimePitch()
     private let filter = AVAudioUnitEQ(numberOfBands: 3)
     /// Where in its file this deck's current segment started.
@@ -34,9 +38,13 @@ final class KnobShiftDeck {
         treble.frequency = Self.trebleRest
         treble.bypass = false
         engine.attach(player)
+        engine.attach(voice)
+        engine.attach(submix)
         engine.attach(stretch)
         engine.attach(filter)
-        engine.connect(player, to: stretch, format: nil)
+        engine.connect(player, to: submix, format: nil)
+        engine.connect(voice, to: submix, format: nil)
+        engine.connect(submix, to: stretch, format: nil)
         engine.connect(stretch, to: filter, format: nil)
         engine.connect(filter, to: engine.mainMixerNode, format: nil)
     }
@@ -46,8 +54,29 @@ final class KnobShiftDeck {
     private static let swapCutoff: Float = 200
 
     var volume: Float {
-        get { player.volume }
-        set { player.volume = newValue }
+        get { submix.outputVolume }
+        set { submix.outputVolume = newValue }
+    }
+
+    /// Level of the separated voice, 0...1.
+    var voiceLevel: Float {
+        get { voice.volume }
+        set { voice.volume = newValue }
+    }
+
+    func stop() {
+        player.stop()
+        voice.stop()
+    }
+
+    func pause() {
+        player.pause()
+        voice.pause()
+    }
+
+    func resume() {
+        player.play()
+        voice.play()
     }
 
     /// Playback speed with natural pitch: 1 is normal.
@@ -86,6 +115,7 @@ final class KnobShiftDeck {
         sweep = 0
         beatsOnly = 0
         volume = 1
+        voiceLevel = 1
     }
 
     /// File position this deck has really reached, read from the audio engine. The player

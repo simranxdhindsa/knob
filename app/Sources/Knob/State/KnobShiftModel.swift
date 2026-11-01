@@ -154,6 +154,11 @@ final class KnobShiftModel: ObservableObject {
     var primaryDeck: KnobShiftDeck
     var secondaryDeck: KnobShiftDeck
     var currentIndex = 0
+    /// The next song's separated voice and music for the coming mix (KnobShiftModel+Stems.swift).
+    var preparedStems: KnobShiftStems.Prepared?
+    var stemTask: Task<Void, Never>?
+    /// True while the incoming song plays as separated music and voice.
+    var blendHasStems = false
     var transitionTask: Task<Void, Never>?
     private var progressTask: Task<Void, Never>?
     var playbackStartedAt = Date()
@@ -292,7 +297,7 @@ final class KnobShiftModel: ObservableObject {
         if isPlaying { log("STOP", "Stopped local playback.") }
         cancelPlan("Playback stopped")
         for deck in [deckOne, deckTwo] {
-            deck.player.stop()
+            deck.stop()
             deck.resetEffects()
         }
         progressTask?.cancel()
@@ -335,8 +340,8 @@ final class KnobShiftModel: ObservableObject {
             updatePlaybackTime()
             log("PLAY", "Paused at \(Self.seconds(playbackTime)).")
             cancelPlan("Paused")
-            secondaryDeck.player.stop()
-            primaryDeck.player.pause()
+            secondaryDeck.stop()
+            primaryDeck.pause()
             progressTask?.cancel()
             isPlaying = false
         } else {
@@ -347,7 +352,7 @@ final class KnobShiftModel: ObservableObject {
                 notice = "KnobShift could not play this file."
                 return
             }
-            primaryDeck.player.play()
+            primaryDeck.resume()
             isPlaying = true
             playbackStartedAt = Date().addingTimeInterval(-playbackTime)
             startProgressUpdates()
@@ -381,7 +386,7 @@ final class KnobShiftModel: ObservableObject {
         guard let track = nowPlaying else { return }
         let wasPlaying = isPlaying
         cancelPlan("You moved to \(Analysis.clock(time))")
-        secondaryDeck.player.stop()
+        secondaryDeck.stop()
         do {
             log("SEEK", "Moving \(track.title) to \(String(format: "%.2f", time))s.")
             try schedulePrimary(track, from: min(max(time, 0), track.duration), play: wasPlaying)
@@ -403,7 +408,7 @@ final class KnobShiftModel: ObservableObject {
         let start = AVAudioFramePosition((time * file.processingFormat.sampleRate).rounded())
         let remaining = max(0, file.length - start)
         guard remaining > 0, remaining <= AVAudioFramePosition(UInt32.max) else { throw PlayerError.invalidSegment }
-        primaryDeck.player.stop()
+        primaryDeck.stop()
         primaryDeck.resetEffects()
         primaryDeck.startOffset = time
         primaryDeck.player.scheduleSegment(file, startingFrame: start, frameCount: AVAudioFrameCount(remaining), at: nil)
@@ -448,7 +453,7 @@ final class KnobShiftModel: ObservableObject {
 
     private func restartCurrent() {
         cancelPlan("You switched to \(tracks.indices.contains(currentIndex) ? tracks[currentIndex].title : "another song")")
-        secondaryDeck.player.stop()
+        secondaryDeck.stop()
         guard !tracks.isEmpty else { return }
         do { try playCurrent() }
         catch {

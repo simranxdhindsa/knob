@@ -82,6 +82,7 @@ extension KnobShiftModel {
         } else {
             log("PLAN", "Decision: clean handoff at \(mixClock), in \(Self.duration(wait)).")
         }
+        if blends { prepareStems(for: next, plan: plan) }
         nextMix = NextMix(next: next, startsAt: startsAt, endsAt: blends ? end : startsAt, at: mixAt, blends: blends)
         transitionDescription = plan.description + " • at \(mixClock)" +
             (sync.isOn ? String(format: " • tempo %.0f to %.0f BPM", sync.outgoingTempo, sync.incomingTempo) : "")
@@ -161,23 +162,26 @@ extension KnobShiftModel {
             let startFrame = AVAudioFramePosition((lock.incomingStart * sampleRate).rounded())
             let frames = max(0, file.length - startFrame)
             guard frames > 0, frames <= AVAudioFramePosition(UInt32.max) else { throw PlayerError.invalidSegment }
-            secondaryDeck.player.stop()
+            secondaryDeck.stop()
             secondaryDeck.resetEffects()
             secondaryDeck.volume = 0
             secondaryDeck.rate = sync.rates(progress: 0, voice: pivot).incoming
             secondaryDeck.bassCut = 1
-            secondaryDeck.beatsOnly = pivot > 0.02 ? 1 : 0
             secondaryDeck.startOffset = lock.incomingStart
-            secondaryDeck.player.scheduleSegment(file, startingFrame: startFrame, frameCount: AVAudioFrameCount(frames), at: nil)
+            blendHasStems = scheduleIncoming(next, file: file, from: lock.incomingStart, startFrame: startFrame, frames: frames)
+            // With its voice held back separately, the new song's melody can come through too.
+            secondaryDeck.beatsOnly = pivot > 0.02 ? (blendHasStems ? 0.5 : 1) : 0
             try startEngineIfNeeded()
             // Both decks share the engine's render clock, so a start time on the outgoing
             // deck's timeline is sample-accurate for the incoming deck too.
             if lock.delay > 0, let now = primaryDeck.player.lastRenderTime, now.isSampleTimeValid {
                 let renderRate = now.sampleRate
-                secondaryDeck.player.play(at: AVAudioTime(sampleTime: now.sampleTime + AVAudioFramePosition(lock.delay * renderRate),
-                                                          atRate: renderRate))
+                let startAt = AVAudioTime(sampleTime: now.sampleTime + AVAudioFramePosition(lock.delay * renderRate), atRate: renderRate)
+                secondaryDeck.player.play(at: startAt)
+                secondaryDeck.voice.play(at: startAt)
             } else {
                 secondaryDeck.player.play()
+                secondaryDeck.voice.play()
             }
             log("DECK", "\(secondaryDeck.name) loaded \(next.title) from \(Self.seconds(lock.incomingStart)) at volume 0, speed \(String(format: "%.3f", secondaryDeck.rate)), bass and melody held back so only its beats come in.")
 
@@ -232,7 +236,7 @@ extension KnobShiftModel {
     /// song opens up fully, the basslines swap and the outgoing song fades out, thinning upward.
     /// Without a handoff it is one equal-power crossfade.
     private func applyBlend(_ progress: Double, pivot: Double, sync: KnobShiftSync) {
-        let outgoing: Double, incoming: Double, swap: Double, sweep: Double, beatsOnly: Double
+        let outgoing: Double, incoming: Double, swap: Double, sweep: Double, beatsOnly: Double, voice: Double
         if pivot > 0.02 {
             if progress < pivot {
                 let rise = Self.shape(progress / pivot)
@@ -241,6 +245,7 @@ extension KnobShiftModel {
                 swap = 0
                 sweep = 0
                 beatsOnly = 1
+                voice = 0
             } else {
                 let fall = pivot < 1 ? Self.shape((progress - pivot) / (1 - pivot)) : 1
                 outgoing = 0.85 * cos(fall * .pi / 2)
@@ -248,6 +253,7 @@ extension KnobShiftModel {
                 swap = min(fall / 0.25, 1)
                 sweep = fall
                 beatsOnly = max(0, 1 - fall / 0.25)
+                voice = min(fall / 0.25, 1)
             }
         } else {
             let shaped = Self.shape(progress)
@@ -256,6 +262,7 @@ extension KnobShiftModel {
             swap = min(max((shaped - 0.4) / 0.2, 0), 1)
             sweep = max(0, (shaped - 0.5) / 0.5)
             beatsOnly = 0
+            voice = 1
         }
         primaryDeck.volume = Float(outgoing)
         secondaryDeck.volume = Float(incoming)
@@ -265,7 +272,9 @@ extension KnobShiftModel {
         // Bass swap so two basslines never stack.
         primaryDeck.bassCut = swap
         secondaryDeck.bassCut = 1 - swap
-        secondaryDeck.beatsOnly = beatsOnly
+        secondaryDeck.beatsOnly = blendHasStems ? beatsOnly * 0.5 : beatsOnly
+        // The separated voice of the new song stays silent under the old singer.
+        if blendHasStems { secondaryDeck.voiceLevel = Float(voice) }
         // The leaving song loses its treble first as it fades.
         primaryDeck.sweep = sweep
     }
@@ -288,7 +297,8 @@ extension KnobShiftModel {
         // The incoming deck has been playing for the whole blend, so the clock continues from
         // where it really is instead of restarting at zero (which made the next mix late).
         let incomingPlayed = min(next.duration, secondaryDeck.position ?? secondaryDeck.startOffset)
-        primaryDeck.player.stop()
+        blendHasStems = false
+        primaryDeck.stop()
         primaryDeck.resetEffects()
         let outgoing = primaryDeck
         primaryDeck = secondaryDeck
@@ -308,8 +318,8 @@ extension KnobShiftModel {
     }
 
     func advance(to next: Track, offset: TimeInterval) {
-        primaryDeck.player.stop()
-        secondaryDeck.player.stop()
+        primaryDeck.stop()
+        secondaryDeck.stop()
         currentIndex = tracks.firstIndex(of: next) ?? 0
         mixNowWaiting = false
         log("HANDOFF", "No blend used. Both decks stopped, starting \(next.title) at \(Self.seconds(offset)).")

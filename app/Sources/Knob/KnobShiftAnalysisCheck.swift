@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 
 /// Verifies offline local-file analysis without opening an audio output device.
@@ -88,6 +89,31 @@ enum KnobShiftAnalysisCheck {
         }
         return incomingTimes.compactMap { beat in
             outgoingTimes.min { abs($0 - beat) < abs($1 - beat) }.map { (beat - $0) * 1_000 }
+        }
+    }
+
+    /// Separates `length` seconds from `start` into voice and music and writes both as WAV files
+    /// in `folder`, so the separation can be heard.
+    static func runStems(file: URL, start: TimeInterval, length: TimeInterval, folder: URL) {
+        do {
+            let error = try KnobShiftStems.roundTripError(file, from: start, length: length)
+            print(String(format: "  Transform alone, nothing removed: largest difference %.6f%% of the peak.", error * 100))
+            guard error < 0.001 else { fail("the transform does not rebuild the original sound") }
+            let stems = try KnobShiftStems.separate(file, from: start, length: length)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            for (name, buffer) in [("vocals", stems.vocals), ("music", stems.music)] {
+                let url = folder.appendingPathComponent("\(file.deletingPathExtension().lastPathComponent) \(name).wav")
+                let settings: [String: Any] = [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: KnobShiftStems.sampleRate,
+                                               AVNumberOfChannelsKey: 2, AVLinearPCMBitDepthKey: 16]
+                let output = try AVAudioFile(forWriting: url, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+                try output.write(from: buffer)
+                let peak = (0..<Int(buffer.frameLength)).map { abs(buffer.floatChannelData![0][$0]) }.max() ?? 0
+                print(String(format: "  %@: %@, peak %.2f", name, url.path, peak))
+            }
+            print(String(format: "KnobShift stems check passed: %.1fs separated in %.2fs.", length, stems.seconds))
+            exit(0)
+        } catch {
+            fail("separation failed: \(error)")
         }
     }
 
