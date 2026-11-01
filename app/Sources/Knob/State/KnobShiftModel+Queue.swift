@@ -4,6 +4,14 @@ import Foundation
 /// shown next is what plays next. Shuffle keeps the playing song first and shuffles the rest;
 /// turning it off brings back the user's own order. Dragging reorders whichever order is showing.
 extension KnobShiftModel {
+    /// The song that plays next: the planned mix's, or simply the next one in the queue, so it
+    /// shows the same whether music is playing, paused or stopped.
+    var upNext: Track? {
+        if let planned = nextMix?.next { return planned }
+        guard tracks.count > 1 else { return nil }
+        return tracks[(min(currentIndex, tracks.count - 1) + 1) % tracks.count]
+    }
+
     func toggleShuffle() {
         if isShuffled {
             tracks = unshuffled
