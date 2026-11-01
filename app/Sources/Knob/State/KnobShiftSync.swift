@@ -17,11 +17,12 @@ import Foundation
 ///   speed throughout and the old song eases all the way to it before the blend.
 struct KnobShiftSync {
     /// Largest gap a meeting at the outgoing tempo covers.
-    static let glideStretch = 0.15
+    static let glideStretch = 0.08
     /// Largest speed change for the incoming song's beats before its vocals.
-    static let incomingStretch = 0.20
-    /// Largest speed change for the outgoing song, which carries most of the tempo change.
-    static let outgoingStretch = 0.30
+    static let incomingStretch = 0.08
+    /// Largest speed change for the outgoing song. Apple Music leaves songs further apart at
+    /// their own speed (measured: 25% apart, no change at all), and so does KnobShift.
+    static let outgoingStretch = 0.08
     /// Both songs need a beat grid at least this trustworthy before beats are lined up.
     static let minimumConfidence = 0.6
 

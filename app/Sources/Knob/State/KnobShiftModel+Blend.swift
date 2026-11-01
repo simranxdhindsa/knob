@@ -237,14 +237,14 @@ extension KnobShiftModel {
             if progress < pivot {
                 let rise = Self.shape(progress / pivot)
                 outgoing = 1 - 0.15 * rise
-                incoming = 0.7 * sin(rise * .pi / 2)
+                incoming = 0.55 * sin(rise * .pi / 2)
                 swap = 0
                 sweep = 0
                 beatsOnly = 1
             } else {
                 let fall = pivot < 1 ? Self.shape((progress - pivot) / (1 - pivot)) : 1
                 outgoing = 0.85 * cos(fall * .pi / 2)
-                incoming = 0.7 + 0.3 * sin(fall * .pi / 2)
+                incoming = 0.55 + 0.45 * sin(fall * .pi / 2)
                 swap = min(fall / 0.25, 1)
                 sweep = fall
                 beatsOnly = max(0, 1 - fall / 0.25)
@@ -266,7 +266,7 @@ extension KnobShiftModel {
         primaryDeck.bassCut = swap
         secondaryDeck.bassCut = 1 - swap
         secondaryDeck.beatsOnly = beatsOnly
-        // The leaving song thins out upward as it fades.
+        // The leaving song loses its treble first as it fades.
         primaryDeck.sweep = sweep
     }
 

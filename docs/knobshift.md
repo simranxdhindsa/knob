@@ -65,6 +65,25 @@ Example, measured on real files:
 
 ### How a transition is planned (`State/KnobShiftPlanner.swift`)
 
+**Measured on Apple Music (2026-11-01)**, from a room recording of its AutoMix of
+Naggnee into Sardaari, aligned against both files:
+
+| | Apple Music | KnobShift since this change |
+| --- | --- | --- |
+| New song starts | Sardaari 0:00 at Naggnee 2:08.4, 8s before Naggnee's voice ends | 0:00.5 at 2:11.5 |
+| New song opens up | about 2:23 | 2:22.1 |
+| Old song gone | about 2:29, at its own fade (2:28.6) | 2:28.7 |
+| Speed | both exactly normal speed, though 25% apart in tempo | none (sync only within 8%) |
+| Old song's exit | treble goes first, the middle lingers | low pass closing to 1 kHz, bass swapped |
+
+So the plan now: the old song keeps its voice and outro and leaves at its own
+fade (at most eight bars after its voice); the new song's verse lands as it
+leaves, so two singers never overlap; the new intro plays quietly underneath
+first (up to 24 seconds, often from its very start); three bars before the old
+song is gone the new one opens up fully. A song that sings to the end, and
+KnobMix Now, still leave two bars after the handoff. The steps below describe
+the earlier design where they differ.
+
 The vocal handoff, counted in bars of the outgoing song's own tempo:
 
 1. The handoff point is where the outgoing song's last vocal line ends. When

@@ -1,7 +1,7 @@
 import AVFoundation
 
 /// One of KnobShift's two players with its own effects:
-/// player → time-stretch (tempo glide, pitch kept natural) → bass filter → KnobShift's mixer.
+/// player → time-stretch (tempo glide, pitch kept natural) → filters (bass, melody, treble) → KnobShift's mixer.
 ///
 /// At normal speed the time-stretch unit passes audio through sample for sample, and the bass
 /// filter rests at 10 Hz, below anything audible, so both stay connected all the time. Switching
@@ -11,7 +11,7 @@ final class KnobShiftDeck {
     let name: String
     let player = AVAudioPlayerNode()
     private let stretch = AVAudioUnitTimePitch()
-    private let filter = AVAudioUnitEQ(numberOfBands: 2)
+    private let filter = AVAudioUnitEQ(numberOfBands: 3)
     /// Where in its file this deck's current segment started.
     var startOffset: TimeInterval = 0
 
@@ -28,6 +28,11 @@ final class KnobShiftDeck {
         melody.bandwidth = 2
         melody.gain = 0
         melody.bypass = false
+        // Treble fade for a leaving song, resting above anything audible.
+        let treble = filter.bands[2]
+        treble.filterType = .lowPass
+        treble.frequency = Self.trebleRest
+        treble.bypass = false
         engine.attach(player)
         engine.attach(stretch)
         engine.attach(filter)
@@ -54,11 +59,14 @@ final class KnobShiftDeck {
     /// 0 keeps the full bass, 1 removes it (used to swap basslines during a blend).
     var bassCut: Double = 0 { didSet { updateFilter() } }
 
-    /// Rising filter on a song that is leaving: 0 stops at the bass, 1 thins it out up to
-    /// 2 kHz so its beats seem to float upward into the next song.
-    var sweep: Double = 0 { didSet { updateFilter() } }
+    /// Treble fade on a song that is leaving, as Apple Music's AutoMix does: 0 is the full song,
+    /// 1 has closed a low-pass down to 1 kHz, so its top end goes first and its middle lingers.
+    var sweep: Double = 0 {
+        didSet { filter.bands[2].frequency = Self.trebleRest * powf(Self.trebleClosed / Self.trebleRest, Float(min(max(sweep, 0), 1))) }
+    }
 
-    private static let sweepCutoff: Float = 2_000
+    private static let trebleRest: Float = 20_000
+    private static let trebleClosed: Float = 1_000
 
     /// 1 holds back the melody and vocal range (12 dB dip around 1.5 kHz) so mostly the beats
     /// come through; 0 is the full song. Used while a new song enters under the old voice.
@@ -68,9 +76,7 @@ final class KnobShiftDeck {
 
     private func updateFilter() {
         let bass = Float(min(max(bassCut, 0), 1))
-        let lift = Float(min(max(sweep, 0), 1))
-        let base = Self.restingCutoff * powf(Self.swapCutoff / Self.restingCutoff, bass)
-        filter.bands[0].frequency = base * powf(Self.sweepCutoff / Self.swapCutoff, lift)
+        filter.bands[0].frequency = Self.restingCutoff * powf(Self.swapCutoff / Self.restingCutoff, bass)
     }
 
     /// Back to plain playback after a blend.

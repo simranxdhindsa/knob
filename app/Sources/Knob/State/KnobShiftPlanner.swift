@@ -3,13 +3,12 @@ import Foundation
 /// When and how KnobShift moves from one song to the next. There is no fixed crossfade length:
 /// every time here comes from the two songs' own analysis, counted in bars of their own tempo.
 ///
-/// The vocal handoff, as in the product intent:
-/// 1. The handoff is where the outgoing song's last vocal line ends.
-/// 2. Two bars before it, the incoming song comes in, started two bars before its own main
-///    verse (not necessarily at its beginning), so only its beats play under the old voice and
-///    its main verse lands on the handoff.
-/// 3. After the handoff the old song fades out over two bars and stops, rather than playing its
-///    whole outro, so its leftover shouts or ad-libs never sing over the new verse.
+/// Modelled on a measured Apple Music AutoMix (Naggnee into Sardaari):
+/// 1. The old song plays its voice to the end, then its outro, and leaves at its own fade.
+/// 2. The new song's main verse lands as the old song leaves, so two singers never overlap.
+/// 3. Before that the new song's intro plays quietly underneath, often from its very start.
+/// 4. Three bars before the old song is gone, the new song opens up fully and the old one
+///    loses its treble first, then fades.
 /// Songs without vocals use their measured fade; with neither, the songs meet cleanly.
 struct KnobShiftPlan {
     /// Position in the outgoing song where the incoming song starts.
@@ -58,42 +57,50 @@ struct KnobShiftPlan {
                 reasoning.append("Its singing runs to the end, so the voices hand over at its last break, \(clock(lastBreak)), instead.")
                 handoff = lastBreak
             }
-            // Two bars of beats under the old voice; less if the new song has a shorter run-up
-            // to its main verse, but at least one bar so the change never feels abrupt.
-            let runUp = mainVerse.map { max(0, $0 - leadIn) }
-            let underVoice = max(min(2 * bar, runUp ?? 2 * bar), bar)
-            let start = max(handoff - underVoice, lastLine)
-            let beatsTime = handoff - start
-            let incomingOffset = mainVerse.map { max(leadIn, $0 - beatsTime) } ?? leadIn
+            // Where the old song leaves, as Apple Music's AutoMix does it: at its own fade when
+            // that comes after the voice (its outro plays out first), at most eight bars after
+            // the voice. A song that sings to the end, or KnobMix Now, leaves two bars after.
+            var exit = min(audibleEnd, handoff + 2 * bar)
+            if handoffAt == nil, audibleEnd - (outgoing.vocalEnd ?? audibleEnd) >= bar {
+                let natural = outgoing.fadeOutCue.map { $0 > handoff + bar ? $0 : audibleEnd } ?? audibleEnd
+                exit = min(natural, handoff + 8 * bar, audibleEnd)
+            }
+            // The new song opens up fully three bars before the old one is gone, never before
+            // the old voice ends, and its main verse lands as the old song leaves, so the two
+            // singers never overlap. Its intro plays quietly underneath first, up to 24 seconds
+            // of it, and at least one bar before it opens up.
+            let open = max(handoff, exit - 3 * bar)
+            let introRoom = mainVerse.map { max(0, $0 - leadIn) } ?? 4 * bar
+            let start = max(lastLine, exit - min(max(introRoom, exit - open + bar), 24))
+            let underneath = exit - start
+            let incomingOffset = mainVerse.map { max(leadIn, $0 - underneath) } ?? leadIn
             if let mainVerse {
                 let skipped = incomingOffset - leadIn
                 reasoning.append("\(next.title): its main verse starts at \(clock(mainVerse)). It comes in at \(clock(incomingOffset))" +
-                                 (skipped > 0.5 ? ", skipping \(seconds(skipped)) of intro," : "") +
-                                 " so \(seconds(beatsTime)) of its beats play under \(current.title)'s last line and its verse lands on the handoff.")
+                                 (skipped > 0.5 ? ", skipping \(seconds(skipped)) of intro," : " with its whole intro,") +
+                                 " playing quietly under \(current.title) for \(seconds(underneath)), so its verse lands as \(current.title) leaves.")
             } else {
-                reasoning.append("\(next.title): no vocals found, so it comes in from \(clock(incomingOffset)), \(seconds(beatsTime)) before the old voice ends.")
+                reasoning.append("\(next.title): no vocals found, so it comes in from \(clock(incomingOffset)), \(seconds(underneath)) before \(current.title) leaves.")
             }
-            // The old song fades for two bars after its voice and then stops.
-            let end = min(audibleEnd, handoff + 2 * bar)
-            if end < audibleEnd - 0.5 {
-                reasoning.append("\(current.title) fades out over two bars after its voice and stops at \(clock(end)), skipping its last \(seconds(audibleEnd - end)).")
+            if exit < audibleEnd - 0.5 {
+                reasoning.append("\(current.title) plays out after its voice, loses its treble first, and is gone at \(clock(exit)), skipping its last \(seconds(audibleEnd - exit)).")
             }
             let strays = outgoing.vocalStrays.filter { $0 > handoff }
             if !strays.isEmpty {
-                let heard = strays.filter { $0 < end }
+                let heard = strays.filter { $0 < exit }
                 reasoning.append(heard.isEmpty
-                    ? "Its short vocal sounds after the last line (\(strays.map { clock($0) }.joined(separator: ", "))) come after it stops, so they are not heard."
-                    : "Its short vocal sounds at \(heard.map { clock($0) }.joined(separator: ", ")) fall inside the fade.")
+                    ? "Its short vocal sounds after the last line (\(strays.map { clock($0) }.joined(separator: ", "))) come after it leaves, so they are not heard."
+                    : "Its short vocal sounds at \(heard.map { clock($0) }.joined(separator: ", ")) fall inside the mix.")
             }
-            let duration = end - start
+            let duration = exit - start
             guard duration > 0.05 else {
                 reasoning.append("Nothing is left to blend, so the songs meet cleanly at \(clock(audibleEnd)).")
                 return clean(at: audibleEnd, offset: incomingOffset, reasoning: reasoning)
             }
-            reasoning.append("Blend: \(clock(start)) to \(clock(end)), \(seconds(duration)), voices hand over at \(clock(handoff)).")
-            return KnobShiftPlan(start: start, duration: duration, handoff: handoff, incomingOffset: incomingOffset,
-                                 beatsBeforeVoice: mainVerse == nil ? nil : beatsTime,
-                                 description: "READY • mix at \(clock(start)) for \(Int(duration.rounded()))s, voices hand over at \(clock(handoff))",
+            reasoning.append("Blend: \(clock(start)) to \(clock(exit)), \(seconds(duration)), the new song opens up at \(clock(open)).")
+            return KnobShiftPlan(start: start, duration: duration, handoff: open, incomingOffset: incomingOffset,
+                                 beatsBeforeVoice: mainVerse == nil ? nil : open - start,
+                                 description: "READY • mix at \(clock(start)) for \(Int(duration.rounded()))s, opens up at \(clock(open))",
                                  reasoning: reasoning)
         }
 
