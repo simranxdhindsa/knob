@@ -71,9 +71,11 @@ enum KnobShiftSections {
 
     /// The next good moment for KnobMix Now to hand over: the start of the next four bar phrase or
     /// the next break in the music, whichever comes first, at least `lead` seconds from `now` so
-    /// the new song's beats have time to come in first. Nil when the song ends before one.
+    /// the new song's beats have time to come in first. When the singer finishes a line before
+    /// that, the end of the line wins, so the old voice is never cut mid sentence. Nil when the
+    /// song ends before one.
     static func mixNowPoint(after now: TimeInterval, lead: TimeInterval, analysis: KnobShiftModel.Analysis,
-                            audibleEnd: TimeInterval) -> TimeInterval? {
+                            audibleEnd: TimeInterval) -> (point: TimeInterval, lineEnd: Bool)? {
         let earliest = now + lead
         let beats = analysis.beatGrid
         var candidates = analysis.musicBreaks.filter { $0 >= earliest }
@@ -89,7 +91,10 @@ enum KnobShiftSections {
             candidates.append(earliest)
         }
         guard let point = candidates.min(), point < audibleEnd - 1 else { return nil }
-        return point
+        if let lineEnd = analysis.vocalLineEnds?.first(where: { $0 >= earliest && $0 <= point + 0.5 }) {
+            return (nearest(lineEnd, in: beats), true)
+        }
+        return (point, false)
     }
 
     private static func nearest(_ time: TimeInterval, in beats: [TimeInterval]) -> TimeInterval {

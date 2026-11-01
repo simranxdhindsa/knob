@@ -92,7 +92,10 @@ struct KnobShiftPlan {
                     reasoning.append("The new music opens up at \(clock(open)), two bars before \(current.title)'s voice ends, on a bar line; the new voice waits until \(clock(handoff)).")
                 }
             }
-            let start = max(lastLine, exit - min(max(introRoom, exit - open + bar), 24))
+            // KnobMix Now waits for its moment: the new song comes in only two bars before it.
+            let start = handoffAt != nil
+                ? max(lastLine, open - 2 * bar)
+                : max(lastLine, exit - min(max(introRoom, exit - open + bar), 24))
             let underneath = exit - start
             let incomingOffset = mainVerse.map { max(leadIn, $0 - underneath) } ?? leadIn
             if let mainVerse {

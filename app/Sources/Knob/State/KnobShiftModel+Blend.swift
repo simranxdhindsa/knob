@@ -24,13 +24,16 @@ extension KnobShiftModel {
         let now = primaryDeck.position ?? playbackTime
         let bar = current.analysis.tempo.map { 4 * 60 / $0 } ?? 2.5
         let audibleEnd = current.analysis.audibleEnd(duration: current.duration)
-        guard let point = KnobShiftSections.mixNowPoint(after: now, lead: 2 * bar + 0.5, analysis: current.analysis,
+        guard let found = KnobShiftSections.mixNowPoint(after: now, lead: 2 * bar + 0.5, analysis: current.analysis,
                                                         audibleEnd: audibleEnd),
-              point < (nextMix?.startsAt ?? .infinity) + 2 * bar else {
+              found.point < (nextMix?.startsAt ?? .infinity) + 2 * bar else {
             log("KNOBMIX NOW", "The planned mix comes sooner than the next phrase, so it carries on as planned.")
             return
         }
-        log("KNOBMIX NOW", "Pressed at \(Analysis.clock(now)). The next phrase or break is at \(Analysis.clock(point)), \(Self.seconds(point - now)) away.")
+        let point = found.point
+        log("KNOBMIX NOW", "Pressed at \(Analysis.clock(now)). " + (found.lineEnd
+            ? "The singer finishes a line at \(Analysis.clock(point)), \(Self.seconds(point - now)) away, so it mixes there and the old voice is not cut mid sentence."
+            : "The next phrase or break is at \(Analysis.clock(point)), \(Self.seconds(point - now)) away."))
         cancelPlan("KnobMix Now was pressed")
         mixNowWaiting = true
         scheduleNext(handoffAt: point)
