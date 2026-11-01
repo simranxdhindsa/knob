@@ -6,7 +6,9 @@ import Foundation
 @MainActor
 enum KnobShiftSmokeCheck {
     /// `volume` is 0 (muted) for automated runs; a small value lets a person listen along.
-    static func run(first: URL, second: URL, volume: Float = 0) {
+    /// `mixNowAt` seeks there instead, presses KnobMix Now a second later and checks the mix
+    /// waits for the chosen phrase or break rather than starting at once.
+    static func run(first: URL, second: URL, volume: Float = 0, mixNowAt: TimeInterval? = nil) {
         let app = NSApplication.shared
         app.setActivationPolicy(.prohibited)
         Task { @MainActor in
@@ -20,10 +22,25 @@ enum KnobShiftSmokeCheck {
             // to check while the seek-then-plan path is exercised too.
             let plan = KnobShiftPlan.make(from: model.tracks[0], to: expectedNext)
             let lead = min(plan.start, 6)
-            if plan.start - lead > 1 { model.seek(to: plan.start - lead) }
+            if let mixNowAt {
+                model.seek(to: mixNowAt)
+                try? await Task.sleep(for: .seconds(1))
+                let pressed = Date()
+                model.mixNow()
+                guard model.mixNowWaiting, let note = model.diagnostics.last(where: { $0.stage == "KNOBMIX NOW" }) else {
+                    fail("KnobMix Now did not plan a mix")
+                }
+                print(note.message)
+                while model.mixState != .mixing, Date().timeIntervalSince(pressed) < 30 {
+                    try? await Task.sleep(for: .milliseconds(20))
+                }
+                print(String(format: "KnobMix Now: the blend began %.2fs after the press, at %.2fs of the song.",
+                             Date().timeIntervalSince(pressed), model.playbackTime))
+                for line in model.diagnostics where line.stage == "PLAN" && line.message.contains("KnobMix Now") { print(line.message) }
+            } else if plan.start - lead > 1 { model.seek(to: plan.start - lead) }
             // Wait for the handoff itself rather than a fixed time, with a few seconds of slack.
             // Slowed-down blends take longer than their music, so allow for that too.
-            let deadline = Date().addingTimeInterval(lead * 1.3 + plan.duration * 1.3 + 4)
+            let deadline = Date().addingTimeInterval(mixNowAt != nil ? 25 : lead * 1.3 + plan.duration * 1.3 + 4)
             while model.nowPlaying != expectedNext, Date() < deadline {
                 try? await Task.sleep(for: .milliseconds(50))
             }

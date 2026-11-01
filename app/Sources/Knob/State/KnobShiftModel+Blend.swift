@@ -13,7 +13,30 @@ extension KnobShiftModel {
         return formatter
     }()
 
-    func scheduleNext() {
+    /// Mixes into the next song at the next good moment rather than at once: the next four bar
+    /// phrase or break in the music that leaves two bars for the new beats to come in first.
+    func mixNow() {
+        guard let current = nowPlaying, isPlaying, tracks.count > 1, mixState != .mixing, !mixNowWaiting else { return }
+        guard abs(primaryDeck.rate - 1) < 0.001 else {
+            log("KNOBMIX NOW", "The planned mix is already easing in, so it carries on as planned.")
+            return
+        }
+        let now = primaryDeck.position ?? playbackTime
+        let bar = current.analysis.tempo.map { 4 * 60 / $0 } ?? 2.5
+        let audibleEnd = current.analysis.audibleEnd(duration: current.duration)
+        guard let point = KnobShiftSections.mixNowPoint(after: now, lead: 2 * bar + 0.5, analysis: current.analysis,
+                                                        audibleEnd: audibleEnd),
+              point < (nextMix?.startsAt ?? .infinity) + 2 * bar else {
+            log("KNOBMIX NOW", "The planned mix comes sooner than the next phrase, so it carries on as planned.")
+            return
+        }
+        log("KNOBMIX NOW", "Pressed at \(Analysis.clock(now)). The next phrase or break is at \(Analysis.clock(point)), \(Self.seconds(point - now)) away.")
+        cancelPlan("KnobMix Now was pressed")
+        mixNowWaiting = true
+        scheduleNext(handoffAt: point)
+    }
+
+    func scheduleNext(handoffAt: TimeInterval? = nil) {
         guard let current = nowPlaying, tracks.count > 1 else {
             mixState = .ready
             transitionDescription = "Playing normally."
@@ -22,7 +45,7 @@ extension KnobShiftModel {
         }
         let next = tracks[(currentIndex + 1) % tracks.count]
         plannedNext = next
-        let plan = KnobShiftPlan.make(from: current, to: next)
+        let plan = KnobShiftPlan.make(from: current, to: next, handoffAt: handoffAt)
         let sync = plan.duration > 0
             ? KnobShiftSync.make(outgoing: current.analysis, incoming: next.analysis, beatsBeforeVoice: plan.beatsBeforeVoice)
             : .off
@@ -121,6 +144,7 @@ extension KnobShiftModel {
             let pivot = min(max((handoff - outgoingAt) / music, 0), 1)
             let duration = sync.blendLength(forOutgoingMusic: music, voice: pivot)
             mixState = .mixing
+            mixNowWaiting = false
             mixingInto = next
             blendProgress = 0
             transitionDescription = "MIXING • \(Int(duration.rounded())) second blend into \(next.title)" + (sync.isOn ? ", beats locked." : ".")
@@ -287,6 +311,7 @@ extension KnobShiftModel {
         primaryDeck.player.stop()
         secondaryDeck.player.stop()
         currentIndex = tracks.firstIndex(of: next) ?? 0
+        mixNowWaiting = false
         log("HANDOFF", "No blend used. Both decks stopped, starting \(next.title) at \(Self.seconds(offset)).")
         do {
             try schedulePrimary(next, from: offset, play: true)

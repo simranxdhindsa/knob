@@ -25,6 +25,7 @@ struct KnobShiftNowPlaying: View {
             }
             timeline
             transport
+            mixNowButton
         }
         .screenCard(radius: 20, padding: compact ? 16 : 22)
         .onAppear { scrubPosition = model.playbackTime }
@@ -117,6 +118,34 @@ struct KnobShiftNowPlaying: View {
         .foregroundStyle(model.tracks.isEmpty ? Screen.textTertiary : Screen.text)
         .disabled(model.tracks.isEmpty)
         .frame(maxWidth: .infinity)
+    }
+
+    /// KnobMix Now: asks for the mix at the next phrase or break, so it may wait a few seconds.
+    private var mixNowButton: some View {
+        let waiting = model.mixNowWaiting && model.mixState != .mixing
+        let available = model.isPlaying && model.tracks.count > 1 && model.mixState != .mixing && !waiting
+        return Button { model.mixNow() } label: {
+            HStack(spacing: 7) {
+                if waiting {
+                    Circle().fill(Palette.accent).frame(width: 6, height: 6)
+                        .shadow(color: Palette.accentGlow, radius: 4)
+                } else {
+                    Image(systemName: "arrow.triangle.merge").font(.system(size: 11, weight: .bold))
+                }
+                Text(waiting ? "WAITING FOR THE BEAT" : "KNOBMIX NOW")
+                    .font(.system(size: 10, weight: .bold)).tracking(0.8)
+            }
+            .foregroundStyle(available || waiting ? Palette.accent : Screen.textTertiary)
+            .padding(.horizontal, 16)
+            .frame(height: 30)
+            .background(Capsule().fill(Palette.accent.opacity(waiting ? 0.16 : 0.08)))
+            .overlay(Capsule().stroke(Palette.accent.opacity(available || waiting ? 0.45 : 0.15), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .disabled(!available)
+        .help("Mixes into the next song at the next phrase or break, so it may take a few seconds.")
+        .accessibilityLabel(waiting ? "KnobMix Now, waiting for the beat" : "KnobMix Now")
+        .animation(Motion.gentle, value: waiting)
     }
 
     static func clock(_ value: TimeInterval) -> String {

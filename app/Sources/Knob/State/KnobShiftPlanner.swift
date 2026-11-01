@@ -26,7 +26,10 @@ struct KnobShiftPlan {
     let description: String
     let reasoning: [String]
 
-    static func make(from current: KnobShiftModel.Track, to next: KnobShiftModel.Track) -> KnobShiftPlan {
+    /// `handoffAt` is a handoff the listener asked for with KnobMix Now: the voices hand over
+    /// there instead of where the old song's singing ends.
+    static func make(from current: KnobShiftModel.Track, to next: KnobShiftModel.Track,
+                     handoffAt: TimeInterval? = nil) -> KnobShiftPlan {
         let outgoing = current.analysis
         let incoming = next.analysis
         var reasoning: [String] = []
@@ -38,14 +41,19 @@ struct KnobShiftPlan {
         reasoning.append("\(current.title) is heard until \(clock(audibleEnd)). One bar of it is \(seconds(bar)).")
 
         // Songs with vocals: hand the voice over.
-        if let vocalEnd = outgoing.vocalEnd {
-            var handoff = min(vocalEnd, audibleEnd)
-            let lastLine = min(outgoing.lastLineStart ?? handoff, handoff)
-            reasoning.append("\(current.title): its last vocal line runs \(clock(lastLine)) to \(clock(handoff)).")
+        if handoffAt != nil || outgoing.vocalEnd != nil {
+            var handoff = min(handoffAt ?? outgoing.vocalEnd ?? audibleEnd, audibleEnd)
+            var lastLine = min(outgoing.lastLineStart ?? handoff, handoff)
+            if let handoffAt {
+                lastLine = 0
+                reasoning.append("KnobMix Now: the voices hand over at \(clock(handoffAt)), the next phrase or break in \(current.title).")
+            } else {
+                reasoning.append("\(current.title): its last vocal line runs \(clock(lastLine)) to \(clock(handoff)).")
+            }
             // Singing that runs right up to the end leaves no room to mix, so the handoff moves
             // to the last break in the music (where the bass drops out) at least four bars from
             // the end, as a DJ would leave a song before its final section.
-            if audibleEnd - handoff < bar,
+            if handoffAt == nil, audibleEnd - handoff < bar,
                let lastBreak = outgoing.musicBreaks.last(where: { $0 <= audibleEnd - 4 * bar && $0 >= audibleEnd - 60 && $0 > lastLine }) {
                 reasoning.append("Its singing runs to the end, so the voices hand over at its last break, \(clock(lastBreak)), instead.")
                 handoff = lastBreak

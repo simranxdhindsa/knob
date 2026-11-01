@@ -113,6 +113,23 @@ on the planned end. After the handoff the incoming song's clock carries on from
 where its deck really is, so the next plan is on time. The queue loops: the
 last song mixes into the first.
 
+### KnobMix Now
+
+The KNOBMIX NOW button under the transport mixes into the next song on request,
+but never at a random moment. It finds the next good mixing point in the playing
+song: the start of the next four bar phrase (counted from where the beat comes
+in) or the next break in the music, whichever comes first, at least two bars
+away so the new song's beats can come in underneath first. In practice that is
+about 4 to 15 seconds. The planner then runs as usual with that point as the
+handoff, so beat lock, tempo glide and the beats only entry all apply. While it
+waits the button reads WAITING FOR THE BEAT. If the planned mix would come
+sooner anyway, or is already easing in, the press changes nothing.
+
+Check: `Knob --knobshift-mixnow-check A B SECONDS` seeks to SECONDS, presses the
+button muted, and reports where the mix landed. On Putt Jam Te Lau into
+Sardaari, pressed at 1:01 it handed over on the phrase at 1:13.2; pressed at
+1:36, at 1:46.7.
+
 ### Tempo sync, beat lock and bass swap
 
 Each song gets an exact beat grid. The beat tracker can follow the kick in one

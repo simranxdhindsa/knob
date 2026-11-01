@@ -31,6 +31,13 @@ struct KnobLauncher {
                                     second: URL(fileURLWithPath: arguments[index + 2]), volume: volume)
             return
         }
+        if let index = arguments.firstIndex(of: "--knobshift-mixnow-check"), index + 3 < arguments.count {
+            // Seeks to the given second, presses KnobMix Now and checks it waits for the beat.
+            KnobShiftSmokeCheck.run(first: URL(fileURLWithPath: arguments[index + 1]),
+                                    second: URL(fileURLWithPath: arguments[index + 2]),
+                                    mixNowAt: Double(arguments[index + 3]) ?? 60)
+            return
+        }
         if let index = arguments.firstIndex(of: "--knobshift-sync-check"), index + 2 < arguments.count {
             KnobShiftAnalysisCheck.runSync(first: URL(fileURLWithPath: arguments[index + 1]),
                                            second: URL(fileURLWithPath: arguments[index + 2]))
