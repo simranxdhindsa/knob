@@ -47,6 +47,8 @@ extension KnobShiftModel {
         let beat = 60 / beatsPerMinute
         exitStyle = choice.style
         effectsLogged = []
+        // Slow, laid back songs take a deeper tape slowdown; fast, energetic ones only a touch.
+        tapeDepth = min(max((130 - beatsPerMinute) / 60, 0.1), 0.6)
         primaryDeck.armTransitionEffects(echoEvery: beat / 2, hall: choice.style == .reverbWash ? .largeHall : .mediumHall)
         log("EFFECT", "\(choice.style.name) on \(current.title): \(choice.reason).")
         log("EFFECT", String(format: "Beat pulse at %.1f BPM: the effects build between kicks and drop on every beat, to 0%% on the first beat of each bar, 50%% on the second and fourth, 10%% on the third.", 60 / beat))
@@ -99,7 +101,7 @@ extension KnobShiftModel {
             deck.lofiMix = 0.18 * ramp(0, 0.6)
             deck.reverbMix = 0.08 * ramp(0.5, 1)
         case .tapeSlowdown:
-            deck.tape = ramp(0.15, 0.85)
+            deck.tape = tapeDepth * ramp(0.15, 0.85)
             deck.reverbMix = 0.1 * ramp(0.5, 1)
         case .echoOut:
             deck.echoMix = 0.4 * ramp(0.3, 0.6)
@@ -110,7 +112,8 @@ extension KnobShiftModel {
         announce("reverb", when: deck.reverbMix > 0.01, style == .reverbWash
                  ? "Reverb wash: large hall rising to 50%." : "Reverb tail: hall rising to \(Int((style == .underwater ? 0.12 : style == .lofiDip ? 0.08 : 0.1) * 100))%.")
         announce("lofi", when: deck.lofiMix > 0.01, "Lo-fi colour: vintage crunch rising to 18%.")
-        announce("tape", when: deck.tape > 0.01, "Tape slowdown: the leaving song slows to 85% speed, its pitch dropping with it.")
+        announce("tape", when: deck.tape > 0.01, String(format: "Tape slowdown at %.0f%% depth for this song: it slows to %.0f%% speed, its pitch dropping with it.",
+                                                        tapeDepth * 100, (1 - 0.15 * tapeDepth) * 100))
         announce("echo", when: deck.echoMix > 0.01, "Echo out: repeats every half beat, 45% feedback, rising to 40%.")
     }
 

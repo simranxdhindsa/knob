@@ -15,8 +15,11 @@ struct KnobShiftPlan {
     let start: TimeInterval
     /// Length of the blend in the outgoing song's music; 0 means a clean handoff at `start`.
     let duration: TimeInterval
-    /// Position in the outgoing song where its voice ends and the incoming voice takes over.
+    /// Position in the outgoing song where the incoming music opens up fully.
     let handoff: TimeInterval
+    /// Position in the outgoing song where its voice ends: its fade and exit effects wait for
+    /// this, and so does the incoming voice.
+    var voiceEnd: TimeInterval? = nil
     /// Where the incoming song is started from: shortly before its main verse, or after its
     /// leading silence.
     let incomingOffset: TimeInterval
@@ -77,6 +80,18 @@ struct KnobShiftPlan {
                 open = max(handoff, min(open, exit - 2 * bar))
             }
             let introRoom = mainVerse.map { max(0, $0 - leadIn) } ?? 4 * bar
+            // The new music opens up two bars before the old voice ends, on a bar line, so the new
+            // song arrives during the old song's last line. Its voice still waits for the old one.
+            if handoffAt == nil, outgoing.vocalEnd != nil {
+                let anchor = outgoing.beatEntry ?? outgoing.beatGrid.first ?? 0
+                let target = handoff - 2 * bar
+                let barLine = anchor + max(0, ((target - anchor) / bar).rounded(.down)) * bar
+                let snapped = outgoing.beatGrid.min { abs($0 - barLine) < abs($1 - barLine) } ?? barLine
+                if snapped > lastLine + bar, snapped < open {
+                    open = snapped
+                    reasoning.append("The new music opens up at \(clock(open)), two bars before \(current.title)'s voice ends, on a bar line; the new voice waits until \(clock(handoff)).")
+                }
+            }
             let start = max(lastLine, exit - min(max(introRoom, exit - open + bar), 24))
             let underneath = exit - start
             let incomingOffset = mainVerse.map { max(leadIn, $0 - underneath) } ?? leadIn
@@ -104,7 +119,8 @@ struct KnobShiftPlan {
                 return clean(at: audibleEnd, offset: incomingOffset, reasoning: reasoning)
             }
             reasoning.append("Blend: \(clock(start)) to \(clock(exit)), \(seconds(duration)), the new song opens up at \(clock(open)).")
-            return KnobShiftPlan(start: start, duration: duration, handoff: open, incomingOffset: incomingOffset,
+            return KnobShiftPlan(start: start, duration: duration, handoff: open, voiceEnd: max(open, handoff),
+                                 incomingOffset: incomingOffset,
                                  beatsBeforeVoice: mainVerse == nil ? nil : open - start,
                                  description: "READY • mix at \(clock(start)) for \(Int(duration.rounded()))s, opens up at \(clock(open))",
                                  reasoning: reasoning)
