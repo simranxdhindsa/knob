@@ -164,6 +164,8 @@ extension KnobShiftModel {
             guard frames > 0, frames <= AVAudioFramePosition(UInt32.max) else { throw PlayerError.invalidSegment }
             secondaryDeck.stop()
             secondaryDeck.resetEffects()
+            secondaryDeck.resetTransitionEffects()
+            armExitEffects(from: current, to: next, sync: sync)
             secondaryDeck.volume = 0
             secondaryDeck.rate = sync.rates(progress: 0, voice: pivot).incoming
             secondaryDeck.bassCut = 1
@@ -237,6 +239,8 @@ extension KnobShiftModel {
     /// Without a handoff it is one equal-power crossfade.
     private func applyBlend(_ progress: Double, pivot: Double, sync: KnobShiftSync) {
         let outgoing: Double, incoming: Double, swap: Double, sweep: Double, beatsOnly: Double, voice: Double
+        // How far the leaving song is through its exit, 0...1: the lo-fi exit follows this.
+        let exit: Double
         if pivot > 0.02 {
             if progress < pivot {
                 let rise = Self.shape(progress / pivot)
@@ -246,14 +250,18 @@ extension KnobShiftModel {
                 sweep = 0
                 beatsOnly = 1
                 voice = 0
+                exit = 0
             } else {
                 let fall = pivot < 1 ? Self.shape((progress - pivot) / (1 - pivot)) : 1
-                outgoing = 0.85 * cos(fall * .pi / 2)
+                // The leaving song holds on through the first part of its exit, so its exit
+                // effects are heard, then drops away at the end.
+                outgoing = 0.85 * cos(pow(fall, 1.6) * .pi / 2)
                 incoming = 0.55 + 0.45 * sin(fall * .pi / 2)
                 swap = min(fall / 0.25, 1)
                 sweep = fall
                 beatsOnly = max(0, 1 - fall / 0.25)
                 voice = min(fall / 0.25, 1)
+                exit = fall
             }
         } else {
             let shaped = Self.shape(progress)
@@ -263,6 +271,7 @@ extension KnobShiftModel {
             sweep = max(0, (shaped - 0.5) / 0.5)
             beatsOnly = 0
             voice = 1
+            exit = max(0, (shaped - 0.5) / 0.5)
         }
         primaryDeck.volume = Float(outgoing)
         secondaryDeck.volume = Float(incoming)
@@ -277,6 +286,7 @@ extension KnobShiftModel {
         if blendHasStems { secondaryDeck.voiceLevel = Float(voice) }
         // The leaving song loses its treble first as it fades.
         primaryDeck.sweep = sweep
+        applyExitEffects(exit)
     }
 
     private func logBlendStep(progress: Double, pivot: Double, elapsed: TimeInterval, sync: KnobShiftSync) {

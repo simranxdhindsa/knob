@@ -69,7 +69,13 @@ struct KnobShiftPlan {
             // the old voice ends, and its main verse lands as the old song leaves, so the two
             // singers never overlap. Its intro plays quietly underneath first, up to 24 seconds
             // of it, and at least one bar before it opens up.
-            let open = max(handoff, exit - 3 * bar)
+            var open = max(handoff, exit - 3 * bar)
+            // At least two bars for the old song's exit, so its fade and exit effects are heard:
+            // when its voice ends close to where it would leave, it plays on a little longer.
+            if exit - open < 2 * bar {
+                exit = min(audibleEnd, open + 2 * bar)
+                open = max(handoff, min(open, exit - 2 * bar))
+            }
             let introRoom = mainVerse.map { max(0, $0 - leadIn) } ?? 4 * bar
             let start = max(lastLine, exit - min(max(introRoom, exit - open + bar), 24))
             let underneath = exit - start

@@ -160,7 +160,25 @@ if [ "$once" = yes ]; then
     exit 0
 fi
 
-trap 'echo; log "Stopping, quitting dev Knob..."; quit_app; exit 0' INT TERM
+# KnobShift's full log (plans, mixes, transition effects), printed here for testing only and
+# never shown in Knob itself. Colours: effects purple, mixes orange, plans cyan, errors red.
+knobshift_log="$HOME/Library/Logs/Knob (dev)/knobshift.log"
+mkdir -p "$(dirname "$knobshift_log")"
+touch "$knobshift_log"
+tail -n 0 -F "$knobshift_log" 2>/dev/null |
+    while IFS= read -r line; do
+        case "$line" in
+            *"  EFFECT "*) colour='1;35' ;;
+            *"  KNOBMIX"*) colour='0;33' ;;
+            *"  ERROR "*) colour='1;31' ;;
+            *"  PLAN "*|*"  SYNC "*) colour='0;36' ;;
+            *) colour='0;37' ;;
+        esac
+        printf '\033[%sm[knobshift] %s\033[0m\n' "$colour" "${line#*, }"
+    done &
+effects_tail=$!
+
+trap 'echo; log "Stopping, quitting dev Knob..."; kill "$effects_tail" 2>/dev/null; pkill -f "tail -n 0 -F $knobshift_log" 2>/dev/null; quit_app; exit 0' INT TERM
 log "Watching for changes. Save a file to see it in Knob. Ctrl-C to stop."
 
 while true; do

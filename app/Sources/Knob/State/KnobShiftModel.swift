@@ -159,6 +159,10 @@ final class KnobShiftModel: ObservableObject {
     var stemTask: Task<Void, Never>?
     /// True while the incoming song plays as separated music and voice.
     var blendHasStems = false
+    /// Transition effects already announced in the log for the current blend.
+    var effectsLogged: Set<String> = []
+    /// How the leaving song exits in the current blend (KnobShiftExitEffects.swift).
+    var exitStyle: KnobShiftExitStyle?
     var transitionTask: Task<Void, Never>?
     private var progressTask: Task<Void, Never>?
     var playbackStartedAt = Date()
@@ -410,6 +414,7 @@ final class KnobShiftModel: ObservableObject {
         guard remaining > 0, remaining <= AVAudioFramePosition(UInt32.max) else { throw PlayerError.invalidSegment }
         primaryDeck.stop()
         primaryDeck.resetEffects()
+        primaryDeck.resetTransitionEffects()
         primaryDeck.startOffset = time
         primaryDeck.player.scheduleSegment(file, startingFrame: start, frameCount: AVAudioFrameCount(remaining), at: nil)
         nowPlaying = track
