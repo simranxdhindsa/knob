@@ -49,13 +49,49 @@ extension KnobShiftModel {
         effectsLogged = []
         primaryDeck.armTransitionEffects(echoEvery: beat / 2, hall: choice.style == .reverbWash ? .largeHall : .mediumHall)
         log("EFFECT", "\(choice.style.name) on \(current.title): \(choice.reason).")
+        log("EFFECT", String(format: "Beat pulse at %.1f BPM: the effects build between kicks and drop on every beat, to 0%% on the first beat of each bar, 50%% on the second and fourth, 10%% on the third.", 60 / beat))
+    }
+
+    /// How much of the exit effects to let through right now, following the leaving song's own
+    /// beat: low on each kick (a deeper drop on the strong beats), rising back to full just
+    /// before the next one. 1 when the beat is unknown.
+    private static let beatDrops: [Double] = [0, 0.5, 0.1, 0.5]
+
+    private func beatPulse() -> (level: Double, beatInBar: Int, bar: Int)? {
+        guard let track = nowPlaying, let position = primaryDeck.position else { return nil }
+        let grid = track.analysis.beatGrid
+        guard grid.count > 8, let nextIndex = grid.firstIndex(where: { $0 > position }), nextIndex > 0 else { return nil }
+        let previous = grid[nextIndex - 1], next = grid[nextIndex]
+        let phase = min(max((position - previous) / max(next - previous, 0.05), 0), 1)
+        // Bars counted from where the drums come in, four beats each.
+        let entry = track.analysis.beatEntry ?? grid[0]
+        let entryIndex = grid.firstIndex(where: { $0 >= entry - 0.05 }) ?? 0
+        let count = nextIndex - 1 - entryIndex
+        let beatInBar = ((count % 4) + 4) % 4
+        let drop = Self.beatDrops[beatInBar]
+        let rise = phase * phase * (3 - 2 * phase)
+        return (drop + (1 - drop) * rise, beatInBar, count / 4)
     }
 
     /// Moves the leaving song's effects with its exit, 0 at the handoff to 1 when it is gone.
     func applyExitEffects(_ exit: Double) {
         guard let style = exitStyle else { return }
         let deck = primaryDeck
+        let pulse = exit > 0 ? beatPulse() : nil
+        let level = pulse?.level ?? 1
+        if let pulse, pulse.beatInBar == 0, !effectsLogged.contains("bar \(pulse.bar)") {
+            effectsLogged.insert("bar \(pulse.bar)")
+            log("EFFECT", String(format: "Bar %d, beat 1: effects drop to 0%% on the kick, exit %.0f%% done.", pulse.bar + 1, exit * 100))
+        }
         func ramp(_ from: Double, _ to: Double) -> Double { min(max((exit - from) / (to - from), 0), 1) }
+        // The effect levels below follow the exit; each is then scaled by the beat pulse.
+        defer {
+            deck.reverbMix *= level
+            deck.lofiMix *= level
+            deck.echoMix *= level
+            // The underwater filter half reopens on each kick, so the punch comes through.
+            deck.sweep *= 0.5 + 0.5 * level
+        }
         switch style {
         case .underwater:
             deck.reverbMix = 0.12 * ramp(0.5, 1)
