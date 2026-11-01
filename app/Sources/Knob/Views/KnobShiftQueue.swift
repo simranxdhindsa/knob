@@ -1,38 +1,33 @@
 import SwiftUI
 
-/// What plays next and when it mixes in, counted down live.
+/// The song that plays next, shown the same way playing, paused or stopped, at a fixed height,
+/// so the layout never jumps when playback changes.
 struct KnobShiftUpNext: View {
     @ObservedObject var model: KnobShiftModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("UP NEXT").font(.system(size: 9, weight: .bold)).tracking(0.9).foregroundStyle(Screen.textTertiary)
-            if let mix = model.nextMix {
-                HStack(spacing: 12) {
-                    AlbumArtwork(url: mix.next.url, size: 46)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(mix.next.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Screen.text).lineLimit(1)
-                        if let artist = mix.next.artist {
-                            Text(artist).font(.system(size: 11)).foregroundStyle(Screen.textSecondary).lineLimit(1)
-                        }
-                        countdown(mix)
+            HStack(spacing: 12) {
+                AlbumArtwork(url: model.upNext?.url, size: 46)
+                VStack(alignment: .leading, spacing: 3) {
+                    if let next = model.upNext {
+                        Text(next.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Screen.text).lineLimit(1)
+                        Text(model.mixState == .mixing ? "Mixing now" : (next.artist ?? "Local music"))
+                            .font(.system(size: 11, weight: model.mixState == .mixing ? .semibold : .regular))
+                            .foregroundStyle(model.mixState == .mixing ? Palette.accent : Screen.textSecondary)
+                            .lineLimit(1)
+                    } else {
+                        Text("Nothing yet").font(.system(size: 13, weight: .semibold)).foregroundStyle(Screen.textSecondary)
+                        Text("Add another song and KnobShift mixes into it.")
+                            .font(.system(size: 11)).foregroundStyle(Screen.textTertiary).lineLimit(1)
                     }
-                    Spacer(minLength: 0)
                 }
-            } else {
-                Text(model.tracks.count > 1 ? "Play a song to see its next mix." : "Add another song and KnobShift mixes into it.")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Screen.textSecondary)
+                Spacer(minLength: 0)
             }
+            .frame(height: 46)
         }
         .screenCard(radius: 16, padding: 14)
-    }
-
-    /// "Mixing now" while the mix plays; no times are shown.
-    @ViewBuilder private func countdown(_ mix: KnobShiftModel.NextMix) -> some View {
-        if model.mixState == .mixing {
-            Text("Mixing now").font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.accent)
-        }
     }
 }
 

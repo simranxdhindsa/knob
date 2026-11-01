@@ -50,6 +50,52 @@ Knob places its own audio device between your apps and your speakers. The Mac tr
 
 ---
 
+## 🎧 KnobShift: seamless mixes
+
+KnobShift is a music player inside Knob for the songs on your Mac. Add your music, press play, and every song **mixes into the next one like a DJ set**, the way Apple Music's AutoMix does, worked out fresh for every pair of songs.
+
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/knobshift-dark.png">
+  <img src="docs/images/knobshift-light.png" width="760" alt="KnobShift player: cover art, transport, KnobMix Now button, Up next and the queue" />
+</picture>
+
+</div>
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### 🎤 Singers never clash
+KnobShift listens to every song on your Mac first: where the voice starts and ends, where the drums come in, and where the music breaks between sections. The old song finishes its last line and plays out its ending while the new song's intro comes in quietly underneath. **The new verse lands just as the old song leaves.**
+
+### ✂️ Voice and music, separated
+A small on-device AI model splits the next song's voice from its music. While the old singer is still singing, only the new song's **beats and music** come in; its voice joins the moment it takes over.
+
+### 🥁 Beats in step
+Songs close in tempo glide to each other's speed with the **beats locked together**, pitch kept natural. Songs far apart keep their own speed, just like Apple Music.
+
+</td>
+<td valign="top">
+
+### ⚡ KnobMix Now
+Want the next song sooner? Press **KnobMix Now**. KnobShift waits a few seconds for the next phrase or break in the music, so the mix still lands on the beat.
+
+### 🔀 Shuffle and reorder
+Shuffle shows the new order right in the queue, so you always see what plays next. Press it again to get your own order back. **Drag songs** to rearrange, with shuffle on or off.
+
+### 📥 Instant queue
+Add many songs at once. They appear straight away with a small ring showing each one being prepared, and a Retry if a file can't be read. Prepared songs open instantly next time.
+
+</td>
+</tr>
+</table>
+
+> **Private by design.** Everything happens on your Mac: the listening, the separation and the mixing. Nothing is uploaded. KnobShift plays your own files; Apple Music, Spotify and YouTube stay in their own apps.
+
+---
+
 ## ✨ Features
 
 <table>
@@ -214,10 +260,10 @@ knob/
 │   ├── Sources/Knob/
 │   │   ├── Components/       RealisticKnob, HardwareFader, SegmentedTabs, PowerSwitch…
 │   │   ├── Views/            Panel, header, volume, screen, About, app icon
-│   │   ├── State/            KnobModel (every action), presets, session
+│   │   ├── State/            KnobModel (every action), presets, session, KnobShift player
 │   │   ├── Engine/           Socket client, launcher, devices, volume handoff
 │   │   └── Theme/            Palette (light/dark tokens), Motion (springs)
-│   ├── Resources/            AppIcon.icns
+│   ├── Resources/            AppIcon.icns, KnobShift's vocal separation model
 │   └── build-app.sh          Builds and signs Knob.app
 ├── driver/                   Knob audio device (AudioServerPlugIn)
 ├── engine/                   knob-engine and knob-supervisor (Core Audio, C++)
@@ -238,6 +284,7 @@ knob/
 
 | | Doc | Covers |
 |---|---|---|
+| 🎧 | [`knobshift.md`](./docs/knobshift.md) | How KnobShift listens, plans and mixes, with measurements against Apple Music |
 | 🧪 | [`testing.md`](./docs/testing.md) | Full test suite and the bit-identical sound check |
 | ✅ | [`uat-testing.md`](./docs/uat-testing.md) | How UI is verified: like a real user, not by DOM counts |
 | 🎛️ | [`driver/README.md`](./driver/README.md) | The audio device's stream, clock and control contract |
@@ -268,6 +315,8 @@ Knob is designed and built by **[Simran Dhindsa](https://github.com/simranxdhind
 
 - Tabs adapted from the [Segmented Control](https://21st.dev/halaska-studio/segmented-control) by Halaska (MIT) on 21st.dev.
 - Power switch adapted from the [Switch](https://21st.dev/serafimcloud/switch) by serafimcloud on 21st.dev.
+- KnobShift's vocal separation uses the [Open-Unmix](https://github.com/sigsep/open-unmix-pytorch) UMX-HQ model by Inria (MIT), converted to run on device (`app/Resources/KnobShift/OpenUnmix-LICENSE.txt`).
+- KnobShift's player layout is inspired by the MusicPlayerCard by dhileepkumargm on 21st.dev.
 - The audio device follows Apple's AudioServerPlugIn sample code (`driver/apple-sample-license.txt`).
 - Knob builds on earlier free software; its copyright and license notices are kept at the top of the files they apply to.
 

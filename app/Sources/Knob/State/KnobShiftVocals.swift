@@ -18,6 +18,8 @@ enum KnobShiftVocals {
         var mainOnset: TimeInterval? = nil
         /// Short vocal sounds after the last steady line (shouts, ad-libs).
         var strays: [TimeInterval] = []
+        /// Where each sung line ends: the voice drops below the song's normal singing level.
+        var lineEnds: [TimeInterval] = []
         /// The song's typical confidence while someone is singing or rapping, 0...1.
         let level: Double
         let steps: [String]
@@ -97,8 +99,10 @@ enum KnobShiftVocals {
         } else {
             steps.append(String(format: "Main verse: %.2fs.", mainOnset))
         }
+        let lineEnds = mainRuns.map { frames[$0.upperBound].time + hop }
+        steps.append("Line ends: \(lineEnds.count) places where the singer finishes a line.")
         return Result(onset: onset, end: end, lastLineStart: lastLineStart, mainOnset: mainOnset, strays: strays,
-                      level: level, steps: steps)
+                      lineEnds: lineEnds, level: level, steps: steps)
     }
 
     /// Index ranges where smoothed voice stays at or above `floor` for at least `minimumRun`.

@@ -96,7 +96,8 @@ actor KnobShiftAnalyser {
                                                vocalOnset: vocals.onset, vocalEnd: vocals.end,
                                                lastLineStart: vocals.lastLineStart,
                                                mainVocalOnset: mainVerse, vocalStrays: vocals.strays,
-                                               beatEntry: sections.beatEntry, musicBreaks: sections.breaks)
+                                               beatEntry: sections.beatEntry, musicBreaks: sections.breaks,
+                                               vocalLineEnds: vocals.lineEnds)
         steps.append(String(format: "Finished in %.0f ms.", Date().timeIntervalSince(started) * 1_000))
         let track = KnobShiftModel.Track(url: url, title: url.deletingPathExtension().lastPathComponent,
                                          duration: duration, tailSilence: trailing, analysis: analysis)

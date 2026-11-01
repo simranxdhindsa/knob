@@ -16,6 +16,11 @@ final class KnobShiftDeck {
     private let submix = AVAudioMixerNode()
     private let stretch = AVAudioUnitTimePitch()
     private let filter = AVAudioUnitEQ(numberOfBands: 3)
+    /// Transition effects for a song that is leaving (the lo-fi exit). Bypassed, so not in the
+    /// sound at all, during normal playback.
+    private let lofi = AVAudioUnitDistortion()
+    private let echo = AVAudioUnitDelay()
+    private let room = AVAudioUnitReverb()
     /// Where in its file this deck's current segment started.
     var startOffset: TimeInterval = 0
 
@@ -42,11 +47,20 @@ final class KnobShiftDeck {
         engine.attach(submix)
         engine.attach(stretch)
         engine.attach(filter)
+        lofi.loadFactoryPreset(.drumsLoFi)
+        echo.feedback = 45
+        echo.lowPassCutoff = 3_500
+        room.loadFactoryPreset(.mediumHall)
+        for unit in [lofi, echo, room] as [AVAudioUnitEffect] { engine.attach(unit) }
+        resetTransitionEffects()
         engine.connect(player, to: submix, format: nil)
         engine.connect(voice, to: submix, format: nil)
         engine.connect(submix, to: stretch, format: nil)
         engine.connect(stretch, to: filter, format: nil)
-        engine.connect(filter, to: engine.mainMixerNode, format: nil)
+        engine.connect(filter, to: lofi, format: nil)
+        engine.connect(lofi, to: echo, format: nil)
+        engine.connect(echo, to: room, format: nil)
+        engine.connect(room, to: engine.mainMixerNode, format: nil)
     }
 
     private static let restingCutoff: Float = 10
@@ -81,8 +95,49 @@ final class KnobShiftDeck {
 
     /// Playback speed with natural pitch: 1 is normal.
     var rate: Double {
-        get { Double(stretch.rate) }
-        set { stretch.rate = Float(min(max(newValue, 0.5), 2)) }
+        get { baseRate }
+        set { baseRate = min(max(newValue, 0.5), 2); applySpeed() }
+    }
+    private var baseRate = 1.0
+
+    /// Tape slowdown, 0...1: at 1 the song plays 15% slower and its pitch drops with it, like a
+    /// record or tape winding down (the "slowed" sound).
+    var tape: Double = 0 { didSet { applySpeed() } }
+    private static let tapeSlowest = 0.85
+
+    private func applySpeed() {
+        let factor = 1 - (1 - Self.tapeSlowest) * min(max(tape, 0), 1)
+        stretch.rate = Float(baseRate * factor)
+        stretch.pitch = Float(1_200 * log2(factor))
+    }
+
+    /// Lo-fi colour, echo and reverb share, each 0...1.
+    var lofiMix: Double = 0 { didSet { lofi.wetDryMix = Float(min(max(lofiMix, 0), 1) * 100) } }
+    var echoMix: Double = 0 { didSet { echo.wetDryMix = Float(min(max(echoMix, 0), 1) * 100) } }
+    var reverbMix: Double = 0 { didSet { room.wetDryMix = Float(min(max(reverbMix, 0), 1) * 100) } }
+
+    /// Turns the transition effects on for a leaving song, with echoes `echoEvery` seconds apart
+    /// and the given hall for its reverb.
+    func armTransitionEffects(echoEvery: TimeInterval, hall: AVAudioUnitReverbPreset) {
+        echo.delayTime = min(max(echoEvery, 0.05), 2)
+        room.loadFactoryPreset(hall)
+        lofiMix = 0
+        echoMix = 0
+        reverbMix = 0
+        for unit in [lofi, echo, room] as [AVAudioUnitEffect] { unit.bypass = false }
+    }
+
+    /// Takes the transition effects back out of the sound. Called only when the deck is silent
+    /// (loading its next song), so the echo and reverb tails of a mix always ring out.
+    func resetTransitionEffects() {
+        tape = 0
+        lofiMix = 0
+        echoMix = 0
+        reverbMix = 0
+        for unit in [lofi, echo, room] as [AVAudioUnitEffect] {
+            unit.bypass = true
+            unit.reset()
+        }
     }
 
     /// 0 keeps the full bass, 1 removes it (used to swap basslines during a blend).
@@ -111,6 +166,7 @@ final class KnobShiftDeck {
     /// Back to plain playback after a blend.
     func resetEffects() {
         rate = 1
+        tape = 0
         bassCut = 0
         sweep = 0
         beatsOnly = 0

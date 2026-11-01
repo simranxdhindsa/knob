@@ -70,17 +70,19 @@ struct KnobShiftScreen: View {
         .frame(maxHeight: .infinity)
     }
 
-    @ViewBuilder private var status: some View {
-        if let mix = model.nextMix, model.mixState != .mixing {
-            HStack(spacing: 6) {
-                Text("NEXT").font(.system(size: 9, weight: .bold)).tracking(0.9).foregroundStyle(Screen.textTertiary)
-                Text(mix.next.name).font(.system(size: 11, weight: .semibold)).foregroundStyle(Screen.text).lineLimit(1)
-                Spacer(minLength: 4)
-            }
-            .padding(.horizontal, 12)
-            .frame(height: 32)
-            .background(Capsule().fill(Screen.tabTrack))
+    /// Always there, playing or paused, so the mini player never changes height.
+    private var status: some View {
+        HStack(spacing: 6) {
+            Text("NEXT").font(.system(size: 9, weight: .bold)).tracking(0.9).foregroundStyle(Screen.textTertiary)
+            Text(model.mixState == .mixing ? "Mixing now" : (model.upNext?.name ?? "Nothing yet"))
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(model.mixState == .mixing ? Palette.accent : (model.upNext == nil ? Screen.textTertiary : Screen.text))
+                .lineLimit(1)
+            Spacer(minLength: 4)
         }
+        .padding(.horizontal, 12)
+        .frame(height: 32)
+        .background(Capsule().fill(Screen.tabTrack))
     }
 
     private func openButton(title: String) -> some View {
