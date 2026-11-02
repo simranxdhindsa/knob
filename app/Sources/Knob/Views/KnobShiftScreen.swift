@@ -5,6 +5,8 @@ import SwiftUI
 /// layout is the same playing, paused, stopped or empty, so the panel never jumps.
 struct KnobShiftScreen: View {
     @ObservedObject var model: KnobShiftModel
+    @State private var scrubPosition: TimeInterval = 0
+    @State private var isScrubbing = false
 
     /// The playing song, or the first one in the queue so Play has something to start.
     private var track: KnobShiftModel.Track? { model.nowPlaying ?? model.tracks.first }
@@ -19,6 +21,8 @@ struct KnobShiftScreen: View {
         .padding(.horizontal, 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(Motion.gentle, value: model.nowPlaying?.id)
+        .onAppear { scrubPosition = model.playbackTime }
+        .onChange(of: model.playbackTime) { _, time in if !isScrubbing { scrubPosition = time } }
     }
 
     private var header: some View {
@@ -49,22 +53,23 @@ struct KnobShiftScreen: View {
         }
     }
 
-    /// A thin line with elapsed and remaining time; always shown, empty when nothing plays.
+    /// The native slider, as in the full player: drag to move through the song. Always shown,
+    /// disabled when nothing plays.
     private var progress: some View {
-        let duration = max(model.playbackDuration, 1)
-        let share = model.nowPlaying == nil ? 0 : min(max(model.playbackTime / duration, 0), 1)
-        return VStack(spacing: 4) {
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Screen.grid)
-                    Capsule().fill(Palette.accent).frame(width: geometry.size.width * share)
-                }
-            }
-            .frame(height: 3)
+        let playing = model.nowPlaying != nil
+        return VStack(spacing: 2) {
+            Slider(value: $scrubPosition, in: 0...max(model.playbackDuration, 1), onEditingChanged: { editing in
+                isScrubbing = editing
+                if !editing { model.seek(to: scrubPosition) }
+            })
+            .controlSize(.mini)
+            .tint(Palette.accent)
+            .disabled(!playing)
+            .accessibilityLabel("Position in song")
             HStack {
-                Text(model.nowPlaying == nil ? "0:00" : KnobShiftNowPlaying.clock(model.playbackTime))
+                Text(playing ? KnobShiftNowPlaying.clock(scrubPosition) : "0:00")
                 Spacer()
-                Text(model.nowPlaying == nil ? "0:00" : KnobShiftNowPlaying.clock(max(0, model.playbackDuration - model.playbackTime)) + " left")
+                Text(playing ? KnobShiftNowPlaying.clock(max(0, model.playbackDuration - scrubPosition)) + " left" : "0:00")
             }
             .font(.system(size: 9, weight: .semibold).monospacedDigit())
             .foregroundStyle(Screen.textTertiary)
