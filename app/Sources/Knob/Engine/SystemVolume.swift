@@ -63,6 +63,15 @@ final class SystemVolume: VolumeControl {
         AudioObjectAddPropertyListenerBlock(device, &Self.mainVolume, queue, valueListener)
         AudioObjectAddPropertyListenerBlock(device, &Self.mute, queue, valueListener)
         publish()
+        // A device that has just become the output (Knob's own, as the engine starts) can answer
+        // "no volume" for a moment, which left the panel saying Fixed. Look again shortly after.
+        let bound = device
+        for delay in [0.5, 1.5, 4.0] {
+            queue.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, self.device == bound else { return }
+                self.publish()
+            }
+        }
     }
 
     private func publish() {
