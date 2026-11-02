@@ -28,6 +28,9 @@ struct KnobShiftPlan {
     let description: String
     let reasoning: [String]
 
+    /// No mix is shorter than this, so every transition has time to be heard.
+    static let shortestMix: TimeInterval = 8
+
     /// `handoffAt` is a handoff the listener asked for with KnobMix Now: the voices hand over
     /// there instead of where the old song's singing ends.
     static func make(from current: KnobShiftModel.Track, to next: KnobShiftModel.Track,
@@ -93,9 +96,24 @@ struct KnobShiftPlan {
                 }
             }
             // KnobMix Now waits for its moment: the new song comes in only two bars before it.
-            let start = handoffAt != nil
+            var start = handoffAt != nil
                 ? max(lastLine, open - 2 * bar)
                 : max(lastLine, exit - min(max(introRoom, exit - open + bar), 24))
+            // How long the mix runs follows the song: six bars of its beat, so a fast song mixes
+            // quicker than a slow one, between 8 and 14 seconds. The new song still comes in at
+            // least a bar before it opens up, and the old one still gets two bars to leave.
+            let longest = min(max(6 * bar, Self.shortestMix), 14)
+            if exit - start > longest {
+                start = max(start, min(exit - longest, open - bar))
+                if exit - start > longest {
+                    exit = max(start + longest, min(audibleEnd, max(open, handoff) + 2 * bar))
+                }
+                reasoning.append("The mix is kept to \(seconds(exit - start)) for \(current.title)'s tempo.")
+            }
+            if exit - start < Self.shortestMix {
+                exit = min(audibleEnd, max(exit, start + Self.shortestMix))
+                start = max(0, min(start, exit - Self.shortestMix))
+            }
             let underneath = exit - start
             let incomingOffset = mainVerse.map { max(leadIn, $0 - underneath) } ?? leadIn
             if let mainVerse {
@@ -130,7 +148,11 @@ struct KnobShiftPlan {
         }
 
         // No vocals in the outgoing song: its measured fade is the cue.
-        if let fade = outgoing.fadeOutCue, fade < audibleEnd {
+        if let measured = outgoing.fadeOutCue, measured < audibleEnd {
+            // The same length as a sung mix: six bars of its beat, 8 to 14 seconds of its fade.
+            let bar = outgoing.tempo.map { 4 * 60 / $0 } ?? 2.5
+            let longest = min(max(6 * bar, shortestMix), 14)
+            let fade = max(0, min(max(measured, audibleEnd - longest), audibleEnd - shortestMix))
             let duration = audibleEnd - fade
             let incomingOffset = mainVerse.map { max(leadIn, $0 - duration) } ?? leadIn
             reasoning.append("\(current.title): no vocals found, its fade starts at \(clock(fade)).")
