@@ -87,7 +87,7 @@ struct KnobShiftSpotifySheet: View {
         .overlay(Capsule().strokeBorder(Screen.highlight, lineWidth: 1))
     }
 
-    private var canAdd: Bool { !model.spotifyBusy && !link.trimmingCharacters(in: .whitespaces).isEmpty }
+    private var canAdd: Bool { !model.spotifyBusy && model.spotifyLoginJob == nil && !link.trimmingCharacters(in: .whitespaces).isEmpty }
 
     private func add() {
         guard canAdd else { return }
@@ -106,13 +106,16 @@ struct KnobShiftSpotifySheet: View {
                     .font(.system(size: 11, weight: .medium)).foregroundStyle(Screen.textSecondary)
                 Spacer()
                 Button {
-                    if model.spotifyLoggedIn { model.logOutOfSpotify() } else { Task { await model.logInToSpotify() } }
+                    if model.spotifyLoginJob != nil { model.cancelSpotifyLogin() }
+                    else if model.spotifyLoggedIn { model.logOutOfSpotify() }
+                    else { Task { await model.logInToSpotify() } }
                 } label: {
-                    Text(model.spotifyLoggedIn ? "LOG OUT" : "LOG IN").font(.system(size: 9, weight: .bold)).tracking(0.7)
+                    Text(model.spotifyLoginJob != nil ? "CANCEL" : model.spotifyLoggedIn ? "LOG OUT" : "LOG IN")
+                        .font(.system(size: 9, weight: .bold)).tracking(0.7)
                         .foregroundStyle(Palette.accent)
                 }
                 .buttonStyle(.plain)
-                .disabled(model.spotifyBusy)
+                .disabled(model.spotifyBusy && model.spotifyLoginJob == nil)
             }
             Button { Task { await model.addLikedSongs() } } label: {
                 Label("ADD LIKED SONGS", systemImage: "heart.fill").font(.system(size: 10, weight: .bold)).tracking(0.7)
@@ -121,7 +124,7 @@ struct KnobShiftSpotifySheet: View {
                     .background(Capsule().strokeBorder(Palette.accent.opacity(model.spotifyLoggedIn ? 0.45 : 0.15), lineWidth: 1))
             }
             .buttonStyle(.plain)
-            .disabled(!model.spotifyLoggedIn || model.spotifyBusy)
+            .disabled(!model.spotifyLoggedIn || model.spotifyBusy || model.spotifyLoginJob != nil)
         }
         .screenCard(radius: 14, padding: 12)
     }
@@ -131,7 +134,7 @@ struct KnobShiftSpotifySheet: View {
         HStack(spacing: 8) {
             Circle().fill(Palette.accent).frame(width: 6, height: 6)
                 .shadow(color: Palette.accentGlow, radius: pulse ? 5 : 1)
-                .opacity(model.spotifyBusy ? (pulse ? 1 : 0.4) : 0)
+                .opacity(model.spotifyBusy || model.spotifyLoginJob != nil ? (pulse ? 1 : 0.4) : 0)
                 // The breathing belongs to the dot alone, so nothing else in the sheet moves.
                 .animation(Motion.pulse, value: pulse)
             Text(model.spotifyStatus ?? " ")

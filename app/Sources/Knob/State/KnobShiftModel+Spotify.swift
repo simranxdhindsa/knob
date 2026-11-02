@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 
 /// Spotify in KnobShift: a pasted playlist, album or song (or the user's Liked Songs) is read
 /// from Spotify, its songs appear in the queue at once in Spotify's order, and spotDL downloads
@@ -285,15 +285,28 @@ extension KnobShiftModel {
     // MARK: Spotify login
 
     /// spotDL opens Spotify's login page in the browser and keeps the token in its own home.
+    /// Login ends the moment the token arrives, and Knob comes back to the front.
     func logInToSpotify() async {
-        guard spotifyAvailable, !spotifyBusy else { return }
-        spotifyBusy = true
-        defer { spotifyBusy = false }
+        guard spotifyAvailable, !spotifyBusy, spotifyLoginJob == nil else { return }
+        let job = UUID()
+        spotifyLoginJob = job
         spotifyStatus = "Finish logging in to Spotify in your browser."
         log("SPOTIFY", "Logging in to Spotify.")
-        _ = try? await KnobShiftSpotDL.shared.list("saved", userAuth: true)
-        spotifyLoggedIn = KnobShiftSpotDL.isLoggedIn
-        spotifyStatus = spotifyLoggedIn ? "Logged in to Spotify." : "Spotify login did not finish. Try again."
+        let loggedIn = await KnobShiftSpotDL.shared.logIn(id: job)
+        guard spotifyLoginJob == job else { return }
+        spotifyLoginJob = nil
+        spotifyLoggedIn = loggedIn
+        spotifyStatus = loggedIn ? "Logged in to Spotify." : "Spotify login did not finish. Try again."
+        log("SPOTIFY", loggedIn ? "Logged in to Spotify." : "Spotify login did not finish.")
+        if loggedIn { NSApp.activate(ignoringOtherApps: true) }
+    }
+
+    func cancelSpotifyLogin() {
+        guard let job = spotifyLoginJob else { return }
+        spotifyLoginJob = nil
+        KnobShiftSpotDL.shared.cancel(job)
+        spotifyStatus = nil
+        log("SPOTIFY", "Spotify login cancelled.")
     }
 
     func logOutOfSpotify() {

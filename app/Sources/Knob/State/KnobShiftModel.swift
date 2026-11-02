@@ -173,6 +173,8 @@ final class KnobShiftModel: ObservableObject {
     @Published internal(set) var spotifyBusy = false
     /// Running downloads by playlist id.
     var spotifyJobs: [String: UUID] = [:]
+    /// The browser login waiting for Spotify, so LOG IN can turn into CANCEL.
+    @Published internal(set) var spotifyLoginJob: UUID?
 
     private let analyser = KnobShiftAnalyser()
     private let audioEngine = AVAudioEngine()

@@ -140,6 +140,33 @@ final class KnobShiftSpotDL: @unchecked Sendable {
         return await run(arguments, id: id, onLine: onLine).status
     }
 
+    /// Logs in through Spotify's page in the browser. spotDL saves the token as soon as the user
+    /// agrees, then would go on reading their whole Liked Songs, so it is stopped the moment the
+    /// token appears. Gives up after `timeout` or when `cancel(id)` stops it.
+    func logIn(id: UUID, timeout: TimeInterval = 180) async -> Bool {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("knobshift-login.spotdl")
+        let finished = Flag()
+        let login = Task {
+            _ = await run(["save", "saved", "--save-file", file.path, "--user-auth"], id: id) { _ in }
+            finished.set()
+        }
+        let deadline = Date().addingTimeInterval(timeout)
+        while !Self.isLoggedIn, !finished.isSet, Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(400))
+        }
+        cancel(id)
+        await login.value
+        try? FileManager.default.removeItem(at: file)
+        return Self.isLoggedIn
+    }
+
+    private final class Flag: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = false
+        var isSet: Bool { lock.lock(); defer { lock.unlock() }; return value }
+        func set() { lock.lock(); value = true; lock.unlock() }
+    }
+
     func cancel(_ id: UUID) {
         lock.lock()
         let process = running[id]
