@@ -256,6 +256,8 @@ extension KnobShiftModel {
     private func applyBlend(_ progress: Double, pivot: Double, voiceDone: Double,
                             keyframes: (start: Double, peak: Double, end: Double), sync: KnobShiftSync) {
         let outgoing: Double, incoming: Double, swap: Double, sweep: Double, beatsOnly: Double, voice: Double
+        // The old singer's separated voice: it leaves before the new one arrives, never together.
+        var oldVoice = 1.0
         // How far the leaving song is through its exit, 0...1: the lo-fi exit follows this.
         let exit: Double
         if pivot > 0.02 {
@@ -280,7 +282,9 @@ extension KnobShiftModel {
                 swap = min(fall / 0.25, 1)
                 sweep = leaving
                 beatsOnly = max(0, 1 - fall / 0.25)
-                voice = progress < voiceDone ? 0 : min(leaving / 0.25, 1)
+                // The old voice clears over the first tenth of the exit, then the new voice rises.
+                oldVoice = progress < voiceDone ? 1 : max(0, 1 - leaving / 0.1)
+                voice = progress < voiceDone ? 0 : min(max((leaving - 0.1) / 0.25, 0), 1)
                 exit = leaving
             }
         } else {
@@ -304,6 +308,9 @@ extension KnobShiftModel {
         secondaryDeck.beatsOnly = blendHasStems ? beatsOnly * 0.5 : beatsOnly
         // The separated voice of the new song stays silent under the old singer.
         if blendHasStems { secondaryDeck.voiceLevel = Float(voice) }
+        // Once the leaving song plays as separated parts, its voice is let go as the new one
+        // comes, so the two singers are never heard over each other.
+        if outgoingOnStems { primaryDeck.voiceLevel = Float(oldVoice) }
         // The leaving song loses its treble first as it fades.
         primaryDeck.sweep = sweep
         // Keyframes: 0 until `start`, full at `peak`, 0 again from `end`, eased in and out at

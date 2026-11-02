@@ -131,9 +131,9 @@ extension KnobShiftModel {
         // arrives through a reverb that clears as it takes over. The old voice is never slowed
         // on its own: it would drift behind its music (about 0.3s by the end) and the faint
         // trace of it left in the music would sing its last word twice.
-        if outgoingOnStems { deck.voiceReverb = 0.25 * envelope }
+        if outgoingOnStems { deck.voiceReverb = 0.25 * envelope * Double(deck.voiceLevel) }
         if blendHasStems { secondaryDeck.voiceReverb = 0.35 * envelope }
-        announce("old voice", when: outgoingOnStems && envelope > 0.01, "Old voice gets a hall that peaks where it ends; it stays in time with its music.")
+        announce("old voice", when: outgoingOnStems && envelope > 0.01, "Old voice gets a hall that peaks where it ends; it stays in time with its music and is gone before the new voice comes in.")
         announce("new voice", when: blendHasStems && envelope > 0.01, "New voice comes in through a reverb that clears as it takes over.")
         announce("treble", when: exit > 0.01, "Treble fade on the leaving song: a low pass closing from 20 kHz to 1 kHz, the underwater sound.")
         announce("reverb", when: deck.reverbMix > 0.01, style == .reverbWash
