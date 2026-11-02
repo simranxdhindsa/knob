@@ -84,40 +84,10 @@ struct KnobShiftQueue: View {
         .screenCard(radius: 16, padding: 14)
     }
 
-    /// ADD MUSIC: songs on this Mac, or, where Spotify import is available, a menu with both.
-    /// The header looks the same either way, so it never changes size.
-    @ViewBuilder private var addMusic: some View {
-        if model.spotifyAvailable {
-            // Styled like PillMenu: the button menu style keeps the label's own small font (the
-            // borderless style drew it at the system menu size, bigger than the rest).
-            Menu {
-                Button("Songs on your Mac", action: onAdd)
-                Button("Spotify playlist", action: onSpotify)
-            } label: {
-                Text("ADD MUSIC")
-                    .font(.system(size: 9, weight: .bold)).tracking(0.6)
-                    .foregroundStyle(Palette.accent)
-                    .padding(.leading, 13)
-                    .frame(height: 20)
-                    .contentShape(Rectangle())
-            }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .overlay(alignment: .leading) {
-                Image(systemName: "plus").font(.system(size: 9, weight: .bold)).foregroundStyle(Palette.accent)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-            }
-        } else {
-            Button(action: onAdd) {
-                Label("ADD MUSIC", systemImage: "plus")
-                    .font(.system(size: 9, weight: .bold)).tracking(0.6)
-                    .foregroundStyle(Palette.accent)
-            }
-            .buttonStyle(.plain)
-        }
+    /// ADD MUSIC: songs on this Mac, or, where Spotify import is available, a dropdown with both
+    /// (KnobShiftAddMusic). The header looks the same either way, so it never changes size.
+    private var addMusic: some View {
+        KnobShiftAddMusic(spotify: model.spotifyAvailable, onMac: onAdd, onSpotify: onSpotify)
     }
 
     /// Strips the list's own look, and leaves room on the right for the scroll bar so it never
