@@ -6,6 +6,12 @@ import Foundation
 /// from KnobShiftPlan and KnobShiftSync; this part carries the plan out on the two decks and
 /// logs every step.
 extension KnobShiftModel {
+    /// Seconds the exit effects take to rise to their peak where the old voice ends, and again
+    /// to fall away: they stay near the end of the old song instead of covering the whole mix.
+    static let effectSide: TimeInterval = 4.5
+    /// The effects' strength at that peak: half, so the old song is coloured, never swamped.
+    static let effectPeak = 0.5
+
     private static let wallClock: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -149,12 +155,14 @@ extension KnobShiftModel {
             // Where the old voice ends: the old song's fade and the new voice wait for it.
             let voiceDone = min(max((voiceEnd - outgoingAt) / music, pivot), 1)
             let duration = sync.blendLength(forOutgoingMusic: music, voice: pivot)
-            // The effects peak where the old voice ends, the climax of the mix, with at least
-            // four seconds of rise and of fall (an even split when the mix is shorter than eight).
-            let minimum = 4 / max(duration, 0.1)
-            let peak = duration >= 8 ? min(max(voiceDone, minimum), 1 - minimum) : 0.5
-            log("EFFECT", String(format: "Keyframes: effects rise for %.1fs to full where the old voice ends, then fall for %.1fs to nothing as the mix completes.",
-                                 duration * peak, duration * (1 - peak)))
+            // The effects peak where the old voice ends, the climax of the mix: about four and a
+            // half seconds up and four and a half down, so they pass in under ten seconds even
+            // in a long mix (an even split of the whole mix when it is shorter than nine).
+            let side = Self.effectSide / max(duration, 0.1)
+            let peak = duration >= 2 * Self.effectSide ? min(max(voiceDone, side), 1 - side) : 0.5
+            let keyframes = (start: max(peak - side, 0), peak: peak, end: min(peak + side, 1))
+            log("EFFECT", String(format: "Keyframes: effects start %.1fs into the mix, rise for %.1fs to full where the old voice ends, then fall for %.1fs to nothing.",
+                                 duration * keyframes.start, duration * (peak - keyframes.start), duration * (keyframes.end - peak)))
             mixState = .mixing
             mixNowWaiting = false
             mixingInto = next
@@ -213,7 +221,7 @@ extension KnobShiftModel {
                     if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
                     guard let self, !Task.isCancelled else { return }
                     let progress = Double(step) / Double(steps)
-                    self.applyBlend(progress, pivot: pivot, voiceDone: voiceDone, peak: peak, sync: sync)
+                    self.applyBlend(progress, pivot: pivot, voiceDone: voiceDone, keyframes: keyframes, sync: sync)
                     self.blendProgress = progress
                     if !handedOver, progress >= pivot {
                         handedOver = true
@@ -250,7 +258,8 @@ extension KnobShiftModel {
     /// and melody range are held back and its speed moves to its own. At the handoff the incoming
     /// song opens up fully, the basslines swap and the outgoing song fades out, thinning upward.
     /// Without a handoff it is one equal-power crossfade.
-    private func applyBlend(_ progress: Double, pivot: Double, voiceDone: Double, peak: Double, sync: KnobShiftSync) {
+    private func applyBlend(_ progress: Double, pivot: Double, voiceDone: Double,
+                            keyframes: (start: Double, peak: Double, end: Double), sync: KnobShiftSync) {
         let outgoing: Double, incoming: Double, swap: Double, sweep: Double, beatsOnly: Double, voice: Double
         // How far the leaving song is through its exit, 0...1: the lo-fi exit follows this.
         let exit: Double
@@ -302,12 +311,17 @@ extension KnobShiftModel {
         if blendHasStems { secondaryDeck.voiceLevel = Float(voice) }
         // The leaving song loses its treble first as it fades.
         primaryDeck.sweep = sweep
-        // Keyframes: 0 at the start, full at `peak`, 0 again at the end, eased both ways.
+        // Keyframes: 0 until `start`, full at `peak`, 0 again from `end`, eased both ways.
         let clamped = min(max(progress, 0), 1)
-        let envelope = clamped < peak
-            ? sin(clamped / max(peak, 0.001) * .pi / 2)
-            : cos((clamped - peak) / max(1 - peak, 0.001) * .pi / 2)
-        applyExitEffects(exit, envelope: envelope)
+        let envelope: Double
+        if clamped <= keyframes.start || clamped >= keyframes.end {
+            envelope = 0
+        } else if clamped < keyframes.peak {
+            envelope = sin((clamped - keyframes.start) / max(keyframes.peak - keyframes.start, 0.001) * .pi / 2)
+        } else {
+            envelope = cos((clamped - keyframes.peak) / max(keyframes.end - keyframes.peak, 0.001) * .pi / 2)
+        }
+        applyExitEffects(exit, envelope: Self.effectPeak * envelope)
     }
 
     private func logBlendStep(progress: Double, pivot: Double, elapsed: TimeInterval, sync: KnobShiftSync) {
