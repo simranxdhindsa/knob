@@ -287,6 +287,14 @@ final class KnobShiftSpotDL: @unchecked Sendable {
         // names across lines.
         environment["COLUMNS"] = "1000"
         environment["TERM"] = "dumb"
+        // spotDL also comes unpacked in Resources (build-app.sh), so PyInstaller's "already
+        // unpacked" mode skips unpacking hundreds of libraries on every start: about 2s, not 20s.
+        let unpacked = Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/spotdl-runtime")
+        if FileManager.default.fileExists(atPath: unpacked.appendingPathComponent("base_library.zip").path) {
+            environment["_PYI_APPLICATION_HOME_DIR"] = unpacked.path
+            environment["_PYI_ARCHIVE_FILE"] = helper.path
+            environment["_PYI_PARENT_PROCESS_LEVEL"] = "1"
+        }
         process.environment = environment
         let pipe = Pipe()
         process.standardOutput = pipe
