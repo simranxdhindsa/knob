@@ -27,7 +27,7 @@ enum KnobShiftWindow {
 
     private static func present(model: KnobShiftModel, activates: Bool) {
         if window == nil {
-            let host = NSHostingController(rootView: KnobShiftPlayerView(model: model))
+            let host = NSHostingController(rootView: KnobShiftPlayerView(model: model).focusEffectDisabled())
             let created = NSWindow(contentViewController: host)
             created.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
             created.title = "KnobShift"
@@ -91,7 +91,7 @@ struct KnobShiftPlayerView: View {
             }
             .ignoresSafeArea()
         }
-        .sheet(isPresented: $showingSpotify) { KnobShiftSpotifySheet(model: model) }
+        .sheet(isPresented: $showingSpotify) { KnobShiftSpotifySheet(model: model).focusEffectDisabled() }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result else { return }
             Task { await model.addTracks(urls) }

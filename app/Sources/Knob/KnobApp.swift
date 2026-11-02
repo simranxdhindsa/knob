@@ -88,6 +88,8 @@ struct KnobApp: App {
     var body: some Scene {
         MenuBarExtra {
             PanelView(model: model)
+            // Knob never draws macOS's blue focus ring; pointer highlights show what is active.
+            .focusEffectDisabled()
         } label: {
             Image(systemName: model.powerOn ? "dial.medium.fill" : "dial.medium")
                 .accessibilityLabel("Knob")
