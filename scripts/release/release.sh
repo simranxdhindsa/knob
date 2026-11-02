@@ -81,6 +81,7 @@ bash "$repo_dir/driver/build.sh" "$engine_dir/driver" >/dev/null
 sh "$repo_dir/tests/driver-build.sh" "$engine_dir/driver/Knob.driver"
 
 log "App"
+bash "$repo_dir/packaging/fetch-spotdl.sh"
 KNOB_VERSION=$version KNOB_BUILD=$build_number KNOB_UNIVERSAL=1 KNOB_ENGINE_DIR=$engine_dir \
     bash "$repo_dir/app/build-app.sh" release
 
@@ -116,15 +117,11 @@ if [ -n "${SPARKLE_PRIVATE_KEY:-}" ]; then
 else
     echo "Note: no update key, so installed copies would refuse this trial build's update."
 fi
-if [ -n "$previous_tag" ]; then
-    git -C "$repo_dir" log --no-merges --format='%s' "$previous_tag..HEAD" -- . ':!*.md' ':!docs' ':!.claude' \
-        > "$work/changes.txt"
-else
-    cat > "$work/changes.txt" <<'NOTES'
-First release of Knob: a volume control that works on HDMI monitors and other outputs with no volume of their own, plus presets, effects and a 10-band equalizer
-Knob now updates itself, so you never need to download it again
-NOTES
-fi
+# Release notes always come from this version's section of CHANGELOG.md (New features, then
+# Fixes), written for users; never from commit messages.
+series=$(tr -d '[:space:]' < "$repo_dir/VERSION")
+awk -v head="## $series" '$0 == head { on = 1; next } /^## / { on = 0 } on && (/^- / || /^### /) { print }' \
+    "$repo_dir/CHANGELOG.md" > "$work/changes.txt" 2>/dev/null || : > "$work/changes.txt"
 python3 -I "$repo_dir/scripts/release/appcast.py" --version "$version" --build "$build_number" \
     --url "https://github.com/$repo/releases/download/$tag/$archive" --signature "$signature" \
     --installation-type "$installation_type" --changes "$work/changes.txt" \

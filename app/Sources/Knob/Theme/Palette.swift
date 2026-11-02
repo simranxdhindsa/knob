@@ -78,6 +78,37 @@ enum Meter {
     static let glass = Color.white
 }
 
+/// Covers KnobShift draws for songs whose files carry none (GeneratedArtwork). Every song gets
+/// its own colours: a hue from its name and a three stop gradient around it, light (cream to
+/// a soft tint) or deep (a bright tint falling into shadow), in the style of the README's
+/// player animation.
+enum ArtworkPalette {
+    struct Family {
+        let colors: [Color]
+        /// Light covers get dark shapes on top; dark covers get light ones.
+        let isLight: Bool
+    }
+
+    /// `hue` and `shift` are 0...1 values from the song's name.
+    static func family(hue: Double, shift: Double, light: Bool) -> Family {
+        let spread = 0.06 + shift * 0.12
+        let second = (hue + spread).truncatingRemainder(dividingBy: 1)
+        let third = (hue + spread * 2).truncatingRemainder(dividingBy: 1)
+        if light {
+            return Family(colors: [Color(hue: hue, saturation: 0.10, brightness: 1.0),
+                                   Color(hue: second, saturation: 0.32, brightness: 0.97),
+                                   Color(hue: third, saturation: 0.58, brightness: 0.85)], isLight: true)
+        }
+        return Family(colors: [Color(hue: hue, saturation: 0.62, brightness: 0.98),
+                               Color(hue: second, saturation: 0.75, brightness: 0.72),
+                               Color(hue: third, saturation: 0.80, brightness: 0.24)], isLight: false)
+    }
+
+    /// The soft circles and the wave on top of the gradient.
+    static let light = Color.white
+    static let shade = Color.black
+}
+
 extension Color {
     init(hex: UInt32) {
         self.init(.sRGB,

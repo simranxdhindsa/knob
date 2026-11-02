@@ -7,3 +7,9 @@ Knob is a modified work. It includes code from earlier free-software projects an
 Modified by Simran Dhindsa, October 2026: new macOS app, renamed throughout, macOS-only build.
 
 Knob comes with no warranty, to the extent permitted by law.
+
+## Third party components shipped inside Knob.app
+
+- **Open-Unmix UMX-HQ** vocal model (`app/Resources/KnobShift/`), Copyright (c) 2019 Inria, MIT License (`OpenUnmix-LICENSE.txt` beside it).
+- **spotDL 4.6.0** (`Contents/Helpers/spotdl`, fetched at build time by `packaging/fetch-spotdl.sh`), Copyright (c) 2021 spotDL Developers, MIT License, https://github.com/spotDL/spotify-downloader. Its single executable bundles Python and its libraries, including yt-dlp (Unlicense), under their own licenses.
+- **FFmpeg 4.4** static build (`Contents/Helpers/ffmpeg`, fetched the same way) from https://github.com/eugeneware/ffmpeg-static, GNU GPL version 3; its source is available from https://ffmpeg.org.

@@ -1,7 +1,7 @@
 """Writes appcast.xml (the update feed installed copies of Knob read) and the release notes.
 
-Called by scripts/release/release.sh. Change lines are commit subjects with the type prefix
-(FEATURE:, BUG:, ...) removed; CHORE and REFACTOR commits are left out of what users read.
+Called by scripts/release/release.sh with this version's section of CHANGELOG.md: "### " lines
+are group headings (New features, Fixes) and "- " lines the items under them.
 """
 import argparse
 import email.utils
@@ -9,17 +9,20 @@ import html
 import re
 from xml.sax.saxutils import escape, quoteattr
 
-HIDDEN = {"CHORE", "REFACTOR"}
-
 
 def changes(path):
-    lines = []
+    """[(heading, [items])] in the order written; items before any heading go under None."""
+    groups = []
     for raw in open(path, encoding="utf-8"):
-        match = re.match(r"\s*([A-Z]+):\s*(.+)", raw)
-        kind, text = (match.group(1), match.group(2)) if match else ("", raw.strip())
-        if text and kind not in HIDDEN and text not in lines:
-            lines.append(text[0].upper() + text[1:])
-    return lines or ["Small improvements and fixes."]
+        line = raw.strip()
+        if line.startswith("### "):
+            groups.append((line[4:].strip(), []))
+        elif line.startswith("- ") and line[2:].strip():
+            if not groups:
+                groups.append((None, []))
+            groups[-1][1].append(line[2:].strip())
+    groups = [(heading, items) for heading, items in groups if items]
+    return groups or [(None, ["Small improvements and fixes."])]
 
 
 def main():
@@ -27,11 +30,14 @@ def main():
     for name in ("version", "build", "url", "signature", "installation-type", "changes", "appcast", "notes"):
         parser.add_argument("--" + name, required=True)
     args = parser.parse_args()
-    items = changes(args.changes)
+    groups = changes(args.changes)
 
     with open(args.notes, "w", encoding="utf-8") as notes:
-        notes.write("".join(f"- {line}\n" for line in items))
-        notes.write("\nNew to Knob? Download Knob.dmg below and open Knob-Install.pkg inside it."
+        for heading, items in groups:
+            if heading:
+                notes.write(f"### {heading}\n\n")
+            notes.write("".join(f"- {line}\n" for line in items) + "\n")
+        notes.write("New to Knob? Download Knob.dmg below and open Knob-Install.pkg inside it."
                     " Already installed? Knob updates itself.\n")
 
     # sign_update prints: sparkle:edSignature="..." length="..."
@@ -40,7 +46,9 @@ def main():
     if args.installation_type:
         enclosure["sparkle:installationType"] = args.installation_type
     enclosure_xml = " ".join(f"{key}={quoteattr(value)}" for key, value in enclosure.items())
-    description = "<ul>" + "".join(f"<li>{html.escape(line)}</li>" for line in items) + "</ul>"
+    description = "".join((f"<h3>{html.escape(heading)}</h3>" if heading else "")
+                          + "<ul>" + "".join(f"<li>{html.escape(line)}</li>" for line in items) + "</ul>"
+                          for heading, items in groups)
 
     with open(args.appcast, "w", encoding="utf-8") as feed:
         feed.write(f"""<?xml version="1.0" encoding="utf-8"?>

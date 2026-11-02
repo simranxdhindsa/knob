@@ -13,6 +13,13 @@ final class KnobShiftDeck {
     /// Plays a song's separated voice beside `player` (which then plays its music), so the voice
     /// can be held back on its own while a new song comes in. Silent the rest of the time.
     let voice = AVAudioPlayerNode()
+    /// Plays a leaving song's separated music while `voice` plays its separated voice, so its voice
+    /// alone can slow down during a mix. Silent the rest of the time.
+    let musicStem = AVAudioPlayerNode()
+    /// Speed and reverb on the voice alone (the song's music keeps its own speed). At rest the
+    /// speed unit passes audio through unchanged and the reverb is bypassed.
+    private let voiceStretch = AVAudioUnitTimePitch()
+    private let voiceRoom = AVAudioUnitReverb()
     private let submix = AVAudioMixerNode()
     private let stretch = AVAudioUnitTimePitch()
     private let filter = AVAudioUnitEQ(numberOfBands: 3)
@@ -44,6 +51,12 @@ final class KnobShiftDeck {
         treble.bypass = false
         engine.attach(player)
         engine.attach(voice)
+        engine.attach(musicStem)
+        engine.attach(voiceStretch)
+        engine.attach(voiceRoom)
+        voiceRoom.loadFactoryPreset(.largeHall)
+        voiceRoom.wetDryMix = 0
+        voiceRoom.bypass = true
         engine.attach(submix)
         engine.attach(stretch)
         engine.attach(filter)
@@ -54,7 +67,10 @@ final class KnobShiftDeck {
         for unit in [lofi, echo, room] as [AVAudioUnitEffect] { engine.attach(unit) }
         resetTransitionEffects()
         engine.connect(player, to: submix, format: nil)
-        engine.connect(voice, to: submix, format: nil)
+        engine.connect(voice, to: voiceStretch, format: nil)
+        engine.connect(voiceStretch, to: voiceRoom, format: nil)
+        engine.connect(voiceRoom, to: submix, format: nil)
+        engine.connect(musicStem, to: submix, format: nil)
         engine.connect(submix, to: stretch, format: nil)
         engine.connect(stretch, to: filter, format: nil)
         engine.connect(filter, to: lofi, format: nil)
@@ -78,19 +94,52 @@ final class KnobShiftDeck {
         set { voice.volume = newValue }
     }
 
+    /// Level of the whole file (`player`); falls to 0 while a leaving song plays as separated
+    /// music and voice instead, which add up to the same sound.
+    var fileLevel: Float {
+        get { player.volume }
+        set { player.volume = newValue }
+    }
+
+    var musicStemLevel: Float {
+        get { musicStem.volume }
+        set { musicStem.volume = newValue }
+    }
+
+    /// Slows the voice alone, 0...1: at 1 it plays 15% slower with its pitch dropping with it.
+    var voiceTape: Double = 0 {
+        didSet {
+            let factor = 1 - 0.15 * min(max(voiceTape, 0), 1)
+            voiceStretch.rate = Float(factor)
+            voiceStretch.pitch = Float(1_200 * log2(factor))
+        }
+    }
+
+    /// Hall reverb on the voice alone, 0...1.
+    var voiceReverb: Double = 0 {
+        didSet {
+            let wet = min(max(voiceReverb, 0), 1)
+            voiceRoom.wetDryMix = Float(wet * 100)
+            voiceRoom.bypass = wet <= 0.001
+        }
+    }
+
     func stop() {
         player.stop()
         voice.stop()
+        musicStem.stop()
     }
 
     func pause() {
         player.pause()
         voice.pause()
+        musicStem.pause()
     }
 
     func resume() {
         player.play()
         voice.play()
+        musicStem.play()
     }
 
     /// Playback speed with natural pitch: 1 is normal.
@@ -172,6 +221,10 @@ final class KnobShiftDeck {
         beatsOnly = 0
         volume = 1
         voiceLevel = 1
+        fileLevel = 1
+        musicStemLevel = 1
+        voiceTape = 0
+        voiceReverb = 0
     }
 
     /// File position this deck has really reached, read from the audio engine. The player

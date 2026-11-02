@@ -56,11 +56,14 @@ KnobShift is a music player inside Knob for the songs on your Mac. Add your musi
 
 <div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/knobshift-dark.png">
-  <img src="docs/images/knobshift-light.png" width="760" alt="KnobShift player: cover art, transport, KnobMix Now button, Up next and the queue" />
-</picture>
+<img src="docs/images/knobshift-player.svg" width="100%" alt="The KnobShift player at work: a song plays with its time ticking while, in the queue, a Spotify playlist downloads song by song and new songs are prepared one by one, each ring filling until the song shows its tempo. KnobMix Now is pressed, waits for the next phrase, the cover glows with KNOBMIX while Up next says Mixing now, and the player moves on to the next song, starting at its verse." />
 
+</div>
+
+### 🎬 Watch a KnobMix
+
+<div align="center">
+  <img src="docs/images/knobmix.svg" width="100%" alt="Three KnobMixes in a row, each with its own transition. Two decks spin while the songs scroll past the playhead. Mix 1, Tape slowdown: the tempos are close, the beats lock and the old voice slows down like tape. Mix 2, Echo out: the tempos are far apart, each song keeps its speed and the verse echoes out on the beat. Mix 3: KnobMix Now is pressed, KnobShift waits for the next phrase, then the old song sinks into an Underwater fade. Below, each transition's effect curve rises until the verse ends and falls away by the handoff, next to badges for beat sync, the AI voice split and the bass swap." />
 </div>
 
 <table>
@@ -74,13 +77,23 @@ KnobShift listens to every song on your Mac first: where the voice starts and en
 A small on-device AI model splits the next song's voice from its music. While the old singer is still singing, only the new song's **beats and music** come in; its voice joins the moment it takes over.
 
 ### 🥁 Beats in step
-Songs close in tempo glide to each other's speed with the **beats locked together**, pitch kept natural. Songs far apart keep their own speed, just like Apple Music.
+Songs close in tempo glide to each other's speed with the **beats locked together**, pitch kept natural. Songs far apart keep their own speed, just like Apple Music. The bass swaps over on a bar line, so the two kick drums never fight.
+
+### 🎛️ A different transition every time
+KnobShift picks a transition for **each pair of songs**:
+- When the beats can lock, it's an **Underwater fade**, a **Lofi dip** or a **Tape slowdown**.
+- When the tempos are far apart, it's an **Echo out** or a **Reverb wash**.
+
+Every effect rises until the old verse ends and falls away by the handoff. Each way is timed to the song and never shorter than four seconds, and the effect breathes gently on the beat.
 
 </td>
 <td valign="top">
 
 ### ⚡ KnobMix Now
-Want the next song sooner? Press **KnobMix Now**. KnobShift waits a few seconds for the next phrase or break in the music, so the mix still lands on the beat.
+Want the next song sooner? Press **KnobMix Now**. KnobShift waits a few seconds for the next phrase or break in the music, and lets the singer finish the line, so the mix still lands on the beat.
+
+### 🎙️ Voices with their own moves
+During a tape slowdown, **only the old singer's voice** winds down, over the new song's beat. The new voice arrives through a short reverb that clears as the verse begins.
 
 ### 🔀 Shuffle and reorder
 Shuffle shows the new order right in the queue, so you always see what plays next. Press it again to get your own order back. **Drag songs** to rearrange, with shuffle on or off.
@@ -92,7 +105,9 @@ Add many songs at once. They appear straight away with a small ring showing each
 </tr>
 </table>
 
-> **Private by design.** Everything happens on your Mac: the listening, the separation and the mixing. Nothing is uploaded. KnobShift plays your own files; Apple Music, Spotify and YouTube stay in their own apps.
+> **Private by design.** Everything happens on your Mac: the listening, the separation and the mixing. Nothing is uploaded. KnobShift plays files on your Mac, including songs you add from your Spotify playlists.
+
+**🔜 Coming next:** add music straight from YouTube videos and YouTube Music.
 
 ---
 
@@ -284,6 +299,7 @@ knob/
 
 | | Doc | Covers |
 |---|---|---|
+| 🆕 | [`CHANGELOG.md`](./CHANGELOG.md) | What's new in each version of Knob |
 | 🎧 | [`knobshift.md`](./docs/knobshift.md) | How KnobShift listens, plans and mixes, with measurements against Apple Music |
 | 🧪 | [`testing.md`](./docs/testing.md) | Full test suite and the bit-identical sound check |
 | ✅ | [`uat-testing.md`](./docs/uat-testing.md) | How UI is verified: like a real user, not by DOM counts |

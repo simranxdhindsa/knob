@@ -72,7 +72,11 @@ enum KnobShiftStems {
     static func prepare(_ url: URL, from start: TimeInterval, length: TimeInterval) throws -> Prepared {
         let stems = try separate(url, from: start, length: length)
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("KnobShift Stems", isDirectory: true)
-        try? FileManager.default.removeItem(at: folder)
+        // Keep the files of the mix being prepared alongside; clear anything over an hour old.
+        let old = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        for file in old where ((try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) < Date().addingTimeInterval(-3_600) {
+            try? FileManager.default.removeItem(at: file)
+        }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let id = UUID().uuidString
         let urls = [folder.appendingPathComponent("\(id) music.caf"), folder.appendingPathComponent("\(id) vocals.caf")]

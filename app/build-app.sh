@@ -86,6 +86,18 @@ if [ -x "$engine_dir/knob-engine" ] && [ -x "$engine_dir/knob-supervisor" ]; the
 else
     echo "Note: engine helpers not built yet (cmake --build build); the power switch can't start the engine." >&2
 fi
+# KnobShift's Spotify import: spotDL and a static FFmpeg, fetched into build/spotdl-helpers by
+# packaging/fetch-spotdl.sh (never committed). Without them KnobShift hides Spotify import.
+spotdl_dir="$repo_dir/build/spotdl-helpers"
+if [ -x "$spotdl_dir/spotdl" ] && [ -x "$spotdl_dir/ffmpeg" ]; then
+    mkdir -p "$bundle/Contents/Helpers"
+    for helper in spotdl ffmpeg; do
+        cp "$spotdl_dir/$helper" "$bundle/Contents/Helpers/$helper"
+        sign --entitlements "$repo_dir/packaging/spotdl.entitlements" "$bundle/Contents/Helpers/$helper"
+    done
+else
+    echo "Note: Spotify helpers not fetched (bash packaging/fetch-spotdl.sh); KnobShift hides Spotify import." >&2
+fi
 # The audio device rides inside the app, which installs it on first use (one password prompt).
 if [ -d "$engine_dir/driver/Knob.driver" ]; then
     ditto "$engine_dir/driver/Knob.driver" "$bundle/Contents/Resources/Knob.driver"

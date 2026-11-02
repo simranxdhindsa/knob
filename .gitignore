@@ -6,6 +6,9 @@ node_modules/
 __pycache__/
 *.pyc
 
+# KnobShift's Spotify import: the spotDL checkout used for reference, never part of Knob's source
+/spotify-downloader/
+
 # macOS
 .DS_Store
 
@@ -19,3 +22,6 @@ __pycache__/
 !**/.voiden/env-public.yaml
 !**/.voiden/env-*-public.yaml
 .voiden-inherited.void
+
+# Editor settings (VS Code makes these by itself)
+.vscode/

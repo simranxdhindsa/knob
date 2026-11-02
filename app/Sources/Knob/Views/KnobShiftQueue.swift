@@ -36,6 +36,7 @@ struct KnobShiftUpNext: View {
 struct KnobShiftQueue: View {
     @ObservedObject var model: KnobShiftModel
     var onAdd: () -> Void
+    var onSpotify: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -58,13 +59,9 @@ struct KnobShiftQueue: View {
                 .help(model.isShuffled ? "Shuffle is on. Click to go back to your order." : "Shuffle the queue")
                 .accessibilityLabel(model.isShuffled ? "Shuffle on" : "Shuffle off")
                 .padding(.trailing, 8)
-                Button(action: onAdd) {
-                    Label("ADD MUSIC", systemImage: "plus")
-                        .font(.system(size: 9, weight: .bold)).tracking(0.6)
-                        .foregroundStyle(Palette.accent)
-                }
-                .buttonStyle(.plain)
+                addMusic
             }
+            KnobShiftPlaylistRows(model: model)
             if model.tracks.isEmpty && model.pending.isEmpty {
                 empty
             } else {
@@ -76,13 +73,51 @@ struct KnobShiftQueue: View {
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
-                .animation(Motion.gentle, value: model.tracks.map(\.id))
+                // Shuffle animates; mapping every song's id on each change was slow with
+                // thousands of songs.
+                .animation(Motion.gentle, value: model.isShuffled)
             }
             if let notice = model.notice {
                 Text(notice).font(.system(size: 10)).foregroundStyle(Palette.accent).lineLimit(2)
             }
         }
         .screenCard(radius: 16, padding: 14)
+    }
+
+    /// ADD MUSIC: songs on this Mac, or, where Spotify import is available, a menu with both.
+    /// The header looks the same either way, so it never changes size.
+    @ViewBuilder private var addMusic: some View {
+        if model.spotifyAvailable {
+            // Styled like PillMenu: the button menu style keeps the label's own small font (the
+            // borderless style drew it at the system menu size, bigger than the rest).
+            Menu {
+                Button("Songs on your Mac", action: onAdd)
+                Button("Spotify playlist", action: onSpotify)
+            } label: {
+                Text("ADD MUSIC")
+                    .font(.system(size: 9, weight: .bold)).tracking(0.6)
+                    .foregroundStyle(Palette.accent)
+                    .padding(.leading, 13)
+                    .frame(height: 20)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .overlay(alignment: .leading) {
+                Image(systemName: "plus").font(.system(size: 9, weight: .bold)).foregroundStyle(Palette.accent)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        } else {
+            Button(action: onAdd) {
+                Label("ADD MUSIC", systemImage: "plus")
+                    .font(.system(size: 9, weight: .bold)).tracking(0.6)
+                    .foregroundStyle(Palette.accent)
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     /// Strips the list's own look, and leaves room on the right for the scroll bar so it never
@@ -128,14 +163,14 @@ struct KnobShiftQueue: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 13)).foregroundStyle(Palette.accent)
                 } else {
-                    PreparingRing(progress: song.progress, active: song.isActive)
+                    PreparingRing(progress: song.progress, active: song.isActive || song.stage == "Downloading")
                 }
             }
             .frame(width: 34, height: 34)
             VStack(alignment: .leading, spacing: 2) {
                 Text(song.name).font(.system(size: 12, weight: .medium))
                     .foregroundStyle(song.failure == nil ? Screen.textSecondary : Screen.text).lineLimit(1)
-                Text([song.artist, song.failure ?? (song.isActive ? "Preparing \(Int(song.progress * 100))%" : "Waiting to prepare")]
+                Text([song.artist, song.failure ?? song.stage ?? (song.isActive ? "Preparing \(Int(song.progress * 100))%" : "Waiting to prepare")]
                         .compactMap { $0 }.joined(separator: "  ·  "))
                     .font(.system(size: 10)).foregroundStyle(song.failure == nil ? Screen.textTertiary : Palette.accent).lineLimit(1)
             }
