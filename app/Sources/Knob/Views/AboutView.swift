@@ -6,6 +6,9 @@ import SwiftUI
 /// and where the source is.
 struct AboutView: View {
     @Environment(\.colorScheme) private var scheme
+    var width: CGFloat = AboutView.size.width
+    /// Shown inside the panel: a back button at the top left (and Escape) returns to the controls.
+    var onBack: (() -> Void)? = nil
 
     static let size = CGSize(width: 340, height: 452)
 
@@ -59,7 +62,24 @@ struct AboutView: View {
             .padding(.horizontal, 26)
             .padding(.bottom, 20)
         }
-        .frame(width: Self.size.width, height: Self.size.height)
+        .frame(width: width, height: Self.size.height)
+        .overlay(alignment: .topLeading) {
+            if let onBack {
+                Button(action: onBack) {
+                    Label("BACK", systemImage: "chevron.left")
+                        .font(.system(size: 9.5, weight: .bold)).tracking(0.6)
+                        .foregroundStyle(Palette.accent)
+                        .padding(.horizontal, 10)
+                        .frame(height: 24)
+                        .background(RecessedPill())
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)
+                .accessibilityLabel("Back to Knob's controls")
+                .padding(14)
+            }
+        }
         .background {
             ZStack {
                 LinearGradient(colors: [p.panelTop, p.panelBottom], startPoint: .top, endPoint: .bottom)

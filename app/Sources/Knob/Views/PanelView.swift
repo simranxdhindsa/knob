@@ -4,13 +4,28 @@ import SwiftUI
 struct PanelView: View {
     @ObservedObject var model: KnobModel
     @Environment(\.colorScheme) private var scheme
+    /// About Knob opens inside the panel, with a back button, instead of in its own window.
+    @State private var showingAbout = false
 
     static let width: CGFloat = 384
 
     var body: some View {
+        Group {
+            if showingAbout {
+                AboutView(width: Self.width, onBack: { withAnimation(Motion.gentle) { showingAbout = false } })
+                    .transition(.opacity)
+            } else {
+                controls.transition(.opacity)
+            }
+        }
+        // The panel always opens on its controls.
+        .onDisappear { showingAbout = false }
+    }
+
+    private var controls: some View {
         let p = Palette.of(scheme)
-        VStack(spacing: 14) {
-            HeaderBar(model: model)
+        return VStack(spacing: 14) {
+            HeaderBar(model: model, onAbout: { withAnimation(Motion.gentle) { showingAbout = true } })
             PresetBar(model: model)
             VolumeSection(model: model)
             ScreenSection(model: model)

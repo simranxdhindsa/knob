@@ -33,6 +33,8 @@ like a DJ, worked out fresh for each pair of songs.
 
 ### Fixes
 
+- Clicking the Dock icon brings back a minimised KnobShift window
+- The ••• menu opens again on a click, and About Knob now shows inside the panel with a Back button
 - ADD MUSIC opens its choices on a click again, now with the Apple logo for songs on your Mac and the Spotify mark for Spotify
 - The old song's last word is no longer sung twice during a mix
 - Transition effects ease in gently, start a second after the new song arrives and stay at half strength or less, so the old song never lurches or drags on
