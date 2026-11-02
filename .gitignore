@@ -6,6 +6,9 @@ node_modules/
 __pycache__/
 *.pyc
 
+# KnobShift's Spotify import: the spotDL checkout used for reference, never part of Knob's source
+/spotify-downloader/
+
 # macOS
 .DS_Store
 

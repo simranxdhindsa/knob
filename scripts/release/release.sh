@@ -82,6 +82,7 @@ sh "$repo_dir/tests/driver-build.sh" "$engine_dir/driver/Knob.driver"
 
 log "App"
 KNOB_VERSION=$version KNOB_BUILD=$build_number KNOB_UNIVERSAL=1 KNOB_ENGINE_DIR=$engine_dir \
+    bash "$repo_dir/packaging/fetch-spotdl.sh"
     bash "$repo_dir/app/build-app.sh" release
 
 log "Installer"

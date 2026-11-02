@@ -66,11 +66,18 @@ final class KnobShiftModel: ObservableObject {
         let duration: TimeInterval
         let tailSilence: TimeInterval
         let analysis: Analysis
+        /// The file's own title and artists, when it has tags (KnobShiftTags).
+        var tags: KnobShiftTags.Tags? = nil
+        /// Set for songs that came from a Spotify playlist (KnobShiftModel+Spotify.swift).
+        var spotifyId: String? = nil
+        var playlistId: String? = nil
 
-        /// "Title - Artist" file names show as a title with the artist underneath.
-        var name: String { Self.split(title).name }
-        var artist: String? { Self.split(title).artist }
+        /// The file's tags first; otherwise "Title - Artist" file names show as a title with the
+        /// artist underneath.
+        var name: String { tags?.title ?? Self.split(title).name }
+        var artist: String? { tags?.artist ?? Self.split(title).artist }
         static func split(_ title: String) -> (name: String, artist: String?) {
+            let title = KnobShiftPlaylists.plainTitle(title)
             guard let range = title.range(of: " - ", options: .backwards) else { return (title, nil) }
             let name = title[..<range.lowerBound].trimmingCharacters(in: .whitespaces)
             let artist = title[range.upperBound...].trimmingCharacters(in: .whitespaces)
@@ -81,7 +88,17 @@ final class KnobShiftModel: ObservableObject {
     /// A song added to the queue that is still being prepared (or failed to be).
     struct PendingSong: Identifiable, Equatable {
         let id = UUID()
-        let url: URL
+        /// The song's file; for a Spotify song still downloading, where its file will be.
+        var url: URL
+        /// Spotify songs show their Spotify name and artists while they download.
+        var spotifyId: String? = nil
+        var playlistId: String? = nil
+        var spotifyName: String? = nil
+        var spotifyArtist: String? = nil
+        /// True until the Spotify download has written the file; analysis waits for it.
+        var waitingForDownload = false
+        /// "Finding", "Downloading" while a Spotify song is on its way.
+        var stage: String? = nil
         /// 0...1 through the analysis; 0 while waiting its turn.
         var progress: Double = 0
         var isActive = false
@@ -89,8 +106,8 @@ final class KnobShiftModel: ObservableObject {
         var failure: String?
         var title: String { url.deletingPathExtension().lastPathComponent }
         /// "Title - Artist" file names split the same way as ready songs.
-        var name: String { Track.split(title).name }
-        var artist: String? { Track.split(title).artist }
+        var name: String { spotifyName ?? Track.split(title).name }
+        var artist: String? { spotifyArtist ?? Track.split(title).artist }
     }
 
     /// The planned transition, as the player shows it.
@@ -145,7 +162,17 @@ final class KnobShiftModel: ObservableObject {
     @Published internal(set) var mixingInto: Track?
     @Published internal(set) var blendProgress: Double = 0
     /// Songs added but not ready yet, prepared one at a time in the order they were added.
-    @Published private(set) var pending: [PendingSong] = []
+    @Published internal(set) var pending: [PendingSong] = []
+    /// Spotify playlists in the queue and ones removed in the last 30 days
+    /// (KnobShiftModel+Spotify.swift).
+    @Published internal(set) var playlists: [KnobShiftPlaylist] = []
+    @Published internal(set) var removedPlaylists: [KnobShiftRemovedPlaylist] = []
+    @Published internal(set) var spotifyLoggedIn = false
+    /// One plain sentence about the latest Spotify step, shown in the Spotify sheet.
+    @Published internal(set) var spotifyStatus: String?
+    @Published internal(set) var spotifyBusy = false
+    /// Running downloads by playlist id.
+    var spotifyJobs: [String: UUID] = [:]
 
     private let analyser = KnobShiftAnalyser()
     private let audioEngine = AVAudioEngine()
@@ -187,6 +214,7 @@ final class KnobShiftModel: ObservableObject {
         primaryDeck = deckOne
         secondaryDeck = deckTwo
         log("SESSION", "Local mixer initialized with Deck 1 and Deck 2.")
+        loadPlaylists()
         // The engine stops itself when the Mac's output device changes; log it so a silent or
         // stalled mix can be matched to the device change that caused it.
         configurationObserver = NotificationCenter.default.addObserver(
@@ -215,6 +243,10 @@ final class KnobShiftModel: ObservableObject {
 
     func retry(_ song: PendingSong) {
         guard let index = pending.firstIndex(where: { $0.id == song.id }) else { return }
+        if song.waitingForDownload {
+            retryDownload(song)
+            return
+        }
         pending[index].failure = nil
         pending[index].progress = 0
         log("IMPORT", "Retrying \(song.title).")
@@ -226,14 +258,14 @@ final class KnobShiftModel: ObservableObject {
         persistQueue()
     }
 
-    private func isQueued(_ url: URL) -> Bool {
+    func isQueued(_ url: URL) -> Bool {
         let path = url.standardizedFileURL
         return tracks.contains { $0.url.standardizedFileURL == path } || pending.contains { $0.url.standardizedFileURL == path }
     }
 
     /// Prepares waiting songs in order. A second call while this runs returns at once; the
     /// running loop picks up anything added meanwhile.
-    private func processPending() async {
+    func processPending() async {
         guard !isProcessing else { return }
         isProcessing = true
         isPreparing = true
@@ -242,7 +274,7 @@ final class KnobShiftModel: ObservableObject {
             isProcessing = false
             isPreparing = false
         }
-        while let index = pending.firstIndex(where: { $0.failure == nil }) {
+        while let index = pending.firstIndex(where: { $0.failure == nil && !$0.waitingForDownload }) {
             let song = pending[index]
             pending[index].isActive = true
             pending[index].progress = 0.02
@@ -252,9 +284,14 @@ final class KnobShiftModel: ObservableObject {
                 let result = try await analyser.analyse(song.url) { [weak self] value in
                     Task { @MainActor [weak self] in self?.setProgress(value, for: id) }
                 }
+                var track = result.track
+                track.tags = await KnobShiftTags.read(song.url)
+                let origin = KnobShiftPlaylists.origin(of: song.url)
+                track.spotifyId = song.spotifyId ?? origin?.spotifyId
+                track.playlistId = song.playlistId ?? origin?.playlistId
                 pending.removeAll { $0.id == song.id }
-                tracks.append(result.track)
-                if isShuffled { unshuffled.append(result.track) }
+                tracks.append(track)
+                if isShuffled { unshuffled.append(track) }
                 logAnalysis(result)
                 refreshPlanIfNeeded()
             } catch {
