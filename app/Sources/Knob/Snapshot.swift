@@ -39,8 +39,6 @@ enum Snapshot {
             model.knobShift.stop()
 
             // KnobShift is a separate, resizable player. Render its two responsive breakpoints.
-            let savedShiftEnabled = UserDefaults.standard.object(forKey: PersistKey.knobShiftEnabled.rawValue)
-            UserDefaults.standard.set(true, forKey: PersistKey.knobShiftEnabled.rawValue)
             // Both sizes, light and dark, playing and mid-mix.
             for mixing in [false, true] {
                 let shift = KnobShiftModel(restoresQueue: false)
@@ -76,11 +74,6 @@ enum Snapshot {
                     .background(LinearGradient(colors: [Screen.top, Screen.bottom], startPoint: .top, endPoint: .bottom))
                     .environment(\.colorScheme, .dark), scheme: .dark,
                    to: folder.appendingPathComponent("knobshift-spotify-key.png"))
-            if let savedShiftEnabled {
-                UserDefaults.standard.set(savedShiftEnabled, forKey: PersistKey.knobShiftEnabled.rawValue)
-            } else {
-                UserDefaults.standard.removeObject(forKey: PersistKey.knobShiftEnabled.rawValue)
-            }
             model.panelClosed()
 
             // Engine off: what the panel looks like before the engine is installed or running.

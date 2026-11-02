@@ -66,7 +66,6 @@ struct KnobShiftPlayerView: View {
 
     @Environment(\.colorScheme) private var scheme
     @ObservedObject var model: KnobShiftModel
-    @AppStorage(PersistKey.knobShiftEnabled.rawValue) private var enabled = false
     @State private var importing = false
     @State private var showingSpotify = false
 
@@ -75,11 +74,7 @@ struct KnobShiftPlayerView: View {
         GeometryReader { geometry in
             VStack(alignment: .leading, spacing: 16) {
                 header(palette)
-                if enabled {
-                    workspace(width: geometry.size.width)
-                } else {
-                    off(palette)
-                }
+                workspace(width: geometry.size.width)
             }
             .padding(20)
         }
@@ -96,7 +91,6 @@ struct KnobShiftPlayerView: View {
             guard case .success(let urls) = result else { return }
             Task { await model.addTracks(urls) }
         }
-        .onChange(of: enabled) { if !enabled { model.stop() } }
     }
 
     private func header(_ palette: Palette) -> some View {
@@ -110,11 +104,6 @@ struct KnobShiftPlayerView: View {
                 Text("Seamless mixes for the music on your Mac").font(.system(size: 11, weight: .medium)).foregroundStyle(palette.muted)
             }
             Spacer()
-            Toggle("KnobShift", isOn: $enabled)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .tint(Palette.accent)
-                .accessibilityLabel("KnobShift on or off")
         }
     }
 
@@ -137,16 +126,4 @@ struct KnobShiftPlayerView: View {
         }
     }
 
-    private func off(_ palette: Palette) -> some View {
-        VStack(spacing: 10) {
-            Spacer()
-            Image(systemName: "music.note.list").font(.system(size: 30)).foregroundStyle(palette.faint)
-            Text("KnobShift is off").font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.label)
-            Text("Turn it on to play your songs with smooth, beat matched mixes between them.")
-                .font(.system(size: 11)).foregroundStyle(palette.muted)
-                .multilineTextAlignment(.center)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-    }
 }

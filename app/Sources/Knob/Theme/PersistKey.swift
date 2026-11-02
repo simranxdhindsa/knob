@@ -14,8 +14,6 @@ enum PersistKey: String {
     case powerOn = "knob.audio.powerOn"
     /// Knob has asked once for the Accessibility permission its 2% volume keys need.
     case askedKeyAccess = "knob.audio.askedKeyAccess"
-    /// Whether KnobShift is enabled for local music played by Knob.
-    case knobShiftEnabled = "knob.shift.enabled"
     /// Paths for the local files the user has added to KnobShift's queue.
     case knobShiftQueue = "knob.shift.queue"
     /// Whether the dedicated KnobShift window was visible when Knob last quit.
