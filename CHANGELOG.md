@@ -20,11 +20,12 @@ like a DJ, worked out fresh for each pair of songs.
 - On device AI separates the next song's voice from its music, so only its beats come in until its turn
 - Songs close in tempo glide to the same speed with the beats locked together; the bass swaps over on a bar line
 - Every pair of songs gets its own transition: Underwater fade, Lofi dip, Tape slowdown, Echo out or Reverb wash
-- Transition effects rise until the old verse ends and fall away by the handoff, each way timed to the song, and breathe gently on the beat
-- During a tape slowdown only the old singer's voice winds down, and the new voice arrives through a reverb that clears
+- Transition effects build to a gentle peak where the old verse ends and fall away, two bars each way to the song's own beat, and breathe on the beat
+- The old singer's voice leaves before the new singer comes in, so two voices are never heard together, and the new voice arrives through a reverb that clears
 - KnobMix Now mixes into the next song sooner, waiting for the next phrase so the mix still lands on the beat
 - Shuffle shows the new order in the queue, and songs can be dragged into any order
 - Add your Spotify playlists, albums, songs and Liked Songs: tick the songs you want, and they download in the background with live progress, in Spotify's order
+- Use your own free Spotify key (with Spotify Premium), so Spotify imports never wait on the shared daily limit
 - Songs added in bulk appear at once and are prepared in the background, ready instantly next time
 - Songs without cover art get a cover of their own, and during a mix the cover fades into the next song's
 - The KnobShift tab in Knob's panel is a mini player with progress, previous, play and next, plus a button that opens the full player
@@ -32,6 +33,11 @@ like a DJ, worked out fresh for each pair of songs.
 
 ### Fixes
 
+- The old song's last word is no longer sung twice during a mix
+- Transition effects ease in gently, start a second after the new song arrives and stay at half strength or less, so the old song never lurches or drags on
+- Mixes are shorter and fit each song: six bars of its beat, between 8 and 14 seconds
+- Spotify login, reading and downloads start in about 2 seconds instead of 20
+- When Spotify pauses requests for the day, Knob says so and shows when to try again, instead of waiting silently
 - The progress bar in the panel's mini player can be dragged to move through the song
 - Spotify login finishes as soon as you agree in the browser and brings Knob back to the front
 - A song is never added while its download is still being written, and stopping a download leaves nothing running in the background

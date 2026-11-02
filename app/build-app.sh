@@ -95,6 +95,22 @@ if [ -x "$spotdl_dir/spotdl" ] && [ -x "$spotdl_dir/ffmpeg" ]; then
         cp "$spotdl_dir/$helper" "$bundle/Contents/Helpers/$helper"
         sign --entitlements "$repo_dir/packaging/spotdl.entitlements" "$bundle/Contents/Helpers/$helper"
     done
+    # spotDL unpacked once, so it starts in about a second instead of unpacking hundreds of
+    # libraries (each checked by macOS) on every start. Unpacked and signed into a cache that
+    # is redone only when spotDL or the signing identity changes, then copied in.
+    runtime="$spotdl_dir/spotdl-runtime"
+    stamp="$(stat -f '%z %m' "$spotdl_dir/spotdl") $identity"
+    if [ "$(cat "$runtime/.stamp" 2>/dev/null)" != "$stamp" ]; then
+        rm -rf "$runtime"
+        python3 -I "$repo_dir/packaging/unpack-pyinstaller.py" "$spotdl_dir/spotdl" "$runtime"
+        find "$runtime" -type f \( -name '*.so' -o -name '*.dylib' -o -path '*/Python.framework/Versions/*/Python' \) -print0 |
+            while IFS= read -r -d '' library; do sign "$library"; done
+        echo "$stamp" > "$runtime/.stamp"
+    fi
+    # In Resources, not Helpers: it holds scripts and data too, which Helpers may not.
+    rm -rf "$bundle/Contents/Resources/spotdl-runtime"
+    cp -R "$runtime" "$bundle/Contents/Resources/spotdl-runtime"
+    rm -f "$bundle/Contents/Resources/spotdl-runtime/.stamp"
 else
     echo "Note: Spotify helpers not fetched (bash packaging/fetch-spotdl.sh); KnobShift hides Spotify import." >&2
 fi

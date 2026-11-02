@@ -228,6 +228,8 @@ final class KnobShiftModel: ObservableObject {
     var exitStyle: KnobShiftExitStyle?
     /// How far the tape slowdown goes for this song, 0.1...0.6 of its full depth.
     var tapeDepth = 0.5
+    /// The exit effects' strength at their peak for the current mix, at most half.
+    var exitStrength = 0.5
     var transitionTask: Task<Void, Never>?
     private var progressTask: Task<Void, Never>?
     var playbackStartedAt = Date()

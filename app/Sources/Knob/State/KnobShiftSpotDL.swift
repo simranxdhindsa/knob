@@ -26,7 +26,7 @@ final class KnobShiftSpotDL: @unchecked Sendable {
     }
 
     enum Failure: Error, Equatable {
-        case unavailable, privateList, offline, rateLimited, nothingFound, failed, stalled, noSpace
+        case unavailable, privateList, offline, rateLimited, nothingFound, failed, stalled, noSpace, paused
 
         /// Plain sentences for the player; no dashes.
         var message: String {
@@ -39,6 +39,7 @@ final class KnobShiftSpotDL: @unchecked Sendable {
             case .failed: return "Spotify import did not finish. Try again."
             case .stalled: return "Spotify stopped answering, so the import was stopped. Try again."
             case .noSpace: return "Not enough space on this Mac for these songs."
+            case .paused: return KnobShiftSpotifyAccount.pausedMessage
             }
         }
     }
@@ -109,6 +110,7 @@ final class KnobShiftSpotDL: @unchecked Sendable {
     func list(_ query: String, userAuth: Bool, id: UUID = UUID()) async throws -> Listing {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("knobshift-\(UUID().uuidString).spotdl")
         defer { try? FileManager.default.removeItem(at: file) }
+        if await KnobShiftSpotifyAccount.pausedUntil(userAuth: userAuth) != nil { throw Failure.paused }
         let result = await run(["save", query, "--save-file", file.path] + (userAuth ? ["--user-auth"] : []), id: id) { _ in }
         if result.cancelled { throw CancellationError() }
         if result.stalled { throw Failure.stalled }
@@ -157,6 +159,10 @@ final class KnobShiftSpotDL: @unchecked Sendable {
     func download(saveFile: URL, into folder: URL, userAuth: Bool, id: UUID,
                   onLine: @escaping @Sendable (String) -> Void) async -> RunResult {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        // spotDL would sit silently through Spotify's whole day long wait, so check first.
+        if await KnobShiftSpotifyAccount.pausedUntil(userAuth: userAuth) != nil {
+            return RunResult(status: 1, lines: ["Knob: Spotify quota_exceeded"], cancelled: false, stalled: false)
+        }
         let arguments = ["download", saveFile.path,
                          "--format", "m4a", "--bitrate", "disable",
                          "--output", folder.appendingPathComponent("{list-position} {title} - {artists} [{track-id}].{output-ext}").path,
@@ -281,6 +287,14 @@ final class KnobShiftSpotDL: @unchecked Sendable {
         // names across lines.
         environment["COLUMNS"] = "1000"
         environment["TERM"] = "dumb"
+        // spotDL also comes unpacked in Resources (build-app.sh), so PyInstaller's "already
+        // unpacked" mode skips unpacking hundreds of libraries on every start: about 2s, not 20s.
+        let unpacked = Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/spotdl-runtime")
+        if FileManager.default.fileExists(atPath: unpacked.appendingPathComponent("base_library.zip").path) {
+            environment["_PYI_APPLICATION_HOME_DIR"] = unpacked.path
+            environment["_PYI_ARCHIVE_FILE"] = helper.path
+            environment["_PYI_PARENT_PROCESS_LEVEL"] = "1"
+        }
         process.environment = environment
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -435,6 +449,7 @@ final class KnobShiftSpotDL: @unchecked Sendable {
     /// What went wrong, read from spotDL's messages.
     static func classify(_ lines: [String]) -> Failure? {
         let text = lines.joined(separator: "\n").lowercased()
+        if text.contains("quota_exceeded") { return .paused }
         if text.contains("429") || text.contains("rate limit") || text.contains("too many requests") { return .rateLimited }
         if text.contains("connectionerror") || text.contains("max retries") || text.contains("nodename nor servname")
             || text.contains("network is unreachable") || text.contains("temporary failure in name resolution")

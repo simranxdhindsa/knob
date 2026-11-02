@@ -21,19 +21,38 @@ enum KnobShiftExitStyle: CaseIterable {
     /// echo or a reverb wash covers the change.
     static func choose(from current: KnobShiftModel.Track, to next: KnobShiftModel.Track,
                        sync: KnobShiftSync) -> (style: KnobShiftExitStyle, reason: String) {
-        var pair = 0
-        for scalar in (current.title + "→" + next.title).unicodeScalars {
-            pair = (pair &* 31 &+ Int(scalar.value)) & 0xFFFF
-        }
+        let pair = seed(current, next)
         if !sync.isOn {
             if current.analysis.fadeOutCue != nil, pair % 2 == 0 {
                 return (.reverbWash, "the tempos are far apart and the old song fades out, so it dissolves into a hall")
             }
             return (.echoOut, "the tempos are far apart, so its last beats echo away instead of clashing")
         }
-        let styles: [KnobShiftExitStyle] = [.underwater, .underwater, .lofiDip, .tapeSlowdown]
+        let styles: [KnobShiftExitStyle] = [.underwater, .lofiDip, .tapeSlowdown]
         let style = styles[pair % styles.count]
         return (style, "the tempos match, so a filter style keeps the beat going")
+    }
+
+    /// A number fixed for a pair of songs, so the same two songs always mix the same way.
+    static func seed(_ current: KnobShiftModel.Track, _ next: KnobShiftModel.Track) -> Int {
+        var pair = 0
+        for scalar in (current.title + "→" + next.title).unicodeScalars {
+            pair = (pair &* 31 &+ Int(scalar.value)) & 0xFFFF
+        }
+        return pair
+    }
+
+    /// The effects' strength at their peak for a pair: 40%, 45% or 50%, never more.
+    static func strength(_ current: KnobShiftModel.Track, _ next: KnobShiftModel.Track) -> Double {
+        0.4 + 0.05 * Double((seed(current, next) / 3) % 3)
+    }
+
+    /// One beat of a song, its tempo folded into 70...140 BPM; half a second when unknown.
+    static func beat(of track: KnobShiftModel.Track) -> TimeInterval {
+        var beatsPerMinute = track.analysis.tempo ?? 120
+        while beatsPerMinute > 140 { beatsPerMinute /= 2 }
+        while beatsPerMinute < 70 { beatsPerMinute *= 2 }
+        return 60 / beatsPerMinute
     }
 }
 
@@ -41,16 +60,15 @@ extension KnobShiftModel {
     /// Readies the leaving song's effects at the start of a blend and announces the style.
     func armExitEffects(from current: Track, to next: Track, sync: KnobShiftSync) {
         let choice = KnobShiftExitStyle.choose(from: current, to: next, sync: sync)
-        var beatsPerMinute = current.analysis.tempo ?? 120
-        while beatsPerMinute > 140 { beatsPerMinute /= 2 }
-        while beatsPerMinute < 70 { beatsPerMinute *= 2 }
-        let beat = 60 / beatsPerMinute
+        let beat = KnobShiftExitStyle.beat(of: current)
+        let beatsPerMinute = 60 / beat
         exitStyle = choice.style
+        exitStrength = KnobShiftExitStyle.strength(current, next)
         effectsLogged = []
         // Slow, laid back songs take a deeper tape slowdown; fast, energetic ones only a touch.
         tapeDepth = min(max((130 - beatsPerMinute) / 60, 0.1), 0.6)
         primaryDeck.armTransitionEffects(echoEvery: beat / 2, hall: choice.style == .reverbWash ? .largeHall : .mediumHall)
-        log("EFFECT", "\(choice.style.name) on \(current.title): \(choice.reason).")
+        log("EFFECT", "\(choice.style.name) on \(current.title): \(choice.reason). Peak strength \(Int((exitStrength * 100).rounded()))%.")
         log("EFFECT", String(format: "Beat pulse at %.1f BPM: the effects build between kicks and drop on every beat, to 0%% on the first beat of each bar, 50%% on the second and fourth, 10%% on the third.", 60 / beat))
     }
 
@@ -109,25 +127,24 @@ extension KnobShiftModel {
         case .reverbWash:
             deck.reverbMix = 0.5 * envelope
         }
-        // The singers: the old voice alone slows down and gains a hall while its music keeps the
-        // new song's beat; the new voice arrives through a reverb that clears as it takes over.
-        if outgoingOnStems {
-            deck.voiceTape = tapeDepth * envelope
-            deck.voiceReverb = 0.25 * envelope
-        }
+        // The singers: the old voice gains a hall while its music keeps the beat; the new voice
+        // arrives through a reverb that clears as it takes over. The old voice is never slowed
+        // on its own: it would drift behind its music (about 0.3s by the end) and the faint
+        // trace of it left in the music would sing its last word twice.
+        if outgoingOnStems { deck.voiceReverb = 0.25 * envelope * Double(deck.voiceLevel) }
         if blendHasStems { secondaryDeck.voiceReverb = 0.35 * envelope }
-        announce("old voice", when: outgoingOnStems && envelope > 0.01, String(format: "Old voice alone slows down, to %.0f%% speed at the peak where it ends, with a hall on it; its music keeps the beat.", (1 - 0.15 * tapeDepth) * 100))
+        announce("old voice", when: outgoingOnStems && envelope > 0.01, "Old voice gets a hall that peaks where it ends; it stays in time with its music and is gone before the new voice comes in.")
         announce("new voice", when: blendHasStems && envelope > 0.01, "New voice comes in through a reverb that clears as it takes over.")
         announce("treble", when: exit > 0.01, "Treble fade on the leaving song: a low pass closing from 20 kHz to 1 kHz, the underwater sound.")
         announce("reverb", when: deck.reverbMix > 0.01, style == .reverbWash
                  ? "Reverb wash: large hall rising to 50%." : "Reverb tail: hall rising to \(Int((style == .underwater ? 0.12 : style == .lofiDip ? 0.08 : 0.1) * 100))%.")
         announce("lofi", when: deck.lofiMix > 0.01, "Lo-fi colour: vintage crunch rising to 18%.")
         announce("tape", when: deck.tape > 0.01, String(format: "Tape slowdown at %.0f%% depth for this song: it slows to %.0f%% speed, its pitch dropping with it.",
-                                                        tapeDepth * 100, (1 - 0.15 * tapeDepth) * 100))
+                                                        tapeDepth * 100, (1 - 0.15 * tapeDepth * exitStrength) * 100))
         announce("echo", when: deck.echoMix > 0.01, "Echo out: repeats every half beat, 45% feedback, rising to 40%.")
     }
 
-    private func announce(_ key: String, when active: Bool, _ message: String) {
+    func announce(_ key: String, when active: Bool, _ message: String) {
         guard active, !effectsLogged.contains(key) else { return }
         effectsLogged.insert(key)
         log("EFFECT", message)
