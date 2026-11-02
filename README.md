@@ -66,7 +66,7 @@ KnobShift is a music player inside Knob for the songs on your Mac. Add your musi
 ### 🎬 Watch a KnobMix
 
 <div align="center">
-  <img src="docs/images/knobmix.svg" width="100%" alt="A KnobMix in motion: two decks spin while both songs scroll past the playhead. The old singer finishes the last line, the new song's beats slide in underneath with its voice held back by on device AI, the beats lock together, the old record slows like tape and fades, and the new verse lands just as the old song leaves. Below, the crossfade curves draw in time and four steps light up: Listens first, Last line, Beats slide in, Verse lands." />
+  <img src="docs/images/knobmix.svg" width="100%" alt="Three KnobMixes in a row, each with its own transition. Two decks spin while the songs scroll past the playhead. Mix 1, Tape slowdown: the tempos are close, the beats lock and the old voice slows down like tape. Mix 2, Echo out: the tempos are far apart, each song keeps its speed and the verse echoes out on the beat. Mix 3: KnobMix Now is pressed, KnobShift waits for the next phrase, then the old song sinks into an Underwater fade. Below, each transition's effect curve rises until the verse ends and falls away by the handoff, next to badges for beat sync, the AI voice split and the bass swap." />
 </div>
 
 <table>
@@ -80,13 +80,23 @@ KnobShift listens to every song on your Mac first: where the voice starts and en
 A small on-device AI model splits the next song's voice from its music. While the old singer is still singing, only the new song's **beats and music** come in; its voice joins the moment it takes over.
 
 ### 🥁 Beats in step
-Songs close in tempo glide to each other's speed with the **beats locked together**, pitch kept natural. Songs far apart keep their own speed, just like Apple Music.
+Songs close in tempo glide to each other's speed with the **beats locked together**, pitch kept natural. Songs far apart keep their own speed, just like Apple Music. The bass swaps over on a bar line, so the two kick drums never fight.
+
+### 🎛️ A different transition every time
+KnobShift picks a transition for **each pair of songs**:
+- When the beats can lock, it's an **Underwater fade**, a **Lo-fi dip** or a **Tape slowdown**.
+- When the tempos are far apart, it's an **Echo out** or a **Reverb wash**.
+
+Every effect rises until the old verse ends and falls away by the handoff. Each way is timed to the song and never shorter than four seconds, and the effect breathes gently on the beat.
 
 </td>
 <td valign="top">
 
 ### ⚡ KnobMix Now
-Want the next song sooner? Press **KnobMix Now**. KnobShift waits a few seconds for the next phrase or break in the music, so the mix still lands on the beat.
+Want the next song sooner? Press **KnobMix Now**. KnobShift waits a few seconds for the next phrase or break in the music, and lets the singer finish the line, so the mix still lands on the beat.
+
+### 🎙️ Voices with their own moves
+During a tape slowdown, **only the old singer's voice** winds down, over the new song's beat. The new voice arrives through a short reverb that clears as the verse begins.
 
 ### 🔀 Shuffle and reorder
 Shuffle shows the new order right in the queue, so you always see what plays next. Press it again to get your own order back. **Drag songs** to rearrange, with shuffle on or off.
