@@ -188,6 +188,10 @@ final class KnobShiftModel: ObservableObject {
     var stemTask: Task<Void, Never>?
     /// True while the incoming song plays as separated music and voice.
     var blendHasStems = false
+    /// The leaving song's separated voice and music for the coming mix, and whether the leaving
+    /// deck has switched over to them (KnobShiftModel+Stems.swift).
+    var preparedOutgoingStems: KnobShiftStems.Prepared?
+    var outgoingOnStems = false
     /// Transition effects already announced in the log for the current blend.
     var effectsLogged: Set<String> = []
     /// How the leaving song exits in the current blend (KnobShiftExitEffects.swift).

@@ -76,17 +76,18 @@ extension KnobShiftModel {
     }
 
     /// Moves the leaving song's effects with its exit, 0 at the handoff to 1 when it is gone.
-    func applyExitEffects(_ exit: Double) {
+    /// `exit` runs 0...1 through the leaving song's fade; `envelope` is the effects' keyframe
+    /// curve over the whole mix: 0 at its start, full at its middle, 0 again when it completes.
+    func applyExitEffects(_ exit: Double, envelope: Double) {
         guard let style = exitStyle else { return }
         let deck = primaryDeck
-        let pulse = exit > 0 ? beatPulse() : nil
+        let pulse = envelope > 0.01 ? beatPulse() : nil
         let level = pulse?.level ?? 1
         if let pulse, pulse.beatInBar == 0, !effectsLogged.contains("bar \(pulse.bar)") {
             effectsLogged.insert("bar \(pulse.bar)")
             log("EFFECT", String(format: "Bar %d, beat 1: effects drop to 0%% on the kick, exit %.0f%% done.", pulse.bar + 1, exit * 100))
         }
-        func ramp(_ from: Double, _ to: Double) -> Double { min(max((exit - from) / (to - from), 0), 1) }
-        // The effect levels below follow the exit; each is then scaled by the beat pulse.
+        // The effect levels below follow the keyframe curve; each is then scaled by the beat pulse.
         defer {
             deck.reverbMix *= level
             deck.lofiMix *= level
@@ -96,18 +97,27 @@ extension KnobShiftModel {
         }
         switch style {
         case .underwater:
-            deck.reverbMix = 0.12 * ramp(0.5, 1)
+            deck.reverbMix = 0.12 * envelope
         case .lofiDip:
-            deck.lofiMix = 0.18 * ramp(0, 0.6)
-            deck.reverbMix = 0.08 * ramp(0.5, 1)
+            deck.lofiMix = 0.18 * envelope
+            deck.reverbMix = 0.08 * envelope
         case .tapeSlowdown:
-            deck.tape = tapeDepth * ramp(0.15, 0.85)
-            deck.reverbMix = 0.1 * ramp(0.5, 1)
+            deck.tape = tapeDepth * envelope
+            deck.reverbMix = 0.1 * envelope
         case .echoOut:
-            deck.echoMix = 0.4 * ramp(0.3, 0.6)
+            deck.echoMix = 0.4 * envelope
         case .reverbWash:
-            deck.reverbMix = 0.5 * ramp(0.2, 0.6)
+            deck.reverbMix = 0.5 * envelope
         }
+        // The singers: the old voice alone slows down and gains a hall while its music keeps the
+        // new song's beat; the new voice arrives through a reverb that clears as it takes over.
+        if outgoingOnStems {
+            deck.voiceTape = tapeDepth * envelope
+            deck.voiceReverb = 0.25 * envelope
+        }
+        if blendHasStems { secondaryDeck.voiceReverb = 0.35 * envelope }
+        announce("old voice", when: outgoingOnStems && envelope > 0.01, String(format: "Old voice alone slows down, to %.0f%% speed at the peak where it ends, with a hall on it; its music keeps the beat.", (1 - 0.15 * tapeDepth) * 100))
+        announce("new voice", when: blendHasStems && envelope > 0.01, "New voice comes in through a reverb that clears as it takes over.")
         announce("treble", when: exit > 0.01, "Treble fade on the leaving song: a low pass closing from 20 kHz to 1 kHz, the underwater sound.")
         announce("reverb", when: deck.reverbMix > 0.01, style == .reverbWash
                  ? "Reverb wash: large hall rising to 50%." : "Reverb tail: hall rising to \(Int((style == .underwater ? 0.12 : style == .lofiDip ? 0.08 : 0.1) * 100))%.")

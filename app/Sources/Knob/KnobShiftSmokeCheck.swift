@@ -21,7 +21,8 @@ enum KnobShiftSmokeCheck {
             // Jump to a few seconds before the planned transition, so long real songs are quick
             // to check while the seek-then-plan path is exercised too.
             let plan = KnobShiftPlan.make(from: model.tracks[0], to: expectedNext)
-            let lead = min(plan.start, 6)
+            // KNOB_CHECK_LEAD starts further back, giving vocal separation time to finish first.
+            let lead = min(plan.start, Double(ProcessInfo.processInfo.environment["KNOB_CHECK_LEAD"] ?? "") ?? 6)
             if let mixNowAt {
                 model.seek(to: mixNowAt)
                 try? await Task.sleep(for: .seconds(1))
