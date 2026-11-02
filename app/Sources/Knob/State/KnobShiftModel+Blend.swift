@@ -306,15 +306,16 @@ extension KnobShiftModel {
         if blendHasStems { secondaryDeck.voiceLevel = Float(voice) }
         // The leaving song loses its treble first as it fades.
         primaryDeck.sweep = sweep
-        // Keyframes: 0 until `start`, full at `peak`, 0 again from `end`, eased both ways.
+        // Keyframes: 0 until `start`, full at `peak`, 0 again from `end`, eased in and out at
+        // both ends so nothing lurches in its first second.
         let clamped = min(max(progress, 0), 1)
         let envelope: Double
         if clamped <= keyframes.start || clamped >= keyframes.end {
             envelope = 0
         } else if clamped < keyframes.peak {
-            envelope = sin((clamped - keyframes.start) / max(keyframes.peak - keyframes.start, 0.001) * .pi / 2)
+            envelope = 0.5 - 0.5 * cos((clamped - keyframes.start) / max(keyframes.peak - keyframes.start, 0.001) * .pi)
         } else {
-            envelope = cos((clamped - keyframes.peak) / max(keyframes.end - keyframes.peak, 0.001) * .pi / 2)
+            envelope = 0.5 + 0.5 * cos((clamped - keyframes.peak) / max(keyframes.end - keyframes.peak, 0.001) * .pi)
         }
         applyExitEffects(exit, envelope: exitStrength * envelope)
     }
