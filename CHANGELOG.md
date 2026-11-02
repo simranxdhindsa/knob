@@ -33,6 +33,8 @@ like a DJ, worked out fresh for each pair of songs.
 
 ### Fixes
 
+- Knob's volume follows the same curve as your Mac's speakers, so 10% is as quiet as macOS's 10% instead of much louder (needs the installer once, see the release notes)
+- The volume no longer gets stuck on Fixed after turning Knob on
 - Tape slowdown eases the old song about 10% slower with its natural pitch, smoothly in and out, instead of a heavy pitch drop
 - Spotify songs download again: Knob now includes Deno, which YouTube downloads need
 - When YouTube pauses downloads from your Mac, the songs say YouTube paused and Knob tells you to try again in a few hours, instead of Not found

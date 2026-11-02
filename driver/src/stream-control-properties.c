@@ -32,12 +32,12 @@ OSStatus kn_stream_control_value(AudioObjectID o,const AudioObjectPropertyAddres
         case kAudioLevelControlPropertyDecibelValue: {
             if(o!=KN_VOLUME) return kAudioHardwareUnknownPropertyError;
             UInt32 bits=atomic_load(&kn_gain_bits); float f; memcpy(&f,&bits,4);
-            if(a->mSelector==kAudioLevelControlPropertyDecibelValue) f=f>0?fmaxf(-96,20*log10f(f)):-96;
+            if(a->mSelector==kAudioLevelControlPropertyDecibelValue) f=kn_scalar_to_db(f);
             return kn_copy(n,out,&f,sizeof(f));
         }
         case kAudioLevelControlPropertyDecibelRange: {
             if(o!=KN_VOLUME) return kAudioHardwareUnknownPropertyError;
-            AudioValueRange r={-96,0}; return kn_copy(n,out,&r,sizeof(r));
+            AudioValueRange r={KN_MIN_DB,0}; return kn_copy(n,out,&r,sizeof(r));
         }
         case kAudioLevelControlPropertyConvertScalarToDecibels:
         case kAudioLevelControlPropertyConvertDecibelsToScalar: {
@@ -47,7 +47,7 @@ OSStatus kn_stream_control_value(AudioObjectID o,const AudioObjectPropertyAddres
                 float f; memcpy(&f,out,4);
                 if(!isfinite(f)) return kAudioHardwareIllegalOperationError;
                 f=a->mSelector==kAudioLevelControlPropertyConvertScalarToDecibels?
-                    (f>0?fmaxf(-96,20*log10f(f)):-96):powf(10,f/20);
+                    kn_scalar_to_db(f):kn_db_to_scalar(f);
                 memcpy(out,&f,4);
             }
             *n=4; return noErr;

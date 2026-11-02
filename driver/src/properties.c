@@ -71,8 +71,8 @@ OSStatus kn_set(AudioObjectID o,const AudioObjectPropertyAddress* a,UInt32 n,con
         float value; memcpy(&value,data,4);
         if(!isfinite(value)) return kAudioHardwareIllegalOperationError;
         if(a->mSelector==kAudioLevelControlPropertyDecibelValue) {
-            if(value < -96 || value > 0) return kAudioHardwareIllegalOperationError;
-            value=powf(10,value/20);
+            if(value > 0) return kAudioHardwareIllegalOperationError;
+            value=kn_db_to_scalar(value);
         }
         if(value<0 || value>1) return kAudioHardwareIllegalOperationError;
         memcpy(&v,&value,4); atomic_store(&kn_gain_bits,v);
