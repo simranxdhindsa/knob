@@ -276,6 +276,12 @@ extension KnobShiftModel {
         log("SPOTIFY", "Deleted \(removed.playlist.name) for good.")
     }
 
+    func showSpotifyPreviewForSnapshot() {
+        spotifyLoggedIn = true
+        spotifyBusy = true
+        spotifyStatus = "Downloading 18 songs from Punjabi Road Trip."
+    }
+
     // MARK: Spotify login
 
     /// spotDL opens Spotify's login page in the browser and keeps the token in its own home.

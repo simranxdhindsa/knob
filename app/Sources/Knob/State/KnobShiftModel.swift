@@ -555,6 +555,30 @@ final class KnobShiftModel: ObservableObject {
         pending = [PendingSong(url: URL(fileURLWithPath: "/nonexistent/Nagni - TEJAY.mp3"), progress: 0.6, isActive: true),
                    PendingSong(url: URL(fileURLWithPath: "/nonexistent/18 Lakh - Rehal.mp3")),
                    PendingSong(url: URL(fileURLWithPath: "/nonexistent/Broken File.mp3"), failure: "Could not read this file")]
+        // Spotify playlists: one downloading, one finished, one removed, with their songs.
+        let road = KnobShiftPlaylist(id: "demoroad", name: "Punjabi Road Trip", link: "", kind: .playlist,
+                                     folderName: "Punjabi Road Trip", spotifyOrder: [], addedAt: Date())
+        let liked = KnobShiftPlaylist(id: "liked", name: "Liked Songs", link: "saved", kind: .liked,
+                                      folderName: "Liked Songs", spotifyOrder: [], addedAt: Date())
+        playlists = [road, liked]
+        removedPlaylists = [KnobShiftRemovedPlaylist(playlist: KnobShiftPlaylist(id: "demogym", name: "Gym Mix", link: "", kind: .album,
+                                                                                    folderName: "Gym Mix", spotifyOrder: [], addedAt: Date()),
+                                                     removedAt: Date().addingTimeInterval(-3 * 86_400), folderName: "Gym Mix 1")]
+        tracks[3].playlistId = road.id
+        tracks[4].playlistId = liked.id
+        spotifyJobs[road.id] = UUID()
+        var downloading = PendingSong(url: URL(fileURLWithPath: "/nonexistent/x.pending"))
+        downloading.spotifyName = "Sardaari"
+        downloading.spotifyArtist = "Himmat Sandhu"
+        downloading.playlistId = road.id
+        downloading.waitingForDownload = true
+        downloading.stage = "Downloading"
+        var missing = downloading
+        missing.spotifyName = "Bodyguard"
+        missing.spotifyArtist = "Navaan Sandhu"
+        missing.stage = nil
+        missing.failure = "Not found"
+        pending.insert(contentsOf: [downloading, missing], at: 0)
     }
 
     func logSection(_ title: String) {

@@ -139,7 +139,7 @@ struct KnobShiftNowPlaying: View {
             .padding(.horizontal, 16)
             .frame(height: 30)
             .background(Capsule().fill(Palette.accent.opacity(waiting ? 0.16 : 0.08)))
-            .overlay(Capsule().stroke(Palette.accent.opacity(available || waiting ? 0.45 : 0.15), lineWidth: 1))
+            .overlay(Capsule().strokeBorder(Palette.accent.opacity(available || waiting ? 0.45 : 0.15), lineWidth: 1))
         }
         .buttonStyle(.plain)
         .disabled(!available)

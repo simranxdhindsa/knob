@@ -68,6 +68,7 @@ struct KnobShiftPlayerView: View {
     @ObservedObject var model: KnobShiftModel
     @AppStorage(PersistKey.knobShiftEnabled.rawValue) private var enabled = false
     @State private var importing = false
+    @State private var showingSpotify = false
 
     var body: some View {
         let palette = Palette.of(scheme)
@@ -90,6 +91,7 @@ struct KnobShiftPlayerView: View {
             }
             .ignoresSafeArea()
         }
+        .sheet(isPresented: $showingSpotify) { KnobShiftSpotifySheet(model: model) }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result else { return }
             Task { await model.addTracks(urls) }
@@ -122,7 +124,7 @@ struct KnobShiftPlayerView: View {
                 KnobShiftNowPlaying(model: model, compact: false)
                 VStack(spacing: 14) {
                     KnobShiftUpNext(model: model)
-                    KnobShiftQueue(model: model) { importing = true }
+                    KnobShiftQueue(model: model, onAdd: { importing = true }, onSpotify: { showingSpotify = true })
                 }
                 .frame(width: min(360, width * 0.42))
             }
@@ -130,7 +132,7 @@ struct KnobShiftPlayerView: View {
             VStack(spacing: 12) {
                 KnobShiftNowPlaying(model: model, compact: true)
                 KnobShiftUpNext(model: model)
-                KnobShiftQueue(model: model) { importing = true }
+                KnobShiftQueue(model: model, onAdd: { importing = true }, onSpotify: { showingSpotify = true })
             }
         }
     }

@@ -54,6 +54,13 @@ enum Snapshot {
                     }
                 }
             }
+            // The Spotify sheet: its one time notice, and the form logged in with a status line.
+            let spotify = KnobShiftModel(restoresQueue: false)
+            spotify.showSpotifyPreviewForSnapshot()
+            for (name, form) in [("notice", false), ("form", true)] {
+                render(KnobShiftSpotifySheet(model: spotify, showsForm: form).environment(\.colorScheme, .dark), scheme: .dark,
+                       to: folder.appendingPathComponent("knobshift-spotify-\(name).png"))
+            }
             if let savedShiftEnabled {
                 UserDefaults.standard.set(savedShiftEnabled, forKey: PersistKey.knobShiftEnabled.rawValue)
             } else {
