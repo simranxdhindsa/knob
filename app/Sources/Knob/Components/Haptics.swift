@@ -1,18 +1,40 @@
 import AppKit
 
-/// Trackpad haptics for the hardware controls: a firm tick for each notch while turning, a firmer
-/// click at the ends and at a fader's centre. Does nothing on Macs without a Force Touch trackpad.
+/// Trackpad haptics for the hardware controls, felt like a stepped studio pot: a light tick every
+/// 2.5% while turning, a firmer click on each of the eleven printed marks (0 to 10), and the
+/// firmest click at the ends and at a fader's centre. Ticks are spaced at least 12 ms apart, so a
+/// fast spin feels like a run of notches instead of a buzz. Does nothing on Macs without a Force
+/// Touch trackpad.
 enum Haptics {
-    /// Notches across a knob's full turn, or a fader's full travel.
-    static let notches = 20
+    /// Light notches across a full turn, and the printed marks they fall between.
+    static let notches = 40
+    static let marks = 10
 
-    static func tick() { NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now) }
-    static func detent() { NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now) }
+    nonisolated(unsafe) private static var lastTick = Date.distantPast
 
-    /// Plays the right feedback for a control moving from `old` to `new` (both 0...1): a click on
-    /// reaching either end, a tick on crossing a notch.
+    static func tick() { perform(.alignment, spaced: true) }
+    static func mark() { perform(.generic, spaced: false) }
+    static func detent() { perform(.levelChange, spaced: false) }
+
+    /// Plays the right feedback for a control moving from `old` to `new` (both 0...1): the
+    /// firmest click on reaching either end, a firmer one on crossing a printed mark, a light tick
+    /// on crossing a notch.
     static func moved(from old: Double, to new: Double) {
         if (old > 0 && new == 0) || (old < 1 && new == 1) { detent(); return }
-        if Int((old * Double(notches)).rounded(.down)) != Int((new * Double(notches)).rounded(.down)) { tick() }
+        if step(old, marks) != step(new, marks) { mark(); return }
+        if step(old, notches) != step(new, notches) { tick() }
+    }
+
+    /// Which step a value is in; a value exactly on a step line counts as that step, so landing
+    /// on a mark clicks once, whichever way it is reached.
+    private static func step(_ value: Double, _ count: Int) -> Int {
+        Int((value * Double(count) + 1e-9).rounded(.down))
+    }
+
+    private static func perform(_ pattern: NSHapticFeedbackManager.FeedbackPattern, spaced: Bool) {
+        let now = Date()
+        if spaced, now.timeIntervalSince(lastTick) < 0.012 { return }
+        lastTick = now
+        NSHapticFeedbackManager.defaultPerformer.perform(pattern, performanceTime: .now)
     }
 }
