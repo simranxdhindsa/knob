@@ -132,12 +132,14 @@ struct KnobShiftSpotifySheet: View {
             Circle().fill(Palette.accent).frame(width: 6, height: 6)
                 .shadow(color: Palette.accentGlow, radius: pulse ? 5 : 1)
                 .opacity(model.spotifyBusy ? (pulse ? 1 : 0.4) : 0)
+                // The breathing belongs to the dot alone, so nothing else in the sheet moves.
+                .animation(Motion.pulse, value: pulse)
             Text(model.spotifyStatus ?? " ")
                 .font(.system(size: 11)).foregroundStyle(Screen.textSecondary)
                 .lineLimit(2)
             Spacer(minLength: 0)
         }
         .frame(height: 32, alignment: .leading)
-        .onAppear { withAnimation(Motion.pulse) { pulse = true } }
+        .onAppear { DispatchQueue.main.async { pulse = true } }
     }
 }
