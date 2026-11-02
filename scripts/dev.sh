@@ -144,7 +144,7 @@ rebuild() {
         return 1
     fi
     if ! build_app; then
-        warn "App build failed. Fix the error and save again. Knob keeps running the last good build."
+        warn "App build failed. Knob keeps running the last good build."
         return 1
     fi
     assemble_bundle
@@ -181,8 +181,22 @@ effects_tail=$!
 trap 'echo; log "Stopping, quitting dev Knob..."; kill "$effects_tail" 2>/dev/null; pkill -f "tail -n 0 -F $knobshift_log" 2>/dev/null; quit_app; exit 0' INT TERM
 log "Watching for changes. Save a file to see it in Knob. Ctrl-C to stop."
 
+# A failed build (often another build running in the same folder at that moment) is tried
+# again by itself 5 seconds later, so a fix shows up without saving again.
+retry_at=0
+retry_engine=no
+
 while true; do
     sleep "$poll_seconds"
+    if [ "$retry_at" -gt 0 ] && [ "$(date +%s)" -ge "$retry_at" ]; then
+        retry_at=0
+        log "Trying the build again..."
+        if rebuild "$retry_engine"; then retry_engine=no; else
+            retry_at=$(( $(date +%s) + 5 ))
+            warn "Still failing. Trying again in 5 seconds."
+        fi
+        continue
+    fi
     engine_changed=no
     app_changed=no
     driver_changed=no
@@ -198,5 +212,12 @@ while true; do
         warn "driver/ changed. The driver can't be swapped live: it needs a rebuild and a reinstall with admin rights."
     fi
     [ "$engine_changed$app_changed" = nono ] && continue
-    rebuild "$engine_changed" || true
+    if rebuild "$engine_changed"; then
+        retry_at=0
+        retry_engine=no
+    else
+        [ "$engine_changed" = yes ] && retry_engine=yes
+        retry_at=$(( $(date +%s) + 5 ))
+        log "Trying again in 5 seconds."
+    fi
 done
