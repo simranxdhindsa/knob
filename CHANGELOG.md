@@ -33,6 +33,8 @@ like a DJ, worked out fresh for each pair of songs.
 
 ### Fixes
 
+- Spotify songs download again: Knob now includes Deno, which YouTube downloads need
+- When YouTube pauses downloads from your Mac, the songs say YouTube paused and Knob tells you to try again in a few hours, instead of Not found
 - Clicking the Dock icon brings back a minimised KnobShift window
 - The ••• menu opens again on a click, and About Knob now shows inside the panel with a Back button
 - ADD MUSIC opens its choices on a click again, now with the Apple logo for songs on your Mac and the Spotify mark for Spotify

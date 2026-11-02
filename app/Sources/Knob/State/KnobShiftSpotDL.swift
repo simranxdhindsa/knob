@@ -26,7 +26,7 @@ final class KnobShiftSpotDL: @unchecked Sendable {
     }
 
     enum Failure: Error, Equatable {
-        case unavailable, privateList, offline, rateLimited, nothingFound, failed, stalled, noSpace, paused
+        case unavailable, privateList, offline, rateLimited, nothingFound, failed, stalled, noSpace, paused, youtubeBlocked
 
         /// Plain sentences for the player; no dashes.
         var message: String {
@@ -40,6 +40,7 @@ final class KnobShiftSpotDL: @unchecked Sendable {
             case .stalled: return "Spotify stopped answering, so the import was stopped. Try again."
             case .noSpace: return "Not enough space on this Mac for these songs."
             case .paused: return KnobShiftSpotifyAccount.pausedMessage
+            case .youtubeBlocked: return "YouTube is pausing downloads from this Mac for now. Try again in a few hours."
             }
         }
     }
@@ -278,7 +279,9 @@ final class KnobShiftSpotDL: @unchecked Sendable {
         try? FileManager.default.createDirectory(at: Self.home, withIntermediateDirectories: true)
         let process = Process()
         process.executableURL = helper
-        process.arguments = arguments + ["--ffmpeg", ffmpeg.path, "--simple-tui", "--log-level", "INFO"]
+        // DEBUG, because YouTube's reason for refusing a download only shows there; LineCollector
+        // reads those lines for it and passes none of them on.
+        process.arguments = arguments + ["--ffmpeg", ffmpeg.path, "--simple-tui", "--log-level", "DEBUG"]
         var environment = ProcessInfo.processInfo.environment
         environment["HOME"] = Self.home.path
         environment["PATH"] = "\(ffmpeg.deletingLastPathComponent().path):/usr/bin:/bin"
@@ -403,7 +406,15 @@ final class KnobShiftSpotDL: @unchecked Sendable {
         private var kept: [String] = []
         private var lastOutputAt = Date()
         private let onLine: @Sendable (String) -> Void
+        private var sawBotCheck = false
         static let keep = 300
+        /// Kept in place of YouTube's own message, which comes in a DEBUG line.
+        static let botCheckMarker = "Knob: YouTube asks to confirm this is not a bot (youtube_bot_check)."
+
+        /// spotDL's DEBUG lines, "[17:39:20] DEBUG ...": read, never shown or kept.
+        static func isDebug(_ line: String) -> Bool {
+            line.hasPrefix("DEBUG") || line.range(of: #"^\[\d{1,2}:\d{2}:\d{2}\] DEBUG "#, options: .regularExpression) != nil
+        }
 
         init(onLine: @escaping @Sendable (String) -> Void) { self.onLine = onLine }
 
@@ -419,7 +430,12 @@ final class KnobShiftSpotDL: @unchecked Sendable {
                 let line = String(decoding: buffer[buffer.startIndex..<newline], as: UTF8.self)
                 buffer.removeSubrange(buffer.startIndex...newline)
                 let clean = Self.clean(line)
-                if !clean.isEmpty { ready.append(clean) }
+                // YouTube's bot check: it refuses downloads until the Mac's connection cools down.
+                if !sawBotCheck, clean.contains("not a bot") {
+                    sawBotCheck = true
+                    ready.append(Self.botCheckMarker)
+                }
+                if !clean.isEmpty, !Self.isDebug(clean) { ready.append(clean) }
             }
             keep(ready)
             lock.unlock()
@@ -449,6 +465,7 @@ final class KnobShiftSpotDL: @unchecked Sendable {
     /// What went wrong, read from spotDL's messages.
     static func classify(_ lines: [String]) -> Failure? {
         let text = lines.joined(separator: "\n").lowercased()
+        if text.contains("youtube_bot_check") { return .youtubeBlocked }
         if text.contains("quota_exceeded") { return .paused }
         if text.contains("429") || text.contains("rate limit") || text.contains("too many requests") { return .rateLimited }
         if text.contains("connectionerror") || text.contains("max retries") || text.contains("nodename nor servname")

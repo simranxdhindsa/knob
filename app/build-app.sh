@@ -91,7 +91,8 @@ fi
 spotdl_dir="$repo_dir/build/spotdl-helpers"
 if [ -x "$spotdl_dir/spotdl" ] && [ -x "$spotdl_dir/ffmpeg" ]; then
     mkdir -p "$bundle/Contents/Helpers"
-    for helper in spotdl ffmpeg; do
+    # Deno sits beside them so spotDL finds it on its PATH (yt-dlp needs it for YouTube).
+    for helper in spotdl ffmpeg $( [ -x "$spotdl_dir/deno" ] && echo deno ); do
         cp "$spotdl_dir/$helper" "$bundle/Contents/Helpers/$helper"
         sign --entitlements "$repo_dir/packaging/spotdl.entitlements" "$bundle/Contents/Helpers/$helper"
     done
