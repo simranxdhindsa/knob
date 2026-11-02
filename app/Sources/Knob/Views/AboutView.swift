@@ -75,6 +75,7 @@ struct AboutView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .focusEffectDisabled()
                 .keyboardShortcut(.cancelAction)
                 .accessibilityLabel("Back to Knob's controls")
                 .padding(14)

@@ -39,6 +39,7 @@ struct HeaderBar: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .focusEffectDisabled()
             .accessibilityLabel("Knob menu")
             .popover(isPresented: $menuOpen, arrowEdge: .bottom) { knobMenu }
             .onChange(of: showInDock) { _, shown in DockPresence.apply(shown) }

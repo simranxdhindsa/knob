@@ -13,6 +13,8 @@ struct DropdownCard<Content: View>: View {
     var body: some View {
         let p = Palette.of(scheme)
         VStack(alignment: .leading, spacing: 2) { content() }
+            // No blue focus ring around a row: the pointer highlight already shows where you are.
+            .focusEffectDisabled()
             .padding(6)
             .frame(width: width)
             .background(LinearGradient(colors: [p.panelTop, p.panelBottom], startPoint: .top, endPoint: .bottom))
@@ -52,6 +54,7 @@ struct DropdownRow<Icon: View>: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
         .onHover { hovering = $0 }
         .animation(Motion.snappy, value: hovering)
     }
