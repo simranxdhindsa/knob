@@ -10,7 +10,7 @@ enum DevWindow {
 
     static func showIfRequested(model: KnobModel) {
         guard ProcessInfo.processInfo.environment["KNOB_DEV_OPEN_POPOVER"] == "1", window == nil else { return }
-        let host = NSHostingView(rootView: PanelView(model: model))
+        let host = NSHostingView(rootView: PanelView(model: model).focusEffectDisabled())
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: host.fittingSize),
                               styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
                               backing: .buffered, defer: false)

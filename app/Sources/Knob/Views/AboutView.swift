@@ -75,6 +75,7 @@ struct AboutView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .focusEffectDisabled()
                 .keyboardShortcut(.cancelAction)
                 .accessibilityLabel("Back to Knob's controls")
                 .padding(14)
@@ -97,7 +98,7 @@ enum AboutWindow {
 
     static func show() {
         if window == nil {
-            let host = NSHostingController(rootView: AboutView())
+            let host = NSHostingController(rootView: AboutView().focusEffectDisabled())
             let created = NSWindow(contentViewController: host)
             created.styleMask = [.titled, .closable, .fullSizeContentView]
             created.titlebarAppearsTransparent = true

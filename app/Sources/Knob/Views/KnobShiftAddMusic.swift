@@ -22,6 +22,7 @@ struct KnobShiftAddMusic: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
         .accessibilityHint(spotify ? "Opens a choice of songs on this Mac or a Spotify playlist" : "Adds songs from this Mac")
         .popover(isPresented: $open, arrowEdge: .bottom) { KnobShiftAddMusicCard(onMac: { pick(onMac) }, onSpotify: { pick(onSpotify) }) }
         .onAppear { if startsOpen { open = true } }

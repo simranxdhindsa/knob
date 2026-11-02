@@ -172,6 +172,7 @@ All persisted UI state (open sections, last preset, and so on) goes through `@Ap
 - Knob looks like studio hardware: a grained faceplate, recessed pills, realistic knobs, an always-dark analyser screen and one orange accent with glow. Reference: a pro-audio plugin faceplate in charcoal (dark) and speckled white (light).
 - Every colour lives in `Theme/Palette.swift`: `Palette.of(colorScheme)` for the faceplate, `Screen` for the dark screen, `Palette.accent`/`accentGlow` for orange. Never hardcode a colour in a view. Every view must look right in both light and dark (check both `--snapshot` PNGs).
 - Every animation comes from `Theme/Motion.swift`. Springs use Framer Motion settings through SwiftUI's identical spring model (`interpolatingSpring(mass:stiffness:damping:)`); Framer Motion itself is React-only and is never used. Drags follow the finger with no animation; outside changes (volume keys, engine state) animate.
+- **No blue focus ring, ever.** Every window's root view (the MenuBarExtra panel, the dev window, About, KnobShift, its Spotify sheet) carries `.focusEffectDisabled()`, and so does `DropdownCard`, whose popover is its own hierarchy. Any new window, sheet or popover gets it at its root too. Pointer highlights show what is active instead.
 
 ### 5. File organisation
 One SwiftUI file per section (popover shell, volume/output, presets, effects, equalizer), plus `Components/` for shared views, and separate files for app state and the engine client. Views never talk to the socket directly; they go through the state/client layer.
