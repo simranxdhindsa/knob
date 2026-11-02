@@ -63,6 +63,12 @@ KnobShift is a music player inside Knob for the songs on your Mac. Add your musi
 
 </div>
 
+### 🎬 Watch a KnobMix
+
+<div align="center">
+  <img src="docs/images/knobmix.svg" width="100%" alt="A KnobMix in motion: two decks spin while both songs scroll past the playhead. The old singer finishes the last line, the new song's beats slide in underneath with its voice held back by on device AI, the beats lock together, the old record slows like tape and fades, and the new verse lands just as the old song leaves. Below, the crossfade curves draw in time and four steps light up: Listens first, Last line, Beats slide in, Verse lands." />
+</div>
+
 <table>
 <tr>
 <td width="50%" valign="top">
