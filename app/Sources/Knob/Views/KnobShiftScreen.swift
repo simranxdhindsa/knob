@@ -1,77 +1,100 @@
 import SwiftUI
 
-/// KnobShift in Knob's sound-control panel. With nothing playing it is a title card that opens
-/// the player; while music plays it becomes a mini player with the song, play/pause and the next
-/// mix, so KnobShift can be followed without opening its window.
+/// KnobShift in Knob's sound-control panel: always a mini player (cover, song, progress,
+/// transport and what plays next) with a small expand button that opens the full player. The
+/// layout is the same playing, paused, stopped or empty, so the panel never jumps.
 struct KnobShiftScreen: View {
     @ObservedObject var model: KnobShiftModel
 
+    /// The playing song, or the first one in the queue so Play has something to start.
+    private var track: KnobShiftModel.Track? { model.nowPlaying ?? model.tracks.first }
+
     var body: some View {
-        Group {
-            if let track = model.nowPlaying {
-                miniPlayer(track)
-            } else {
-                titleCard
-            }
+        VStack(alignment: .leading, spacing: 10) {
+            header
+            progress
+            transport
+            next
         }
+        .padding(.horizontal, 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(Motion.gentle, value: model.nowPlaying?.id)
     }
 
-    private var titleCard: some View {
-        VStack(spacing: 12) {
-            Spacer(minLength: 2)
-            Image(systemName: "arrow.left.arrow.right.circle.fill")
-                .font(.system(size: 32, weight: .medium))
-                .foregroundStyle(Palette.accent)
-                .shadow(color: Palette.accentGlow.opacity(0.55), radius: 10)
-            VStack(spacing: 5) {
-                Text("KNOBSHIFT")
-                    .font(.system(size: 14, weight: .heavy)).tracking(2)
-                    .foregroundStyle(Screen.text)
-                Text("Seamless playing, with beat matched mixes for the music on your Mac.")
+    private var header: some View {
+        HStack(alignment: .top, spacing: 12) {
+            AlbumArtwork(url: track?.url, size: 52, lit: model.mixState == .mixing)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(track?.name ?? "Nothing playing")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(track == nil ? Screen.textSecondary : Screen.text)
+                    .lineLimit(1)
+                Text(track.map { $0.artist ?? "Local music" } ?? "Open the player to add music")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Screen.textSecondary)
+                    .lineLimit(1)
             }
-            openButton(title: "OPEN PLAYER")
-            Spacer(minLength: 2)
+            .padding(.top, 6)
+            Spacer(minLength: 4)
+            Button { KnobShiftWindow.show(model: model) } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Screen.textSecondary)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(Screen.tabTrack))
+            }
+            .buttonStyle(.plain)
+            .help("Open the full KnobShift player")
+            .accessibilityLabel("Open the full KnobShift player")
         }
     }
 
-    private func miniPlayer(_ track: KnobShiftModel.Track) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                AlbumArtwork(url: track.url, size: 56, lit: model.mixState == .mixing)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(track.name).font(.system(size: 14, weight: .bold)).foregroundStyle(Screen.text).lineLimit(1)
-                    Text(track.artist ?? "Local music").font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Screen.textSecondary).lineLimit(1)
+    /// A thin line with elapsed and remaining time; always shown, empty when nothing plays.
+    private var progress: some View {
+        let duration = max(model.playbackDuration, 1)
+        let share = model.nowPlaying == nil ? 0 : min(max(model.playbackTime / duration, 0), 1)
+        return VStack(spacing: 4) {
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Screen.grid)
+                    Capsule().fill(Palette.accent).frame(width: geometry.size.width * share)
                 }
-                Spacer(minLength: 4)
-                Button { model.pauseOrResume() } label: {
-                    Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 38, height: 38)
-                        .background(Circle().fill(Palette.accent))
-                        .shadow(color: Palette.accentGlow.opacity(0.55), radius: 7)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(model.isPlaying ? "Pause" : "Play")
             }
-            status
+            .frame(height: 3)
             HStack {
+                Text(model.nowPlaying == nil ? "0:00" : KnobShiftNowPlaying.clock(model.playbackTime))
                 Spacer()
-                openButton(title: "OPEN PLAYER")
-                Spacer()
+                Text(model.nowPlaying == nil ? "0:00" : KnobShiftNowPlaying.clock(max(0, model.playbackDuration - model.playbackTime)) + " left")
             }
+            .font(.system(size: 9, weight: .semibold).monospacedDigit())
+            .foregroundStyle(Screen.textTertiary)
         }
-        .padding(.horizontal, 6)
-        .frame(maxHeight: .infinity)
     }
 
-    /// Always there, playing or paused, so the mini player never changes height.
-    private var status: some View {
+    private var transport: some View {
+        HStack(spacing: 26) {
+            Button { model.previous() } label: { Image(systemName: "backward.fill").font(.system(size: 13)) }
+                .accessibilityLabel("Previous")
+            Button { model.pauseOrResume() } label: {
+                Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(model.tracks.isEmpty ? Screen.textTertiary : Palette.accent))
+                    .shadow(color: model.tracks.isEmpty ? .clear : Palette.accentGlow.opacity(0.55), radius: 7)
+            }
+            .accessibilityLabel(model.isPlaying ? "Pause" : "Play")
+            Button { model.next() } label: { Image(systemName: "forward.fill").font(.system(size: 13)) }
+                .accessibilityLabel("Next")
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(model.tracks.isEmpty ? Screen.textTertiary : Screen.text)
+        .disabled(model.tracks.isEmpty)
+        .frame(maxWidth: .infinity)
+    }
+
+    /// What plays next, or that a mix is happening; always there, so the height never changes.
+    private var next: some View {
         HStack(spacing: 6) {
             Text("NEXT").font(.system(size: 9, weight: .bold)).tracking(0.9).foregroundStyle(Screen.textTertiary)
             Text(model.mixState == .mixing ? "Mixing now" : (model.upNext?.name ?? "Nothing yet"))
@@ -81,22 +104,7 @@ struct KnobShiftScreen: View {
             Spacer(minLength: 4)
         }
         .padding(.horizontal, 12)
-        .frame(height: 32)
+        .frame(height: 30)
         .background(Capsule().fill(Screen.tabTrack))
-    }
-
-    private func openButton(title: String) -> some View {
-        Button {
-            KnobShiftWindow.show(model: model)
-        } label: {
-            Label(title, systemImage: "music.note.list")
-                .font(.system(size: 10, weight: .bold)).tracking(0.7)
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .frame(height: 30)
-                .background(Capsule().fill(Palette.accent))
-                .shadow(color: Palette.accentGlow.opacity(0.55), radius: 6)
-        }
-        .buttonStyle(.plain)
     }
 }
