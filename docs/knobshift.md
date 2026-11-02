@@ -319,4 +319,56 @@ KnobShift-mixable.
 
 ## Spotify playlists
 
-See [knobshift-spotify-plan.md](knobshift-spotify-plan.md): spotDL (bundled, fetched by `packaging/fetch-spotdl.sh`) reads a Spotify list and downloads its songs into `~/Music/KnobShift/Spotify/<playlist>/`, one file per song named with its Spotify id; KnobShift queues them in Spotify's order, names them from their tags, and prepares and mixes them like any song. Code: `State/KnobShiftSpotDL.swift`, `KnobShiftPlaylists.swift`, `KnobShiftModel+Spotify.swift`, `KnobShiftTags.swift`, `Views/KnobShiftSpotifySheet.swift`, `KnobShiftPlaylistRows.swift`. Checks: `--knobshift-spotify-check selftest` (offline) and `--knobshift-spotify-check LINK`.
+See [knobshift-spotify-plan.md](knobshift-spotify-plan.md) for the original plan. spotDL (bundled, fetched by `packaging/fetch-spotdl.sh`) reads a Spotify list and downloads its songs into `~/Music/KnobShift/Spotify/<playlist>/`, one file per song named with its Spotify id. KnobShift queues them in Spotify's order, names them from their tags, and prepares and mixes them like any song.
+
+### How an import goes
+
+1. **Choose a list.** Paste a playlist, album or song link. Or log in and use Liked Songs or one of **Your playlists**.
+   - *Your playlists* comes straight from Spotify's Web API (`/me/playlists`), using the token spotDL saved at login (scope `playlist-read-private`).
+   - `State/KnobShiftSpotifyAccount.swift` refreshes that token the same way spotDL's Spotify library does and writes it back, so both keep working.
+2. **Read.** `spotdl save` reads the song list without downloading anything. The sheet offers Cancel while it reads.
+3. **Pick.** The song picker (`Views/KnobShiftSpotifyPicker.swift`) shows a tick box per song, with All, None and search.
+   - Songs already in the queue are ticked and locked.
+   - Songs unticked last time start unticked; they're kept in the playlist's `skipped` list.
+4. **Queue.** The ticked songs appear in the queue at once, in one update. Songs already on disk go straight to preparing.
+   - The chosen songs are written, exactly as spotDL describes them, to `knobshift-songs.spotdl` in the playlist folder.
+   - Downloads and retries use that file (`spotdl download <file>`), so Spotify is never asked again.
+5. **Download.** Downloads run one playlist at a time (`KnobShiftLane`); single-song retries have their own lane.
+   - Progress shows "12 of 340" and the song spotDL is on, in the sheet and in the queue's playlist row (`Components/KnobShiftImportBar.swift`).
+   - Progress reaches the views at most twice a second, and finished files at most once a second.
+6. **Hand over.** A file joins the queue only after spotDL prints `Downloaded "…"` or `Skipping … (file already exists)` for it, or after spotDL exits. spotDL converts straight into the playlist folder, so a file seen earlier may be half written.
+
+### What can go wrong, and what happens
+
+| Case | What KnobShift does |
+| --- | --- |
+| Song not found on YouTube | Its row says Not found. **Retry** on the playlist row tries all failed songs again. |
+| No internet, Spotify busy (429) | The remaining rows say No internet or Spotify busy, with Retry. |
+| spotDL silent for 15 minutes | It's stopped along with everything it started; the remaining rows say Stopped. |
+| Not enough disk space | Nothing starts. The status gives the space needed (about 6 MB a song plus 500 MB) and the space free. |
+| Cancel | spotDL and its children (Python, FFmpeg) get SIGTERM, then SIGKILL after 3 seconds. Unfinished files from the last few minutes are deleted. Waiting rows leave the queue and aren't resumed after a relaunch. |
+| A file that won't read (broken download) | The file is deleted and its row says Download broke; Retry downloads it again. |
+| Knob quits mid download | On the next launch, songs from `knobshift-songs.spotdl` with no file yet come back and continue. |
+| A stray child keeps spotDL's output open | The result still arrives 2 seconds after spotDL exits; nothing waits forever. |
+| Login | It finishes as soon as the token file appears, and Knob comes to the front. LOG IN turns into CANCEL while waiting, and it gives up after 3 minutes. |
+
+spotDL runs with `COLUMNS=1000`, because its display otherwise wraps at 80 columns and splits song names across lines.
+
+### Keeping it fast with thousands of songs
+
+- **Playback values** (position, duration, blend) live in `KnobShiftClock`. Only the timelines (`Components/KnobShiftTimeline.swift`) redraw ten times a second, not the queue.
+- **Values nothing shows** (the diagnostics list, the transition description) are not published, so they never redraw anything.
+- **Bulk row changes** edit a copy of `pending` and assign it once. Changing a published array one row at a time copies the whole array on every change.
+- **Duplicate checks** use sets.
+- **The saved queue** is written at most about once a second (`KnobShiftModel+Persist.swift`).
+- **spotDL output:** only its last 300 lines are kept in memory.
+
+### Checks
+
+- **Self test, offline:** `--knobshift-spotify-check selftest` with `KNOB_SPOTIFY_ROOT` set to a temporary folder. It covers message parsing, progress, selection, save files, the line collector, the lane, stopping process trees, and speed with 1,000 rows.
+- **UAT:** `--knobshift-spotify-check uat 40` runs the whole flow against `tests/fake-spotdl.py` in a temporary folder. It covers picking, updating, cancelling, two playlists at once, a silent spotDL plus Retry, a stray child holding output, and quitting then reopening. It reports the longest main-thread stall, which must stay under 250 ms, and deletes its files and the test analysis cache when done. 30 to 40 songs are enough.
+- **Real list, no download:** `--knobshift-spotify-check LINK`.
+- **Test overrides:**
+  - `KNOB_SPOTDL`, `KNOB_FFMPEG`: the helper paths.
+  - `KNOB_SPOTDL_IDLE`: the silence limit, in seconds.
+  - `KNOB_SONG_MB`: the space estimate per song.
