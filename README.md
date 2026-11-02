@@ -105,7 +105,9 @@ Add many songs at once. They appear straight away with a small ring showing each
 </tr>
 </table>
 
-> **Private by design.** Everything happens on your Mac: the listening, the separation and the mixing. Nothing is uploaded. KnobShift plays your own files; Apple Music, Spotify and YouTube stay in their own apps.
+> **Private by design.** Everything happens on your Mac: the listening, the separation and the mixing. Nothing is uploaded. KnobShift plays files on your Mac, including songs you add from your Spotify playlists.
+
+**🔜 Coming next:** add music straight from YouTube videos and YouTube Music.
 
 ---
 
