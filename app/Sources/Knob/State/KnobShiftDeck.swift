@@ -149,15 +149,15 @@ final class KnobShiftDeck {
     }
     private var baseRate = 1.0
 
-    /// Tape slowdown, 0...1: at 1 the song plays 15% slower and its pitch drops with it, like a
-    /// record or tape winding down (the "slowed" sound).
+    /// The slowdown, 0...1.2: at 1 the song plays 10% slower with its natural pitch, the smooth
+    /// glide KnobShift's first tempo meetings had, rather than a tape's falling pitch.
     var tape: Double = 0 { didSet { applySpeed() } }
-    private static let tapeSlowest = 0.85
+    private static let slowdownAtFull = 0.10
 
     private func applySpeed() {
-        let factor = 1 - (1 - Self.tapeSlowest) * min(max(tape, 0), 1)
+        let factor = 1 - Self.slowdownAtFull * min(max(tape, 0), 1.2)
         stretch.rate = Float(baseRate * factor)
-        stretch.pitch = Float(1_200 * log2(factor))
+        stretch.pitch = 0
     }
 
     /// Lo-fi colour, echo and reverb share, each 0...1.

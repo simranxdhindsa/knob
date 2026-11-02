@@ -33,6 +33,7 @@ like a DJ, worked out fresh for each pair of songs.
 
 ### Fixes
 
+- Tape slowdown eases the old song about 10% slower with its natural pitch, smoothly in and out, instead of a heavy pitch drop
 - Spotify songs download again: Knob now includes Deno, which YouTube downloads need
 - When YouTube pauses downloads from your Mac, the songs say YouTube paused and Knob tells you to try again in a few hours, instead of Not found
 - Clicking the Dock icon brings back a minimised KnobShift window
