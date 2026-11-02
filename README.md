@@ -56,10 +56,7 @@ KnobShift is a music player inside Knob for the songs on your Mac. Add your musi
 
 <div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/knobshift-dark.png">
-  <img src="docs/images/knobshift-light.png" width="760" alt="KnobShift player: cover art, transport, KnobMix Now button, Up next and the queue" />
-</picture>
+<img src="docs/images/knobshift-player.svg" width="100%" alt="The KnobShift player at work: a song plays with its time ticking while, in the queue, a Spotify playlist downloads song by song and new songs are prepared one by one, each ring filling until the song shows its tempo. KnobMix Now is pressed, waits for the next phrase, the cover glows with KNOBMIX while Up next says Mixing now, and the player moves on to the next song, starting at its verse." />
 
 </div>
 

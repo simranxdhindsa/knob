@@ -22,3 +22,6 @@ __pycache__/
 !**/.voiden/env-public.yaml
 !**/.voiden/env-*-public.yaml
 .voiden-inherited.void
+
+# Editor settings (VS Code makes these by itself)
+.vscode/

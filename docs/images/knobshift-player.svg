@@ -1,0 +1,216 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-labelledby="t d">
+  <title id="t">The KnobShift player at work</title>
+  <desc id="d">A song plays with its progress moving. In the queue, a Spotify playlist downloads song by song and new songs are prepared one by one, each ring filling until the song is ready with its tempo. KnobMix Now is pressed, waits for the next phrase, and the player mixes into the next song, which starts at its verse.</desc>
+  <defs>
+    <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3B3E43"/><stop offset="1" stop-color="#151619"/></linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1F2124"/><stop offset="1" stop-color="#121315"/></linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.12"/><stop offset="0.4" stop-color="#FFFFFF" stop-opacity="0.02"/></linearGradient>
+    <linearGradient id="artA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF9A4D"/><stop offset="0.55" stop-color="#E2456B"/><stop offset="1" stop-color="#3B1D5C"/></linearGradient>
+    <linearGradient id="artB" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#0F3B4F"/><stop offset="0.5" stop-color="#2E8C9A"/><stop offset="1" stop-color="#F3E3CF"/></linearGradient>
+    <linearGradient id="artC" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F6C453"/><stop offset="1" stop-color="#C2571F"/></linearGradient>
+    <linearGradient id="artD" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6E5BD9"/><stop offset="1" stop-color="#1B1640"/></linearGradient>
+    <linearGradient id="artE" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#2C6E49"/><stop offset="1" stop-color="#C9E4A6"/></linearGradient>
+    <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="11"/><feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.05 0"/></filter>
+    <filter id="drop" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000" flood-opacity="0.5"/></filter>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="bloom" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="14"/></filter>
+    <clipPath id="frame"><rect width="1280" height="720" rx="28"/></clipPath>
+    <clipPath id="cover"><rect x="210" y="150" width="260" height="260" rx="30"/></clipPath>
+  </defs>
+  <style>
+    .scene { animation: scene 16.0s ease-in-out infinite; }
+    @keyframes scene { 0% { opacity: 0; } 3% { opacity: 1; } 96% { opacity: 1; } 100% { opacity: 0; } }
+    .eq { transform-box: fill-box; transform-origin: bottom; animation: eq 0.9s ease-in-out infinite alternate; }
+    @keyframes eq { from { transform: scaleY(0.25); } to { transform: scaleY(1); } }
+    .spin { transform-box: fill-box; transform-origin: center; animation: spin 1.1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .breathe { transform-box: fill-box; transform-origin: center; animation: breathe 2.4s ease-in-out infinite; }
+    @keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+    .drift { transform-box: fill-box; transform-origin: center; animation: drift 9s ease-in-out infinite alternate; }
+    @keyframes drift { from { transform: translate(-10px, 6px) scale(1); } to { transform: translate(12px, -8px) scale(1.12); } }
+    .press { transform-box: fill-box; transform-origin: center; animation: press 16.0s ease-in-out infinite; }
+    @keyframes press { 0%, 38.44% { transform: scale(1); } 40.00% { transform: scale(0.93); } 41.88%, 100% { transform: scale(1); } }
+    .lit { animation: lit 16.0s ease-in-out infinite; }
+    @keyframes lit { 0%, 47.50% { opacity: 0; } 51.88%, 66.88% { opacity: 1; } 72.50%, 100% { opacity: 0; } }
+    .songA { animation: songA 16.0s ease-in-out infinite; } @keyframes songA { 0% { opacity: 1; } 60.62% { opacity: 1; } 62.50%, 100% { opacity: 0; } }
+    .songB { animation: songB 16.0s ease-in-out infinite; } @keyframes songB { 0%, 60.62% { opacity: 0; } 62.50% { opacity: 1; } 100% { opacity: 1; } }
+    .waitNow { animation: waitNow 16.0s ease-in-out infinite; } @keyframes waitNow { 0%, 38.75% { opacity: 0; } 40.62% { opacity: 1; } 50.00% { opacity: 1; } 51.88%, 100% { opacity: 0; } }
+    .chipMix { animation: chipMix 16.0s ease-in-out infinite; } @keyframes chipMix { 0%, 48.12% { opacity: 0; } 50.00% { opacity: 1; } 68.75% { opacity: 1; } 70.62%, 100% { opacity: 0; } }
+    .nextB { animation: nextB 16.0s ease-in-out infinite; } @keyframes nextB { 0% { opacity: 1; } 48.75% { opacity: 1; } 50.62%, 100% { opacity: 0; } }
+    .nextMix { animation: nextMix 16.0s ease-in-out infinite; } @keyframes nextMix { 0%, 48.12% { opacity: 0; } 50.00% { opacity: 1; } 68.75% { opacity: 1; } 70.62%, 100% { opacity: 0; } }
+    .nextC { animation: nextC 16.0s ease-in-out infinite; } @keyframes nextC { 0%, 68.12% { opacity: 0; } 70.00% { opacity: 1; } 100% { opacity: 1; } }
+    .rowA { animation: rowA 16.0s ease-in-out infinite; } @keyframes rowA { 0% { opacity: 1; } 68.75% { opacity: 1; } 70.62%, 100% { opacity: 0; } }
+    .rowB { animation: rowB 16.0s ease-in-out infinite; } @keyframes rowB { 0%, 66.88% { opacity: 0; } 68.75% { opacity: 1; } 100% { opacity: 1; } }
+    .artB { animation: artB 16.0s ease-in-out infinite; } @keyframes artB { 0%, 53.75% { opacity: 0; } 68.75%, 100% { opacity: 1; } }
+    .progress { transform-box: fill-box; transform-origin: left; animation: progress 16.0s linear infinite; } @keyframes progress { 0.00% { transform: scaleX(0.8873); } 3.12% { transform: scaleX(0.8897); } 6.25% { transform: scaleX(0.8922); } 9.38% { transform: scaleX(0.8946); } 12.50% { transform: scaleX(0.8971); } 15.62% { transform: scaleX(0.8995); } 18.75% { transform: scaleX(0.9020); } 21.88% { transform: scaleX(0.9044); } 25.00% { transform: scaleX(0.9069); } 28.12% { transform: scaleX(0.9093); } 31.25% { transform: scaleX(0.9118); } 34.38% { transform: scaleX(0.9142); } 37.50% { transform: scaleX(0.9167); } 40.62% { transform: scaleX(0.9191); } 43.75% { transform: scaleX(0.9216); } 46.88% { transform: scaleX(0.9240); } 50.00% { transform: scaleX(0.9265); } 53.12% { transform: scaleX(0.9289); } 56.25% { transform: scaleX(0.9314); } 59.38% { transform: scaleX(0.9338); } 62.50% { transform: scaleX(0.9363); } 65.62% { transform: scaleX(0.9387); } 68.75% { transform: scaleX(0.0779); } 71.88% { transform: scaleX(0.0801); } 75.00% { transform: scaleX(0.0823); } 78.12% { transform: scaleX(0.0844); } 81.25% { transform: scaleX(0.0866); } 84.38% { transform: scaleX(0.0887); } 87.50% { transform: scaleX(0.0909); } 90.62% { transform: scaleX(0.0931); } 93.75% { transform: scaleX(0.0952); } 96.88% { transform: scaleX(0.0974); } 100.00% { transform: scaleX(0.0996); } }
+    .knob { animation: knob 16.0s linear infinite; } @keyframes knob { 0.00% { transform: translateX(408.1px); } 3.12% { transform: translateX(409.3px); } 6.25% { transform: translateX(410.4px); } 9.38% { transform: translateX(411.5px); } 12.50% { transform: translateX(412.6px); } 15.62% { transform: translateX(413.8px); } 18.75% { transform: translateX(414.9px); } 21.88% { transform: translateX(416.0px); } 25.00% { transform: translateX(417.2px); } 28.12% { transform: translateX(418.3px); } 31.25% { transform: translateX(419.4px); } 34.38% { transform: translateX(420.5px); } 37.50% { transform: translateX(421.7px); } 40.62% { transform: translateX(422.8px); } 43.75% { transform: translateX(423.9px); } 46.88% { transform: translateX(425.0px); } 50.00% { transform: translateX(426.2px); } 53.12% { transform: translateX(427.3px); } 56.25% { transform: translateX(428.4px); } 59.38% { transform: translateX(429.6px); } 62.50% { transform: translateX(430.7px); } 65.62% { transform: translateX(431.8px); } 68.75% { transform: translateX(35.8px); } 71.88% { transform: translateX(36.8px); } 75.00% { transform: translateX(37.8px); } 78.12% { transform: translateX(38.8px); } 81.25% { transform: translateX(39.8px); } 84.38% { transform: translateX(40.8px); } 87.50% { transform: translateX(41.8px); } 90.62% { transform: translateX(42.8px); } 93.75% { transform: translateX(43.8px); } 96.88% { transform: translateX(44.8px); } 100.00% { transform: translateX(45.8px); } }
+    .tick0 { animation: tick0 16.0s step-end infinite; } @keyframes tick0 { 0% { opacity: 1; } 0.00% { opacity: 1; } 6.25% { opacity: 0; } }
+    .tick1 { animation: tick1 16.0s step-end infinite; } @keyframes tick1 { 0% { opacity: 0; } 6.25% { opacity: 1; } 12.50% { opacity: 0; } }
+    .tick2 { animation: tick2 16.0s step-end infinite; } @keyframes tick2 { 0% { opacity: 0; } 12.50% { opacity: 1; } 18.75% { opacity: 0; } }
+    .tick3 { animation: tick3 16.0s step-end infinite; } @keyframes tick3 { 0% { opacity: 0; } 18.75% { opacity: 1; } 25.00% { opacity: 0; } }
+    .tick4 { animation: tick4 16.0s step-end infinite; } @keyframes tick4 { 0% { opacity: 0; } 25.00% { opacity: 1; } 31.25% { opacity: 0; } }
+    .tick5 { animation: tick5 16.0s step-end infinite; } @keyframes tick5 { 0% { opacity: 0; } 31.25% { opacity: 1; } 37.50% { opacity: 0; } }
+    .tick6 { animation: tick6 16.0s step-end infinite; } @keyframes tick6 { 0% { opacity: 0; } 37.50% { opacity: 1; } 43.75% { opacity: 0; } }
+    .tick7 { animation: tick7 16.0s step-end infinite; } @keyframes tick7 { 0% { opacity: 0; } 43.75% { opacity: 1; } 50.00% { opacity: 0; } }
+    .tick8 { animation: tick8 16.0s step-end infinite; } @keyframes tick8 { 0% { opacity: 0; } 50.00% { opacity: 1; } 56.25% { opacity: 0; } }
+    .tick9 { animation: tick9 16.0s step-end infinite; } @keyframes tick9 { 0% { opacity: 0; } 56.25% { opacity: 1; } 62.50% { opacity: 0; } }
+    .tick10 { animation: tick10 16.0s step-end infinite; } @keyframes tick10 { 0% { opacity: 0; } 62.50% { opacity: 1; } 68.75% { opacity: 0; } }
+    .tick11 { animation: tick11 16.0s step-end infinite; } @keyframes tick11 { 0% { opacity: 0; } 68.75% { opacity: 1; } 75.00% { opacity: 0; } }
+    .tick12 { animation: tick12 16.0s step-end infinite; } @keyframes tick12 { 0% { opacity: 0; } 75.00% { opacity: 1; } 81.25% { opacity: 0; } }
+    .tick13 { animation: tick13 16.0s step-end infinite; } @keyframes tick13 { 0% { opacity: 0; } 81.25% { opacity: 1; } 87.50% { opacity: 0; } }
+    .tick14 { animation: tick14 16.0s step-end infinite; } @keyframes tick14 { 0% { opacity: 0; } 87.50% { opacity: 1; } 93.75% { opacity: 0; } }
+    .tick15 { animation: tick15 16.0s step-end infinite; } @keyframes tick15 { 0% { opacity: 0; } 93.75% { opacity: 1; } 100.00% { opacity: 1; } }
+    .ring_golden { animation: ring_golden 16.0s linear infinite; } @keyframes ring_golden { 0%, 3.75% { stroke-dashoffset: 69.1; } 28.75%, 100% { stroke-dashoffset: 0; } }
+    .waiting_golden { animation: waiting_golden 16.0s ease-in-out infinite; } @keyframes waiting_golden { 0% { opacity: 1; } 1.56% { opacity: 1; } 3.44%, 100% { opacity: 0; } }
+    .prep_golden { animation: prep_golden 16.0s ease-in-out infinite; } @keyframes prep_golden { 0%, 1.88% { opacity: 0; } 3.75% { opacity: 1; } 28.75% { opacity: 1; } 30.62%, 100% { opacity: 0; } }
+    .ready_golden { animation: ready_golden 16.0s ease-in-out infinite; } @keyframes ready_golden { 0%, 30.94% { opacity: 0; } 32.81% { opacity: 1; } 100% { opacity: 1; } }
+    .pct_golden0 { animation: pct_golden0 16.0s ease-in-out infinite; } @keyframes pct_golden0 { 0%, 3.44% { opacity: 0; } 3.75% { opacity: 1; } 9.69% { opacity: 1; } 10.00%, 100% { opacity: 0; } }
+    .pct_golden1 { animation: pct_golden1 16.0s ease-in-out infinite; } @keyframes pct_golden1 { 0%, 9.69% { opacity: 0; } 10.00% { opacity: 1; } 15.94% { opacity: 1; } 16.25%, 100% { opacity: 0; } }
+    .pct_golden2 { animation: pct_golden2 16.0s ease-in-out infinite; } @keyframes pct_golden2 { 0%, 15.94% { opacity: 0; } 16.25% { opacity: 1; } 22.19% { opacity: 1; } 22.50%, 100% { opacity: 0; } }
+    .pct_golden3 { animation: pct_golden3 16.0s ease-in-out infinite; } @keyframes pct_golden3 { 0%, 22.19% { opacity: 0; } 22.50% { opacity: 1; } 28.44% { opacity: 1; } 28.75%, 100% { opacity: 0; } }
+    .ring_after { animation: ring_after 16.0s linear infinite; } @keyframes ring_after { 0%, 30.00% { stroke-dashoffset: 69.1; } 60.00%, 100% { stroke-dashoffset: 0; } }
+    .waiting_after { animation: waiting_after 16.0s ease-in-out infinite; } @keyframes waiting_after { 0% { opacity: 1; } 27.81% { opacity: 1; } 29.69%, 100% { opacity: 0; } }
+    .prep_after { animation: prep_after 16.0s ease-in-out infinite; } @keyframes prep_after { 0%, 28.12% { opacity: 0; } 30.00% { opacity: 1; } 60.00% { opacity: 1; } 61.88%, 100% { opacity: 0; } }
+    .ready_after { animation: ready_after 16.0s ease-in-out infinite; } @keyframes ready_after { 0%, 62.19% { opacity: 0; } 64.06% { opacity: 1; } 100% { opacity: 1; } }
+    .pct_after0 { animation: pct_after0 16.0s ease-in-out infinite; } @keyframes pct_after0 { 0%, 29.69% { opacity: 0; } 30.00% { opacity: 1; } 37.19% { opacity: 1; } 37.50%, 100% { opacity: 0; } }
+    .pct_after1 { animation: pct_after1 16.0s ease-in-out infinite; } @keyframes pct_after1 { 0%, 37.19% { opacity: 0; } 37.50% { opacity: 1; } 44.69% { opacity: 1; } 45.00%, 100% { opacity: 0; } }
+    .pct_after2 { animation: pct_after2 16.0s ease-in-out infinite; } @keyframes pct_after2 { 0%, 44.69% { opacity: 0; } 45.00% { opacity: 1; } 52.19% { opacity: 1; } 52.50%, 100% { opacity: 0; } }
+    .pct_after3 { animation: pct_after3 16.0s ease-in-out infinite; } @keyframes pct_after3 { 0%, 52.19% { opacity: 0; } 52.50% { opacity: 1; } 59.69% { opacity: 1; } 60.00%, 100% { opacity: 0; } }
+    .ring_sardaari { animation: ring_sardaari 16.0s linear infinite; } @keyframes ring_sardaari { 0%, 62.50% { stroke-dashoffset: 69.1; } 91.25%, 100% { stroke-dashoffset: 0; } }
+    .prep_sardaari { animation: prep_sardaari 16.0s ease-in-out infinite; } @keyframes prep_sardaari { 0%, 60.62% { opacity: 0; } 62.50% { opacity: 1; } 91.25% { opacity: 1; } 93.12%, 100% { opacity: 0; } }
+    .ready_sardaari { animation: ready_sardaari 16.0s ease-in-out infinite; } @keyframes ready_sardaari { 0%, 93.44% { opacity: 0; } 95.31% { opacity: 1; } 100% { opacity: 1; } }
+    .pct_sardaari0 { animation: pct_sardaari0 16.0s ease-in-out infinite; } @keyframes pct_sardaari0 { 0%, 62.19% { opacity: 0; } 62.50% { opacity: 1; } 69.38% { opacity: 1; } 69.69%, 100% { opacity: 0; } }
+    .pct_sardaari1 { animation: pct_sardaari1 16.0s ease-in-out infinite; } @keyframes pct_sardaari1 { 0%, 69.38% { opacity: 0; } 69.69% { opacity: 1; } 76.56% { opacity: 1; } 76.88%, 100% { opacity: 0; } }
+    .pct_sardaari2 { animation: pct_sardaari2 16.0s ease-in-out infinite; } @keyframes pct_sardaari2 { 0%, 76.56% { opacity: 0; } 76.88% { opacity: 1; } 83.75% { opacity: 1; } 84.06%, 100% { opacity: 0; } }
+    .pct_sardaari3 { animation: pct_sardaari3 16.0s ease-in-out infinite; } @keyframes pct_sardaari3 { 0%, 83.75% { opacity: 0; } 84.06% { opacity: 1; } 90.94% { opacity: 1; } 91.25%, 100% { opacity: 0; } }
+    .dl_sardaari { animation: dl_sardaari 16.0s ease-in-out infinite; } @keyframes dl_sardaari { 0% { opacity: 1; } 43.75% { opacity: 1; } 45.62%, 100% { opacity: 0; } }
+    .wait_sardaari { animation: wait_sardaari 16.0s ease-in-out infinite; } @keyframes wait_sardaari { 0%, 45.94% { opacity: 0; } 47.81% { opacity: 1; } 60.31% { opacity: 1; } 62.19%, 100% { opacity: 0; } }
+    .dl0 { animation: dl0 16.0s ease-in-out infinite; } @keyframes dl0 { 0% { opacity: 1; } 14.06% { opacity: 1; } 15.00%, 100% { opacity: 0; } }
+    .dl1 { animation: dl1 16.0s ease-in-out infinite; } @keyframes dl1 { 0%, 14.06% { opacity: 0; } 15.00% { opacity: 1; } 29.06% { opacity: 1; } 30.00%, 100% { opacity: 0; } }
+    .dl2 { animation: dl2 16.0s ease-in-out infinite; } @keyframes dl2 { 0%, 29.06% { opacity: 0; } 30.00% { opacity: 1; } 44.06% { opacity: 1; } 45.00%, 100% { opacity: 0; } }
+    .dl3 { animation: dl3 16.0s ease-in-out infinite; } @keyframes dl3 { 0%, 44.06% { opacity: 0; } 45.00% { opacity: 1; } 59.06% { opacity: 1; } 60.00%, 100% { opacity: 0; } }
+    .dl4 { animation: dl4 16.0s ease-in-out infinite; } @keyframes dl4 { 0%, 59.06% { opacity: 0; } 60.00% { opacity: 1; } 74.06% { opacity: 1; } 75.00%, 100% { opacity: 0; } }
+    .dl5 { animation: dl5 16.0s ease-in-out infinite; } @keyframes dl5 { 0%, 74.06% { opacity: 0; } 75.00% { opacity: 1; } 89.06% { opacity: 1; } 90.00%, 100% { opacity: 0; } }
+    .dl6 { animation: dl6 16.0s ease-in-out infinite; } @keyframes dl6 { 0%, 89.06% { opacity: 0; } 90.00% { opacity: 1; } 99.06% { opacity: 1; } 100.00%, 100% { opacity: 0; } }
+    .dlbar { transform-box: fill-box; transform-origin: left; animation: dlbar 16.0s cubic-bezier(0.3, 0.7, 0.3, 1) infinite; } @keyframes dlbar { 0.00% { transform: scaleX(0.250); } 15.00% { transform: scaleX(0.333); } 30.00% { transform: scaleX(0.417); } 45.00% { transform: scaleX(0.500); } 60.00% { transform: scaleX(0.583); } 75.00% { transform: scaleX(0.667); } 90.00% { transform: scaleX(0.750); } 100% { transform: scaleX(0.750); } }
+  </style>
+
+  <g clip-path="url(#frame)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+    <rect width="1280" height="720" fill="url(#plate)"/>
+    <rect width="1280" height="720" filter="url(#grain)"/>
+    <rect width="1280" height="1.5" fill="#FFFFFF" fill-opacity="0.12"/>
+    <circle cx="66" cy="62" r="24" fill="#FF8A3D"/>
+    <path d="M55,57 h20 l-5,-5 M77,67 h-20 l5,5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="104" y="58" fill="#EDEEF0" font-size="22" font-weight="800" letter-spacing="3">KNOBSHIFT</text>
+    <text x="104" y="82" fill="#9A9EA5" font-size="15">Seamless mixes for the music on your Mac</text>
+    <rect x="1170" y="44" width="70" height="36" rx="18" fill="#2A2C30" stroke="#FFFFFF" stroke-opacity="0.08"/>
+    <rect x="1202" y="48" width="34" height="28" rx="14" fill="#EDEEF0"/>
+    <g filter="url(#drop)">
+      <rect x="40" y="114" width="640" height="576" rx="26" fill="url(#card)"/>
+      <rect x="704" y="114" width="536" height="150" rx="24" fill="url(#card)"/>
+      <rect x="704" y="282" width="536" height="408" rx="24" fill="url(#card)"/>
+    </g>
+    <rect x="40.5" y="114.5" width="639" height="575" rx="26" fill="url(#rim)" stroke="#FFFFFF" stroke-opacity="0.07"/>
+    <rect x="704.5" y="114.5" width="535" height="149" rx="24" fill="url(#rim)" stroke="#FFFFFF" stroke-opacity="0.07"/>
+    <rect x="704.5" y="282.5" width="535" height="407" rx="24" fill="url(#rim)" stroke="#FFFFFF" stroke-opacity="0.07"/>
+    <g class="scene">
+      <g class="lit"><rect x="200" y="140" width="280" height="280" rx="38" fill="#FF8A3D" opacity="0.55" filter="url(#bloom)"/></g>
+      <g clip-path="url(#cover)">
+        <rect x="210" y="150" width="260" height="260" fill="url(#artA)"/>
+        <circle class="drift" cx="300" cy="250" r="86" fill="#FFFFFF" fill-opacity="0.16"/>
+        <circle cx="400" cy="340" r="54" fill="#1B0E2B" fill-opacity="0.35"/>
+        <g class="artB">
+          <rect x="210" y="150" width="260" height="260" fill="url(#artB)"/>
+          <circle class="drift" cx="380" cy="230" r="70" fill="#FFFFFF" fill-opacity="0.18"/>
+          <path d="M210,360 C280,320 360,400 470,340 V410 H210 Z" fill="#082530" fill-opacity="0.5"/>
+        </g>
+      </g>
+      <rect x="210.5" y="150.5" width="259" height="259" rx="30" fill="none" stroke="#FFFFFF" stroke-opacity="0.12"/>
+      <g class="lit"><rect x="210" y="150" width="260" height="260" rx="30" fill="none" stroke="#FF8A3D" stroke-width="2.5"/></g>
+      <g class="songA">
+        <text x="340" y="462" text-anchor="middle" fill="#EDEEF0" font-size="30" font-weight="800">Midnight Drive</text>
+        <text x="340" y="490" text-anchor="middle" fill="#9A9EA5" font-size="17">Aria Vale</text>
+      </g>
+      <g class="songB">
+        <text x="340" y="462" text-anchor="middle" fill="#EDEEF0" font-size="30" font-weight="800">Neon Lights</text>
+        <text x="340" y="490" text-anchor="middle" fill="#9A9EA5" font-size="17">The Night Shift</text>
+      </g>
+      <g fill="#FF8A3D">
+        <rect class="eq" x="290" y="504" width="5" height="16" rx="2.5" style="animation-delay: -0s; animation-duration: 0.70s"/>
+        <rect class="eq" x="300" y="504" width="5" height="16" rx="2.5" style="animation-delay: -0.35s; animation-duration: 0.83s"/>
+        <rect class="eq" x="310" y="504" width="5" height="16" rx="2.5" style="animation-delay: -0.15s; animation-duration: 0.96s"/>
+        <rect class="eq" x="320" y="504" width="5" height="16" rx="2.5" style="animation-delay: -0.55s; animation-duration: 1.09s"/>
+        <rect class="eq" x="330" y="504" width="5" height="16" rx="2.5" style="animation-delay: -0.25s; animation-duration: 1.22s"/>
+      </g>
+      <g class="chipMix"><rect x="348" y="504" width="80" height="18" rx="9" fill="#FF8A3D"/>
+        <text x="388" y="517" text-anchor="middle" fill="#fff" font-size="10" font-weight="800" letter-spacing="1.2">KNOBMIX</text></g>
+      <rect x="110" y="540" width="460" height="6" rx="3" fill="#FFFFFF" fill-opacity="0.12"/>
+      <rect class="progress" x="110" y="540" width="460" height="6" rx="3" fill="#FF8A3D"/>
+      <g class="knob"><circle cx="110" cy="543" r="9" fill="#F2F2F2" filter="url(#soft)"/></g>
+      <g class="tick0"><text x="110" y="572" fill="#9A9EA5" font-size="13" font-weight="600">3:01</text><text x="570" y="572" text-anchor="end" fill="#9A9EA5" font-size="13" font-weight="600">0:23 left</text></g>
+      <g class="tick1"><text x="110" y="572" fill="#9A9EA5" font-size="13" font-weight="600">3:02</text><text x="570" y="572" text-anchor="end" fill="#9A9EA5" font-size="13" font-weight="600">0:22 left</text></g>
+      <g class="tick2"><text x="110" y="572" fill="#9A9EA5" font-size="13" font-weight="600">3:03</text><text x="570" y="572" text-anchor="end" fill="#9A9EA5" font-size="13" font-weight="600">0:21 left</text></g>
+      <g class="tick3"><text x="110" y="572" fill="#9A9EA5" font-size="13" font-weight="600">3:04</text><text x="570" y="572" text-anchor="end" fill="#9A9EA5" font-size="13" font-weight="600">0:20 left</text></g>
+      <g class="tick4"><text x="110" y="572" fill="#9A9EA5" font-size="13" font-weight="600">3:05</text><text x="570" y="572" text-anchor="end" fill="#9A9EA5" font-size="13" font-weight="600">0:19 left</text></g>
+      <g class="tick5"><text x="110" y="572" fill="#9A9EA5" font-size="13" font-weight="600">3:06</text><text x="570" y="572" text-anchor="end" fill="#9A9EA5" font-size="13" font-weight="600">0:18 left</text></g>
+      <g class="tick6"><text x="110" y="572" fill="#9A9EA5" font-size="13" font-weight="600">3:07</text><text x="570" y="572" text-anchor="end" fill="#9A9EA5" font-size="13" font-weight="600">0:17 left</text></g>
+      <g class="tick7"><text x="110" y="572" fill="#9A9EA5" font-size="13" font-weight="600">3:08</text><text x="570" y="572" text-anchor="end" fill="#9A9EA5" font-size="13" font-weight="600">0:16 left</text></g>
+      <g class="tick8"><text x="110" y="572" fill="#9A9EA5" font-size="13" font-weight="600">3:09</text><text x="570" y="572" text-anchor="end" fill="#9A9EA5" font-size="13" font-weight="600">0:15 left</text></g>
+      <g class="tick9"><text x="110" y="572" fill="#9A9EA5" font-size="13" font-weight="600">3:10</text><text x="570" y="572" text-anchor="end" fill="#9A9EA5" font-size="13" font-weight="600">0:14 left</text></g>
+      <g class="tick10"><text x="110" y="572" fill="#9A9EA5" font-size="13" font-weight="600">3:11</text><text x="570" y="572" text-anchor="end" fill="#9A9EA5" font-size="13" font-weight="600">0:13 left</text></g>
+      <g class="tick11"><text x="110" y="572" fill="#9A9EA5" font-size="13" font-weight="600">0:18</text><text x="570" y="572" text-anchor="end" fill="#9A9EA5" font-size="13" font-weight="600">3:33 left</text></g>
+      <g class="tick12"><text x="110" y="572" fill="#9A9EA5" font-size="13" font-weight="600">0:19</text><text x="570" y="572" text-anchor="end" fill="#9A9EA5" font-size="13" font-weight="600">3:32 left</text></g>
+      <g class="tick13"><text x="110" y="572" fill="#9A9EA5" font-size="13" font-weight="600">0:20</text><text x="570" y="572" text-anchor="end" fill="#9A9EA5" font-size="13" font-weight="600">3:31 left</text></g>
+      <g class="tick14"><text x="110" y="572" fill="#9A9EA5" font-size="13" font-weight="600">0:21</text><text x="570" y="572" text-anchor="end" fill="#9A9EA5" font-size="13" font-weight="600">3:30 left</text></g>
+      <g class="tick15"><text x="110" y="572" fill="#9A9EA5" font-size="13" font-weight="600">0:22</text><text x="570" y="572" text-anchor="end" fill="#9A9EA5" font-size="13" font-weight="600">3:29 left</text></g>
+      <path d="M262,606 l-16,10 l16,10 z M244,606 l-16,10 l16,10 z" fill="#EDEEF0"/>
+      <g class="breathe"><circle cx="340" cy="616" r="30" fill="#FF8A3D" filter="url(#soft)"/></g>
+      <rect x="331" y="603" width="6" height="26" rx="2" fill="#fff"/><rect x="343" y="603" width="6" height="26" rx="2" fill="#fff"/>
+      <path d="M418,606 l16,10 l-16,10 z M436,606 l16,10 l-16,10 z" fill="#EDEEF0"/>
+      <g class="waitNow"><rect x="270" y="650" width="140" height="30" rx="15" fill="#FF8A3D" fill-opacity="0.35" filter="url(#bloom)"/>
+        <text x="424" y="670" fill="#9A9EA5" font-size="12">Waiting for the phrase</text></g>
+      <g class="press"><rect x="270" y="650" width="140" height="30" rx="15" fill="#0C0D0F" fill-opacity="0.4" stroke="#FF8A3D" stroke-opacity="0.7"/>
+        <text x="340" y="670" text-anchor="middle" fill="#FF8A3D" font-size="11" font-weight="800" letter-spacing="1.6">KNOBMIX NOW</text></g>
+      <text x="730" y="148" fill="#6B6F76" font-size="12" font-weight="700" letter-spacing="2">UP NEXT</text>
+      <g class="nextB"><rect x="730" y="164" width="76" height="76" rx="14" fill="url(#artB)"/>
+        <text x="826" y="196" fill="#EDEEF0" font-size="20" font-weight="700">Neon Lights</text>
+        <text x="826" y="222" fill="#9A9EA5" font-size="15" font-weight="400">The Night Shift</text></g>
+      <g class="nextMix"><rect x="730" y="164" width="76" height="76" rx="14" fill="url(#artB)"/>
+        <text x="826" y="196" fill="#EDEEF0" font-size="20" font-weight="700">Neon Lights</text>
+        <text x="826" y="222" fill="#FF8A3D" font-size="15" font-weight="600">Mixing now</text></g>
+      <g class="nextC"><rect x="730" y="164" width="76" height="76" rx="14" fill="url(#artC)"/>
+        <text x="826" y="196" fill="#EDEEF0" font-size="20" font-weight="700">Golden Hour</text>
+        <text x="826" y="222" fill="#9A9EA5" font-size="15" font-weight="400">Sol Ramirez</text></g>
+      <text x="730" y="318" fill="#6B6F76" font-size="12" font-weight="700" letter-spacing="2">QUEUE  6</text>
+      <path d="M1088,308 h6 l10,12 h6 M1088,320 h6 l10,-12 h6" fill="none" stroke="#9A9EA5" stroke-width="1.8" stroke-linecap="round"/>
+      <text x="1214" y="318" text-anchor="end" fill="#FF8A3D" font-size="12" font-weight="800" letter-spacing="1.2">+ ADD MUSIC</text>
+      <rect x="728" y="334" width="488" height="50" rx="12" fill="#FFFFFF" fill-opacity="0.05"/>
+      <path d="M744,353 h12 M744,359 h12 M744,365 h8" stroke="#FF8A3D" stroke-width="2" stroke-linecap="round"/>
+      <text x="770" y="355" fill="#EDEEF0" font-size="14" font-weight="700">Punjabi Road Trip</text>
+      <rect x="770" y="368" width="390" height="3" rx="1.5" fill="#FFFFFF" fill-opacity="0.1"/>
+      <rect class="dlbar" x="770" y="368" width="390" height="3" rx="1.5" fill="#FF8A3D"/>
+      <rect x="1186" y="352" width="10" height="10" rx="2" fill="#9A9EA5"/>
+      <g class="dl0"><text x="922" y="355" fill="#FF8A3D" font-size="12" font-weight="600">3 of 12. Downloading Kya Baat Aa</text></g>
+      <g class="dl1"><text x="922" y="355" fill="#FF8A3D" font-size="12" font-weight="600">4 of 12. Downloading Bodyguard</text></g>
+      <g class="dl2"><text x="922" y="355" fill="#FF8A3D" font-size="12" font-weight="600">5 of 12. Downloading Lalkaara</text></g>
+      <g class="dl3"><text x="922" y="355" fill="#FF8A3D" font-size="12" font-weight="600">6 of 12. Downloading Ghaint</text></g>
+      <g class="dl4"><text x="922" y="355" fill="#FF8A3D" font-size="12" font-weight="600">7 of 12. Downloading Majhail</text></g>
+      <g class="dl5"><text x="922" y="355" fill="#FF8A3D" font-size="12" font-weight="600">8 of 12. Downloading Khayaal</text></g>
+      <g class="dl6"><text x="922" y="355" fill="#FF8A3D" font-size="12" font-weight="600">9 of 12. Downloading Jee Karuga</text></g>
+      <g class="rowA"><rect x="728" y="390" width="488" height="52" rx="12" fill="#FF8A3D" fill-opacity="0.12"/></g>
+      <g class="rowB"><rect x="728" y="448" width="488" height="52" rx="12" fill="#FF8A3D" fill-opacity="0.12"/></g>
+      <rect x="740" y="396" width="40" height="40" rx="9" fill="url(#artA)"/><text x="796" y="413" fill="#EDEEF0" font-size="15" font-weight="600">Midnight Drive</text><text x="796" y="431" fill="#9A9EA5" font-size="12.5">Aria Vale  ·  100 BPM</text><text x="1176" y="421" text-anchor="end" fill="#9A9EA5" font-size="12.5">3:24</text><path d="M1196,412 l8,8 M1204,412 l-8,8" stroke="#6B6F76" stroke-width="1.8" stroke-linecap="round"/>
+      <rect x="740" y="454" width="40" height="40" rx="9" fill="url(#artB)"/><text x="796" y="471" fill="#EDEEF0" font-size="15" font-weight="600">Neon Lights</text><text x="796" y="489" fill="#9A9EA5" font-size="12.5">The Night Shift  ·  98 BPM</text><text x="1176" y="479" text-anchor="end" fill="#9A9EA5" font-size="12.5">3:51</text><path d="M1196,470 l8,8 M1204,470 l-8,8" stroke="#6B6F76" stroke-width="1.8" stroke-linecap="round"/>
+      <g class="ready_golden"><rect x="740" y="512" width="40" height="40" rx="9" fill="url(#artC)"/><text x="796" y="529" fill="#EDEEF0" font-size="15" font-weight="600">Golden Hour</text><text x="796" y="547" fill="#9A9EA5" font-size="12.5">Sol Ramirez  ·  96 BPM</text><text x="1176" y="537" text-anchor="end" fill="#9A9EA5" font-size="12.5">3:37</text><path d="M1196,528 l8,8 M1204,528 l-8,8" stroke="#6B6F76" stroke-width="1.8" stroke-linecap="round"/></g><g class="waiting_golden"><rect x="740" y="512" width="40" height="40" rx="9" fill="#FFFFFF" fill-opacity="0.06"/><text x="796" y="529" fill="#9A9EA5" font-size="15" font-weight="600">Golden Hour</text><text x="796" y="547" fill="#6B6F76" font-size="12.5">Sol Ramirez  ·  Waiting to prepare</text></g><g class="prep_golden"><rect x="740" y="512" width="40" height="40" rx="9" fill="#FFFFFF" fill-opacity="0.06"/><circle cx="760" cy="532" r="11" fill="none" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="3"/><circle class="ring_golden" cx="760" cy="532" r="11" fill="none" stroke="#FF8A3D" stroke-width="3" stroke-linecap="round" stroke-dasharray="69.1" transform="rotate(-90 760 532)"/><text x="796" y="529" fill="#9A9EA5" font-size="15" font-weight="600">Golden Hour</text><g class="pct_golden0"><text x="796" y="547" fill="#6B6F76" font-size="12.5">Sol Ramirez  ·  Preparing 0%</text></g><g class="pct_golden1"><text x="796" y="547" fill="#6B6F76" font-size="12.5">Sol Ramirez  ·  Preparing 25%</text></g><g class="pct_golden2"><text x="796" y="547" fill="#6B6F76" font-size="12.5">Sol Ramirez  ·  Preparing 50%</text></g><g class="pct_golden3"><text x="796" y="547" fill="#6B6F76" font-size="12.5">Sol Ramirez  ·  Preparing 75%</text></g></g>
+      <g class="ready_after"><rect x="740" y="570" width="40" height="40" rx="9" fill="url(#artD)"/><text x="796" y="587" fill="#EDEEF0" font-size="15" font-weight="600">Afterglow</text><text x="796" y="605" fill="#9A9EA5" font-size="12.5">June Harbor  ·  104 BPM</text><text x="1176" y="595" text-anchor="end" fill="#9A9EA5" font-size="12.5">4:02</text><path d="M1196,586 l8,8 M1204,586 l-8,8" stroke="#6B6F76" stroke-width="1.8" stroke-linecap="round"/></g><g class="waiting_after"><rect x="740" y="570" width="40" height="40" rx="9" fill="#FFFFFF" fill-opacity="0.06"/><text x="796" y="587" fill="#9A9EA5" font-size="15" font-weight="600">Afterglow</text><text x="796" y="605" fill="#6B6F76" font-size="12.5">June Harbor  ·  Waiting to prepare</text></g><g class="prep_after"><rect x="740" y="570" width="40" height="40" rx="9" fill="#FFFFFF" fill-opacity="0.06"/><circle cx="760" cy="590" r="11" fill="none" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="3"/><circle class="ring_after" cx="760" cy="590" r="11" fill="none" stroke="#FF8A3D" stroke-width="3" stroke-linecap="round" stroke-dasharray="69.1" transform="rotate(-90 760 590)"/><text x="796" y="587" fill="#9A9EA5" font-size="15" font-weight="600">Afterglow</text><g class="pct_after0"><text x="796" y="605" fill="#6B6F76" font-size="12.5">June Harbor  ·  Preparing 0%</text></g><g class="pct_after1"><text x="796" y="605" fill="#6B6F76" font-size="12.5">June Harbor  ·  Preparing 25%</text></g><g class="pct_after2"><text x="796" y="605" fill="#6B6F76" font-size="12.5">June Harbor  ·  Preparing 50%</text></g><g class="pct_after3"><text x="796" y="605" fill="#6B6F76" font-size="12.5">June Harbor  ·  Preparing 75%</text></g></g>
+      <g class="ready_sardaari"><rect x="740" y="628" width="40" height="40" rx="9" fill="url(#artE)"/><text x="796" y="645" fill="#EDEEF0" font-size="15" font-weight="600">Sardaari</text><text x="796" y="663" fill="#9A9EA5" font-size="12.5">Himmat Sandhu  ·  92 BPM</text><text x="1176" y="653" text-anchor="end" fill="#9A9EA5" font-size="12.5">3:18</text><path d="M1196,644 l8,8 M1204,644 l-8,8" stroke="#6B6F76" stroke-width="1.8" stroke-linecap="round"/></g><g class="prep_sardaari"><rect x="740" y="628" width="40" height="40" rx="9" fill="#FFFFFF" fill-opacity="0.06"/><circle cx="760" cy="648" r="11" fill="none" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="3"/><circle class="ring_sardaari" cx="760" cy="648" r="11" fill="none" stroke="#FF8A3D" stroke-width="3" stroke-linecap="round" stroke-dasharray="69.1" transform="rotate(-90 760 648)"/><text x="796" y="645" fill="#9A9EA5" font-size="15" font-weight="600">Sardaari</text><g class="pct_sardaari0"><text x="796" y="663" fill="#6B6F76" font-size="12.5">Himmat Sandhu  ·  Preparing 0%</text></g><g class="pct_sardaari1"><text x="796" y="663" fill="#6B6F76" font-size="12.5">Himmat Sandhu  ·  Preparing 25%</text></g><g class="pct_sardaari2"><text x="796" y="663" fill="#6B6F76" font-size="12.5">Himmat Sandhu  ·  Preparing 50%</text></g><g class="pct_sardaari3"><text x="796" y="663" fill="#6B6F76" font-size="12.5">Himmat Sandhu  ·  Preparing 75%</text></g></g>
+      <g class="dl_sardaari"><rect x="740" y="628" width="40" height="40" rx="9" fill="#FFFFFF" fill-opacity="0.06"/>
+        <g class="spin"><circle cx="760" cy="648" r="11" fill="none" stroke="#FF8A3D" stroke-width="3" stroke-linecap="round" stroke-dasharray="22 60"/></g>
+        <text x="796" y="645" fill="#9A9EA5" font-size="15" font-weight="600">Sardaari</text>
+        <text x="796" y="663" fill="#FF8A3D" font-size="12.5">Himmat Sandhu  ·  Downloading from Spotify</text></g>
+      <g class="wait_sardaari"><rect x="740" y="628" width="40" height="40" rx="9" fill="#FFFFFF" fill-opacity="0.06"/>
+        <text x="796" y="645" fill="#9A9EA5" font-size="15" font-weight="600">Sardaari</text>
+        <text x="796" y="663" fill="#6B6F76" font-size="12.5">Himmat Sandhu  ·  Waiting to prepare</text></g>
+    </g>
+  </g>
+</svg>
