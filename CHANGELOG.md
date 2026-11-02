@@ -34,7 +34,9 @@ like a DJ, worked out fresh for each pair of songs.
 ### Fixes
 
 - The old song's last word is no longer sung twice during a mix
-- Transition effects ease in gently and stay at half strength or less, so the old song never lurches or drags on
+- Transition effects ease in gently, start a second after the new song arrives and stay at half strength or less, so the old song never lurches or drags on
+- Mixes are shorter and fit each song: six bars of its beat, between 8 and 14 seconds
+- Spotify login, reading and downloads start in about 2 seconds instead of 20
 - When Spotify pauses requests for the day, Knob says so and shows when to try again, instead of waiting silently
 - The progress bar in the panel's mini player can be dragged to move through the song
 - Spotify login finishes as soon as you agree in the browser and brings Knob back to the front
