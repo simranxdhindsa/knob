@@ -1,11 +1,13 @@
 import SwiftUI
 
-/// A song's embedded cover art with rounded corners, or a dark screen-style tile with an orange
-/// note when the file carries none. `lit` adds the accent glow used for the playing song.
+/// A song's embedded cover art with rounded corners, or, when the file carries none, a cover
+/// drawn for it (GeneratedArtwork) that drifts gently while `animated`. `lit` adds the accent
+/// glow used for the playing song.
 struct AlbumArtwork: View {
     let url: URL?
     var size: CGFloat
     var lit = false
+    var animated = false
 
     @State private var image: NSImage?
 
@@ -14,6 +16,8 @@ struct AlbumArtwork: View {
         ZStack {
             if let image {
                 Image(nsImage: image).resizable().scaledToFill()
+            } else if let url {
+                GeneratedArtwork(seed: url.deletingPathExtension().lastPathComponent, animated: animated)
             } else {
                 LinearGradient(colors: [Screen.top, Screen.bottom], startPoint: .topLeading, endPoint: .bottomTrailing)
                 Image(systemName: "music.note")

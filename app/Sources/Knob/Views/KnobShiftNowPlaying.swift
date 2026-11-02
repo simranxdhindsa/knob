@@ -12,11 +12,11 @@ struct KnobShiftNowPlaying: View {
         VStack(spacing: compact ? 14 : 18) {
             if compact {
                 HStack(spacing: 14) {
-                    AlbumArtwork(url: model.nowPlaying?.url, size: 86, lit: model.mixState == .mixing)
+                    KnobShiftCover(model: model, clock: model.clock, size: 86, lit: model.mixState == .mixing, animated: model.isPlaying)
                     details(alignment: .leading)
                 }
             } else {
-                AlbumArtwork(url: model.nowPlaying?.url, size: 188, lit: model.mixState == .mixing)
+                KnobShiftCover(model: model, clock: model.clock, size: 188, lit: model.mixState == .mixing, animated: model.isPlaying)
                     .padding(.top, 4)
                 details(alignment: .center)
             }

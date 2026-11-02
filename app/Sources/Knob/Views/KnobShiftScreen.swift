@@ -23,7 +23,13 @@ struct KnobShiftScreen: View {
 
     private var header: some View {
         HStack(alignment: .top, spacing: 12) {
-            AlbumArtwork(url: track?.url, size: 52, lit: model.mixState == .mixing)
+            Group {
+                if model.nowPlaying != nil {
+                    KnobShiftCover(model: model, clock: model.clock, size: 52, lit: model.mixState == .mixing, animated: model.isPlaying)
+                } else {
+                    AlbumArtwork(url: track?.url, size: 52)
+                }
+            }
             VStack(alignment: .leading, spacing: 3) {
                 Text(track?.name ?? "Nothing playing")
                     .font(.system(size: 14, weight: .bold))

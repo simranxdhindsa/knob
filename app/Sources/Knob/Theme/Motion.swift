@@ -16,6 +16,8 @@ enum Motion {
     static let segment = Animation.timingCurve(0.2, 0, 0, 1, duration: 0.35)
     /// Slow breathing glow for something live, like the KNOBMIX badge during a mix.
     static let pulse = Animation.easeInOut(duration: 0.9).repeatForever(autoreverses: true)
+    /// The slow drift of a generated cover's shapes while its song plays.
+    static let artworkDrift = Animation.easeInOut(duration: 9).repeatForever(autoreverses: true)
 
     /// 21st.dev Switch: 250ms on, 125ms off, cubic-bezier(.26, .75, .38, .45).
     static func switchThumb(turningOn: Bool) -> Animation {
