@@ -4,9 +4,12 @@ import SwiftUI
 /// Wordmark, the power switch and the app menu.
 struct HeaderBar: View {
     @ObservedObject var model: KnobModel
+    /// About Knob: the panel shows it in place; elsewhere it opens its own window.
+    var onAbout: () -> Void = { AboutWindow.show() }
     @AppStorage(PersistKey.showInDock.rawValue) private var showInDock = true
     @ObservedObject private var updater = Updater.shared
     @Environment(\.colorScheme) private var scheme
+    @State private var menuOpen = false
 
     var body: some View {
         let p = Palette.of(scheme)
@@ -27,15 +30,7 @@ struct HeaderBar: View {
             Spacer(minLength: 6)
             PowerSwitch(isOn: Binding(get: { model.powerOn }, set: { model.userSetPower($0) }), label: "Sound effects")
                 .disabled(model.starting)
-            Menu {
-                Button("About Knob") { AboutWindow.show() }
-                if Updater.shared.isAvailable {
-                    Button("Check for Updates…") { Updater.shared.checkForUpdates() }
-                }
-                Toggle("Show in Dock", isOn: $showInDock)
-                Divider()
-                Button("Quit Knob") { model.quit() }.keyboardShortcut("q")
-            } label: {
+            Button { menuOpen.toggle() } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(p.label)
@@ -43,12 +38,40 @@ struct HeaderBar: View {
                     .background(RecessedPill())
                     .contentShape(Rectangle())
             }
-            .menuStyle(.button)
             .buttonStyle(.plain)
-            .menuIndicator(.hidden)
             .accessibilityLabel("Knob menu")
+            .popover(isPresented: $menuOpen, arrowEdge: .bottom) { knobMenu }
             .onChange(of: showInDock) { _, shown in DockPresence.apply(shown) }
         }
+    }
+
+    /// The ••• menu as a DropdownCard: a native Menu here did not open on a click in the
+    /// installed app.
+    var knobMenu: some View {
+        DropdownCard(width: 210) {
+            DropdownRow(title: "About Knob", action: { pick(onAbout) }) {
+                Image(systemName: "info.circle").font(.system(size: 13))
+            }
+            if Updater.shared.isAvailable {
+                DropdownRow(title: "Check for Updates…", action: { pick { Updater.shared.checkForUpdates() } }) {
+                    Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 12))
+                }
+            }
+            DropdownRow(title: "Show in Dock", trailing: showInDock ? "✓" : nil, action: { showInDock.toggle() }) {
+                Image(systemName: "dock.rectangle").font(.system(size: 12))
+            }
+            DropdownDivider()
+            DropdownRow(title: "Quit Knob", trailing: "⌘Q", action: { pick { model.quit() } }) {
+                Image(systemName: "power").font(.system(size: 12, weight: .semibold))
+            }
+        }
+        .environment(\.colorScheme, scheme)
+    }
+
+    /// Closes the card first, so a window it opens is not hidden behind the panel.
+    private func pick(_ action: @escaping () -> Void) {
+        menuOpen = false
+        DispatchQueue.main.async(execute: action)
     }
 
     static var version: String {

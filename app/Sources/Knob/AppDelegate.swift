@@ -10,11 +10,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DockPresence.apply()
     }
 
-    /// Clicking the Dock icon opens the Knob panel from the menu bar.
+    /// Clicking the Dock icon brings back Knob's windows (the KnobShift player, About) when one is
+    /// minimised or open, as every Mac app does; with none, it opens the Knob panel from the
+    /// menu bar.
     @MainActor func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        NSApp.activate(ignoringOtherApps: true)
+        let windows = NSApp.windows.filter {
+            $0.canBecomeMain && !$0.className.contains("StatusBar") && ($0.isVisible || $0.isMiniaturized)
+        }
+        if !windows.isEmpty {
+            for window in windows where window.isMiniaturized { window.deminiaturize(nil) }
+            windows.first?.makeKeyAndOrderFront(nil)
+            return false
+        }
         // Activate first, then press the menu bar button on the next beat: pressing it while the
         // app is still becoming active let the panel open and close again straight away.
-        NSApp.activate(ignoringOtherApps: true)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { StatusItemPanel.open() }
         return false
     }

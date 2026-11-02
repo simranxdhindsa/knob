@@ -64,6 +64,11 @@ enum Snapshot {
             spotify.showSpotifyPickerForSnapshot()
             render(KnobShiftSpotifySheet(model: spotify, showsForm: true).environment(\.colorScheme, .dark), scheme: .dark,
                    to: folder.appendingPathComponent("knobshift-spotify-picker.png"))
+            for (name, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {
+                render(HeaderBar(model: model).knobMenu.padding(16).background(Palette.of(scheme).panelBottom)
+                        .environment(\.colorScheme, scheme), scheme: scheme,
+                       to: folder.appendingPathComponent("knob-menu-\(name).png"))
+            }
             render(KnobShiftAddMusicCard(onMac: {}, onSpotify: {}).padding(16)
                     .background(Screen.bottom).environment(\.colorScheme, .dark), scheme: .dark,
                    to: folder.appendingPathComponent("knobshift-add-music.png"))

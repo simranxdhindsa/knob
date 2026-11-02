@@ -1,3 +1,4 @@
+<a id="top"></a>
 <div align="center">
 
 <img src="docs/images/banner.svg" alt="Knob: Turn · Tune · Flow" width="100%" />
@@ -71,35 +72,35 @@ KnobShift is a music player inside Knob for the songs on your Mac. Add your musi
 <td width="50%" valign="top">
 
 ### 🎤 Singers never clash
-KnobShift listens to every song on your Mac first: where the voice starts and ends, where the drums come in, and where the music breaks between sections. The old song finishes its last line and plays out its ending while the new song's intro comes in quietly underneath. **The new verse lands just as the old song leaves.**
+KnobShift studies every song: where the voice starts and ends, where drums come in, where the music breaks. The old song finishes its last line and plays out its ending under the new intro. **The new verse lands as the old one leaves.**
 
 ### ✂️ Voice and music, separated
-A small on-device AI model splits the next song's voice from its music. While the old singer is still singing, only the new song's **beats and music** come in; its voice joins the moment it takes over.
+On-device AI splits the next song's voice from its music. Only its **beats and music** come in while the old singer sings. Its voice joins when it takes over.
 
 ### 🥁 Beats in step
-Songs close in tempo glide to each other's speed with the **beats locked together**, pitch kept natural. Songs far apart keep their own speed, just like Apple Music. The bass swaps over on a bar line, so the two kick drums never fight.
+Close tempos glide together with **beats locked** and natural pitch. Far apart songs keep their own speed, like Apple Music. The bass swaps on a bar line, so kick drums never fight.
 
 ### 🎛️ A different transition every time
-KnobShift picks a transition for **each pair of songs**:
-- When the beats can lock, it's an **Underwater fade**, a **Lofi dip** or a **Tape slowdown**.
-- When the tempos are far apart, it's an **Echo out** or a **Reverb wash**.
+One **per pair of songs**:
+- Beats can lock: **Underwater fade**, **Lofi dip**, **Tape slowdown**.
+- Tempos far apart: **Echo out**, **Reverb wash**.
 
-Every effect rises until the old verse ends and falls away by the handoff. Each way is timed to the song and never shorter than four seconds, and the effect breathes gently on the beat.
+Each waits a second, rises to half strength where the old verse ends, falls away two bars later and breathes on the beat. Mixes last 8 to 14 seconds, set by each song's tempo.
 
 </td>
 <td valign="top">
 
 ### ⚡ KnobMix Now
-Want the next song sooner? Press **KnobMix Now**. KnobShift waits a few seconds for the next phrase or break in the music, and lets the singer finish the line, so the mix still lands on the beat.
+Want the next song sooner? Press **KnobMix Now**. It waits a few seconds for the next phrase or break and lets the singer finish the line, so the mix lands on the beat.
 
 ### 🎙️ Voices with their own moves
-During a tape slowdown, **only the old singer's voice** winds down, over the new song's beat. The new voice arrives through a short reverb that clears as the verse begins.
+The **old voice leaves before the new one sings**, so two singers are never heard together. The new voice arrives through a short reverb that clears as the verse begins.
 
 ### 🔀 Shuffle and reorder
-Shuffle shows the new order right in the queue, so you always see what plays next. Press it again to get your own order back. **Drag songs** to rearrange, with shuffle on or off.
+Shuffle shows the new order in the queue. Press again for your own order. **Drag songs** to rearrange, shuffle on or off.
 
 ### 📥 Instant queue
-Add many songs at once. They appear straight away with a small ring showing each one being prepared, and a Retry if a file can't be read. Prepared songs open instantly next time.
+Add many songs at once. Each shows a ring while prepared, with a Retry if a file can't be read. Prepared songs open instantly next time.
 
 </td>
 </tr>
@@ -118,13 +119,13 @@ Add many songs at once. They appear straight away with a small ring showing each
 <td width="50%" valign="top">
 
 ### 🔊 Volume for every output
-HDMI, DisplayPort, USB, Bluetooth or built-in speakers. The **volume keys** and the on-screen HUD work again, and the big knob follows them with a spring while its ring of marks lights up from MIN to MAX.
+HDMI, DisplayPort, USB, Bluetooth, built-in. **Volume keys** and HUD work again, and the knob follows with a spring, marks lighting MIN to MAX.
 
 </td>
 <td width="50%" valign="top">
 
 ### 🎚️ Five effects
-**Clarity, Ambience, Surround Sound, Dynamic Boost and Bass Boost**, each on its own realistic knob, ringed by **Marshall-style indicator marks** that light up in orange, one by one, as you turn it up. Double-click any knob to reset it.
+**Clarity, Ambience, Surround Sound, Dynamic Boost, Bass Boost**, each on its own knob with **Marshall-style marks** lighting orange as you turn up. Double-click resets.
 
 </td>
 </tr>
@@ -132,13 +133,13 @@ HDMI, DisplayPort, USB, Bluetooth or built-in speakers. The **volume keys** and 
 <td valign="top">
 
 ### 📊 10-band equalizer
-Hardware faders with a centre detent, drawn over a **live spectrum analyser** that moves with your music.
+Faders with a centre detent over a **live spectrum analyser**.
 
 </td>
 <td valign="top">
 
 ### 🎼 Presets
-General, Music, Movies, Gaming, Voice, Bass Boost, Streaming Video and more, with **previous and next** buttons for quick flicking.
+General, Music, Movies, Gaming, Voice, Bass Boost, Streaming Video and more, with **previous and next** buttons.
 
 </td>
 </tr>
@@ -146,13 +147,13 @@ General, Music, Movies, Gaming, Voice, Bass Boost, Streaming Video and more, wit
 <td valign="top">
 
 ### ⏻ One switch
-**ON** makes Knob your output and turns the effects on. **OFF** bypasses the effects instantly. Nothing restarts and nothing is lost.
+**ON** makes Knob your output with effects on. **OFF** bypasses them instantly. Nothing restarts or is lost.
 
 </td>
 <td valign="top">
 
 ### 💾 Remembers your sound
-Every knob, fader and preset is saved a moment after you change it and comes back the next time Knob starts.
+Knobs, faders and presets save moments after a change and return at start.
 
 </td>
 </tr>
@@ -160,13 +161,13 @@ Every knob, fader and preset is saved a moment after you change it and comes bac
 <td valign="top">
 
 ### 📈 Live meters
-Left and right level meters on a real dB scale, and an orange glow above the screen that **breathes with the music**.
+Left and right dB meters, and an orange glow that **breathes with the music**.
 
 </td>
 <td valign="top">
 
 ### 🛡️ Safe by design
-A supervisor hands your speakers back if the engine ever stops, and Knob never leaves them stuck at full volume.
+A supervisor restores your speakers if the engine stops. Never stuck at full volume.
 
 </td>
 </tr>
@@ -174,13 +175,13 @@ A supervisor hands your speakers back if the engine ever stops, and Knob never l
 <td valign="top">
 
 ### 💡 Indicator marks
-Eleven marks from 0 to 10 circle every knob, like the dials on a guitar amp. They glow as you turn up and stay dark when switched off, in light and dark mode.
+Eleven marks, 0 to 10, around every knob like a guitar amp. They glow as you turn up and stay dark when off, in light and dark mode.
 
 </td>
 <td valign="top">
 
 ### 📳 Haptic feedback
-On a MacBook or Magic Trackpad you **feel the knob turn**: a firm tick for each notch, and the strongest click at minimum, maximum and the fader's centre.
+On a MacBook or Magic Trackpad you **feel the knob turn**: a tick per notch, the strongest click at minimum, maximum and fader centre.
 
 </td>
 </tr>
@@ -350,6 +351,6 @@ Free software under the [GNU Affero General Public License v3](LICENSE). See [`N
 
 <sub>Built by <a href="https://github.com/simranxdhindsa">Simran Dhindsa</a> · <a href="https://www.linkedin.com/in/simran-dhindsa-0aa7992b9/">LinkedIn</a></sub>
 
-<sub><a href="#">⬆ Back to top</a></sub>
+<sub><a href="#top">⬆ Back to top</a></sub>
 
 </div>

@@ -1,11 +1,7 @@
 import SwiftUI
 
-/// ADD MUSIC: a plain button that opens a small dropdown card with an icon on each row, songs on
-/// this Mac (the Apple logo) and a Spotify playlist (Spotify's mark). The look follows the
-/// 21st.dev Dropdown Menu by originui (menu with icons): a rounded card, an icon and a label per
-/// row, a soft highlight under the pointer. A native Menu here did not open on a mouse click in
-/// the installed app, so the button opens the card itself, in a popover that closes on a click
-/// outside or Escape.
+/// ADD MUSIC: a plain button that opens a DropdownCard with songs on this Mac (the Apple logo)
+/// and a Spotify playlist (Spotify's mark).
 struct KnobShiftAddMusic: View {
     var spotify: Bool
     var onMac: () -> Void
@@ -38,55 +34,22 @@ struct KnobShiftAddMusic: View {
     }
 }
 
-/// The dropdown card itself, also drawn on its own for snapshots.
+/// The dropdown card itself, also drawn on its own for snapshots. Always dark, like the
+/// KnobShift screen it opens from.
 struct KnobShiftAddMusicCard: View {
     var onMac: () -> Void
     var onSpotify: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            AddMusicRow(title: "Songs on your Mac", detail: "Music files from Finder", action: onMac) {
-                Image(systemName: "apple.logo")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Screen.text)
+        DropdownCard(width: 240) {
+            DropdownRow(title: "Songs on your Mac", detail: "Music files from Finder", action: onMac) {
+                Image(systemName: "apple.logo").font(.system(size: 14, weight: .medium))
             }
-            AddMusicRow(title: "Spotify playlist", detail: "Playlists, albums or Liked Songs", action: onSpotify) {
+            DropdownRow(title: "Spotify playlist", detail: "Playlists, albums or Liked Songs", action: onSpotify) {
                 SpotifyMark().frame(width: 16, height: 16)
             }
         }
-        .padding(6)
-        .frame(width: 240)
-        .background(LinearGradient(colors: [Screen.top, Screen.bottom], startPoint: .top, endPoint: .bottom))
         .environment(\.colorScheme, .dark)
-    }
-}
-
-/// One row of the card: icon, name and a short line under it, highlighted under the pointer.
-private struct AddMusicRow<Icon: View>: View {
-    let title: String
-    let detail: String
-    let action: () -> Void
-    @ViewBuilder let icon: () -> Icon
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                icon().frame(width: 22, height: 22)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(Screen.text)
-                    Text(detail).font(.system(size: 10)).foregroundStyle(Screen.textTertiary)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(hovering ? Screen.highlight : .clear))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .animation(Motion.snappy, value: hovering)
     }
 }
 
