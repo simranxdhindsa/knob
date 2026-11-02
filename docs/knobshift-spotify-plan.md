@@ -1,6 +1,6 @@
 # KnobShift and Spotify playlists: plan
 
-Status: proposed, not built. Written 2026-11-02.
+Status: built 2026-11-02, spotDL bundled (the user's choice). The approved build plan differs from sections 2 and 9 here: spotDL ships inside Knob.app, removed playlists are restorable for 30 days, and Spotify login is included. Remaining before release: fetch and pin the helpers, then the live tests in section 10.
 
 ## 1. What the user gets
 

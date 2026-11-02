@@ -316,3 +316,7 @@ KnobShift-mixable.
 - Repeated play, stop, remove, and playlist loops
 - Sleep/wake and output-device changes during a transition
 - Listen for clicks, clipping, a volume dip, late starts, or skipped material
+
+## Spotify playlists
+
+See [knobshift-spotify-plan.md](knobshift-spotify-plan.md): spotDL (bundled, fetched by `packaging/fetch-spotdl.sh`) reads a Spotify list and downloads its songs into `~/Music/KnobShift/Spotify/<playlist>/`, one file per song named with its Spotify id; KnobShift queues them in Spotify's order, names them from their tags, and prepares and mixes them like any song. Code: `State/KnobShiftSpotDL.swift`, `KnobShiftPlaylists.swift`, `KnobShiftModel+Spotify.swift`, `KnobShiftTags.swift`, `Views/KnobShiftSpotifySheet.swift`, `KnobShiftPlaylistRows.swift`. Checks: `--knobshift-spotify-check selftest` (offline) and `--knobshift-spotify-check LINK`.

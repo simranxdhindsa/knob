@@ -34,8 +34,10 @@ enum KnobShiftPlaylists {
 
     static let keepRemovedFor: TimeInterval = 30 * 24 * 60 * 60
 
+    /// ~/Music/KnobShift/Spotify; KNOB_SPOTIFY_ROOT moves it for the command line checks.
     static var root: URL {
-        FileManager.default.homeDirectoryForCurrentUser
+        if let path = ProcessInfo.processInfo.environment["KNOB_SPOTIFY_ROOT"] { return URL(fileURLWithPath: path, isDirectory: true) }
+        return FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Music/KnobShift/Spotify", isDirectory: true)
     }
     static var removedRoot: URL { root.appendingPathComponent(".Removed", isDirectory: true) }
