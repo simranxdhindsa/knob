@@ -8,9 +8,6 @@ struct KnobShiftNowPlaying: View {
     @ObservedObject var model: KnobShiftModel
     var compact: Bool
 
-    @State private var scrubPosition: TimeInterval = 0
-    @State private var isScrubbing = false
-
     var body: some View {
         VStack(spacing: compact ? 14 : 18) {
             if compact {
@@ -28,8 +25,6 @@ struct KnobShiftNowPlaying: View {
             mixNowButton
         }
         .screenCard(radius: 20, padding: compact ? 16 : 22)
-        .onAppear { scrubPosition = model.playbackTime }
-        .onChange(of: model.playbackTime) { _, time in if !isScrubbing { scrubPosition = time } }
         .animation(Motion.gentle, value: model.mixState)
     }
 
@@ -73,26 +68,7 @@ struct KnobShiftNowPlaying: View {
             .shadow(color: lit ? Palette.accentGlow.opacity(0.6) : .clear, radius: 5)
     }
 
-    /// The native slider with elapsed and remaining time.
-    private var timeline: some View {
-        let duration = max(model.playbackDuration, 1)
-        return VStack(spacing: 4) {
-            Slider(value: $scrubPosition, in: 0...duration, onEditingChanged: { editing in
-                isScrubbing = editing
-                if !editing { model.seek(to: scrubPosition) }
-            })
-            .tint(Palette.accent)
-            .disabled(model.nowPlaying == nil)
-            .accessibilityLabel("Position in song")
-            HStack {
-                Text(Self.clock(scrubPosition))
-                Spacer()
-                Text(Self.clock(max(0, model.playbackDuration - scrubPosition)) + " left")
-            }
-            .font(.system(size: 10, weight: .semibold).monospacedDigit())
-            .foregroundStyle(Screen.textTertiary)
-        }
-    }
+    private var timeline: some View { KnobShiftTimeline(model: model, clock: model.clock) }
 
     private var transport: some View {
         HStack(spacing: compact ? 26 : 34) {

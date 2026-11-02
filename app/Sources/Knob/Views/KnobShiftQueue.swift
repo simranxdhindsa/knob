@@ -73,7 +73,9 @@ struct KnobShiftQueue: View {
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
-                .animation(Motion.gentle, value: model.tracks.map(\.id))
+                // Shuffle animates; mapping every song's id on each change was slow with
+                // thousands of songs.
+                .animation(Motion.gentle, value: model.isShuffled)
             }
             if let notice = model.notice {
                 Text(notice).font(.system(size: 10)).foregroundStyle(Palette.accent).lineLimit(2)
@@ -86,21 +88,27 @@ struct KnobShiftQueue: View {
     /// The header looks the same either way, so it never changes size.
     @ViewBuilder private var addMusic: some View {
         if model.spotifyAvailable {
-            HStack(spacing: 4) {
+            // Styled like PillMenu: the button menu style keeps the label's own small font (the
+            // borderless style drew it at the system menu size, bigger than the rest).
+            Menu {
+                Button("Songs on your Mac", action: onAdd)
+                Button("Spotify playlist", action: onSpotify)
+            } label: {
+                Text("ADD MUSIC")
+                    .font(.system(size: 9, weight: .bold)).tracking(0.6)
+                    .foregroundStyle(Palette.accent)
+                    .padding(.leading, 13)
+                    .frame(height: 20)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .overlay(alignment: .leading) {
                 Image(systemName: "plus").font(.system(size: 9, weight: .bold)).foregroundStyle(Palette.accent)
                     .allowsHitTesting(false)
-                Menu {
-                    Button("Songs on your Mac", action: onAdd)
-                    Button("Spotify playlist", action: onSpotify)
-                } label: {
-                    Text("ADD MUSIC")
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .font(.system(size: 9, weight: .bold)).tracking(0.6)
-                .foregroundStyle(Palette.accent)
-                .tint(Palette.accent)
+                    .accessibilityHidden(true)
             }
         } else {
             Button(action: onAdd) {

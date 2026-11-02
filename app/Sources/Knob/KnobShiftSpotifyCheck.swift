@@ -13,7 +13,10 @@ enum KnobShiftSpotifyCheck {
         app.setActivationPolicy(.prohibited)
         Task { @MainActor in
             if arguments.first == "selftest" {
+                await unitTests()
                 await selfTest(files: Array(arguments.dropFirst()))
+            } else if arguments.first == "uat" {
+                await uat(count: Int(arguments.dropFirst().first ?? "") ?? 40)
             } else if let link = arguments.first {
                 await readList(link)
             }
@@ -89,7 +92,7 @@ enum KnobShiftSpotifyCheck {
             exit(1)
         }
         do {
-            let songs = try await KnobShiftSpotDL.shared.list(link, userAuth: KnobShiftSpotDL.isLoggedIn)
+            let songs = try await KnobShiftSpotDL.shared.list(link, userAuth: KnobShiftSpotDL.isLoggedIn).songs
             for song in songs {
                 print(String(format: "  %3d  %@  by %@  (%@)", song.list_position ?? 0, song.name, song.artists.joined(separator: ", "), song.song_id))
             }
@@ -103,9 +106,9 @@ enum KnobShiftSpotifyCheck {
         }
     }
 
-    private static var failures = 0
+    static var failures = 0
 
-    private static func expect(_ condition: Bool, _ what: String) {
+    static func expect(_ condition: Bool, _ what: String) {
         print("  \(condition ? "ok  " : "FAIL") \(what)")
         if !condition { failures += 1 }
     }

@@ -13,12 +13,16 @@ enum KnobShiftLog {
     private static let writer = Writer()
 
     /// 12-hour with AM/PM, as everywhere in Knob, plus milliseconds for envelope timing.
-    static func stamp(_ date: Date) -> String {
+    /// One formatter for every line: making a new one per line was slow when spotDL prints
+    /// thousands of them. DateFormatter is safe to share across threads.
+    private static let formatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "MMM d, h:mm:ss.SSS a"
-        return formatter.string(from: date)
-    }
+        return formatter
+    }()
+
+    static func stamp(_ date: Date) -> String { formatter.string(from: date) }
 
     /// Sections become heading lines; every other entry lines up in time, stage, message columns.
     static func append(stage: String, message: String, at date: Date = Date()) {

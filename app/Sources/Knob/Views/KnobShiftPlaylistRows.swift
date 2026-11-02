@@ -42,23 +42,43 @@ struct KnobShiftPlaylistRows: View {
 
     private func row(_ playlist: KnobShiftPlaylist) -> some View {
         let count = model.songCount(in: playlist)
-        let downloading = model.isDownloading(playlist)
+        let progress = model.spotifyProgress[playlist.id]
+        let failed = progress == nil ? model.failedCount(in: playlist) : 0
         return HStack(spacing: 10) {
             Image(systemName: icon(playlist.kind)).font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.accent)
                 .frame(width: 16)
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(playlist.name).font(.system(size: 11, weight: .semibold)).foregroundStyle(Screen.text).lineLimit(1)
-                Text(downloading ? "Downloading, \(count.ready) of \(count.total) ready" : "\(count.total) song\(count.total == 1 ? "" : "s") from Spotify")
-                    .font(.system(size: 9.5)).foregroundStyle(downloading ? Palette.accent : Screen.textTertiary).lineLimit(1)
+                if let progress {
+                    KnobShiftImportBar(progress: progress, compact: true)
+                } else {
+                    Text(failed > 0 ? "\(count.ready) of \(count.total) ready, \(failed) not downloaded" : "\(count.total) song\(count.total == 1 ? "" : "s") from Spotify")
+                        .font(.system(size: 9.5)).foregroundStyle(Screen.textTertiary).lineLimit(1)
+                }
             }
             Spacer(minLength: 4)
-            Button { Task { await model.updatePlaylist(playlist) } } label: {
-                Image(systemName: "arrow.clockwise").font(.system(size: 10, weight: .bold))
+            if progress != nil {
+                Button { model.cancelDownload(playlist) } label: {
+                    Image(systemName: "stop.fill").font(.system(size: 9, weight: .bold))
+                }
+                .buttonStyle(.plain).foregroundStyle(Screen.textSecondary)
+                .help("Stop downloading")
+                .accessibilityLabel("Stop downloading \(playlist.name)")
+            } else {
+                if failed > 0 {
+                    Button("RETRY") { model.retryFailed(playlist) }
+                        .buttonStyle(.plain).font(.system(size: 9, weight: .bold)).foregroundStyle(Palette.accent)
+                        .help("Try the songs that did not download again")
+                        .accessibilityLabel("Retry \(failed) songs of \(playlist.name)")
+                }
+                Button { Task { await model.updatePlaylist(playlist) } } label: {
+                    Image(systemName: "arrow.clockwise").font(.system(size: 10, weight: .bold))
+                }
+                .buttonStyle(.plain).foregroundStyle(Screen.textSecondary)
+                .disabled(model.spotifyReadJob != nil)
+                .help("Update from Spotify and pick songs")
+                .accessibilityLabel("Update \(playlist.name) from Spotify")
             }
-            .buttonStyle(.plain).foregroundStyle(Screen.textSecondary)
-            .disabled(downloading || model.spotifyBusy)
-            .help("Update from Spotify")
-            .accessibilityLabel("Update \(playlist.name) from Spotify")
             Button { confirmRemove = playlist } label: {
                 Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
             }

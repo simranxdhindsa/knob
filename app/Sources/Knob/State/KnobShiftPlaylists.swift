@@ -15,6 +15,8 @@ struct KnobShiftPlaylist: Codable, Identifiable, Equatable {
     /// Song ids in Spotify's order, as last read.
     var spotifyOrder: [String]
     let addedAt: Date
+    /// Songs the user left unticked, so Update playlist does not tick them again.
+    var skipped: [String]? = nil
 }
 
 /// A removed playlist, kept for 30 days so it can be restored with its files.
@@ -142,11 +144,18 @@ enum KnobShiftPlaylists {
     }
 
     /// Which playlist and Spotify song a file belongs to, when it sits in a playlist folder.
-    static func origin(of url: URL) -> (playlistId: String?, spotifyId: String)? {
+    /// `playlists` saves reading the index from disk once per song.
+    static func origin(of url: URL, in playlists: [KnobShiftPlaylist]? = nil) -> (playlistId: String?, spotifyId: String)? {
         guard let id = spotifyId(inFileName: url.deletingPathExtension().lastPathComponent) else { return nil }
         let folder = url.deletingLastPathComponent().lastPathComponent
-        let playlist = load().playlists.first { $0.folderName == folder }
+        let playlist = (playlists ?? load().playlists).first { $0.folderName == folder }
         return (playlist?.id, id)
+    }
+
+    /// Where a playlist keeps its chosen songs as spotDL describes them, so downloads can
+    /// continue after a relaunch without reading Spotify again.
+    static func songsFile(for playlist: KnobShiftPlaylist) -> URL {
+        folder(for: playlist).appendingPathComponent("knobshift-songs.spotdl")
     }
 
     /// "07 Title - Artists [id]" (how Spotify songs are saved) without the position and the id.
