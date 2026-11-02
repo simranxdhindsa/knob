@@ -14,6 +14,7 @@ installed Knob ─▶ releases/latest/download/appcast.xml (at launch, then ever
 ```
 
 - **Version:** `VERSION` holds `major.minor`; the last part and the build number are the commit count, so every release is newer than the one before. Bump `VERSION` by hand for a big release.
+- **Release notes** come from the version's section of `CHANGELOG.md` (`## 2.0`): `### New features` first, then `### Fixes`, written for users. They are never built from commit messages. Update that section before pushing to `main`; without one, the notes say only "Small improvements and fixes."
 - **Docs-only pushes** (`*.md`, `docs/`, `.claude/`, `LICENSE`) don't release.
 - **Driver changes:** if `driver/` changed since the previous release tag, the update is the full `Knob-Install.pkg` (`sparkle:installationType="package"`). Sparkle quits Knob, macOS asks for the password once, and the installer replaces app and driver. **This path has not been tested on a real Mac yet**: check it with the user on the first release that changes the driver.
 - **App-only updates** install silently: `postinstall` gives the user ownership of `/Applications/Knob.app`, so no password is needed.

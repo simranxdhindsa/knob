@@ -1,7 +1,7 @@
 # Changelog
 
-What's new in each version of Knob, written for people who use it. Knob updates itself, so
-installed copies get every version below on their own.
+What's new in each version of Knob, written for people who use it: new features first, then
+fixes. Knob updates itself, so installed copies get every version below on their own.
 
 ## Coming next
 
@@ -11,6 +11,8 @@ installed copies get every version below on their own.
 
 Knob 2.0 brings KnobShift: a music player inside Knob that mixes every song into the next one
 like a DJ, worked out fresh for each pair of songs.
+
+### New features
 
 - KnobShift plays the songs on your Mac and mixes each one into the next, the way Apple Music's AutoMix does
 - It listens to every song first, finding where the voice starts and ends, where the drums come in and where the music breaks, so two singers never clash
@@ -27,6 +29,14 @@ like a DJ, worked out fresh for each pair of songs.
 - Songs without cover art get a cover of their own, and during a mix the cover fades into the next song's
 - The KnobShift tab in Knob's panel is a mini player with progress, previous, play and next, plus a button that opens the full player
 - KnobShift stays smooth with thousands of songs in the queue
+
+### Fixes
+
+- The progress bar in the panel's mini player can be dragged to move through the song
+- Spotify login finishes as soon as you agree in the browser and brings Knob back to the front
+- A song is never added while its download is still being written, and stopping a download leaves nothing running in the background
+- The KnobShift window no longer slows down while a song plays with a long queue
+- The Add from Spotify window no longer bounces
 
 ## 0.1
 
