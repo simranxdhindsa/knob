@@ -297,6 +297,7 @@ knob/
 
 | | Doc | Covers |
 |---|---|---|
+| 🆕 | [`CHANGELOG.md`](./CHANGELOG.md) | What's new in each version of Knob |
 | 🎧 | [`knobshift.md`](./docs/knobshift.md) | How KnobShift listens, plans and mixes, with measurements against Apple Music |
 | 🧪 | [`testing.md`](./docs/testing.md) | Full test suite and the bit-identical sound check |
 | ✅ | [`uat-testing.md`](./docs/uat-testing.md) | How UI is verified: like a real user, not by DOM counts |
