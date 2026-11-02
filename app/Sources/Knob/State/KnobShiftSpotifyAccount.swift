@@ -83,13 +83,70 @@ enum KnobShiftSpotifyAccount {
         guard let paused, paused > Date() else { return "Spotify is busy. Try again in a minute." }
         let clock = DateFormatter()
         clock.dateFormat = Calendar.current.isDateInToday(paused) ? "h:mm a" : "EEEE h:mm a"
-        return "Spotify has paused requests from Knob for now. Try again after \(clock.string(from: paused))."
+        let when = "Try again after \(clock.string(from: paused))"
+        return hasOwnKey ? "Spotify has paused requests from your key. \(when)."
+            : "Spotify has paused the shared key for now. \(when), or add your own key below."
+    }
+
+    // MARK: Your own key
+
+    /// spotDL's own Spotify key, shared by everyone who uses spotDL.
+    private static let sharedClientId = "5f573c9620494bae87890c0f08a60293"
+
+    /// True when spotDL uses a key of the person's own instead of the shared one.
+    static var hasOwnKey: Bool {
+        guard let id = config()["client_id"] as? String else { return false }
+        return !id.isEmpty && id != sharedClientId
+    }
+
+    enum KeyProblem: Error { case wrong, offline, failed }
+
+    /// Checks a Client ID and secret with Spotify, then saves them where spotDL reads them.
+    /// Spotify answers 400 or 401 for a key that is not right.
+    static func saveOwnKey(id: String, secret: String, session: URLSession = .shared) async throws {
+        let id = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        let secret = secret.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard id.count == 32, secret.count == 32, id.allSatisfy(\.isHexDigit), secret.allSatisfy(\.isHexDigit) else {
+            throw KeyProblem.wrong
+        }
+        do {
+            _ = try await appToken(session: session, id: id, secret: secret)
+        } catch Problem.offline {
+            throw KeyProblem.offline
+        } catch Problem.loggedOut {
+            throw KeyProblem.wrong
+        } catch {
+            throw KeyProblem.failed
+        }
+        try writeKey(id: id, secret: secret)
+    }
+
+    /// Goes back to the shared key: spotDL falls back to its own when the file names none.
+    static func removeOwnKey() throws {
+        try writeKey(id: nil, secret: nil)
+    }
+
+    private static func config() -> [String: Any] {
+        (try? JSONSerialization.jsonObject(with: Data(contentsOf: configURL)) as? [String: Any]) ?? [:]
+    }
+
+    /// Updates only the key in spotDL's settings, keeping everything else as it was. A new
+    /// file gets load_config, without which spotDL ignores it.
+    private static func writeKey(id: String?, secret: String?) throws {
+        var settings = config()
+        if settings.isEmpty { settings["load_config"] = true }
+        settings["client_id"] = id
+        settings["client_secret"] = secret
+        let data = try JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys])
+        try FileManager.default.createDirectory(at: configURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: configURL, options: .atomic)
+        paused = nil
     }
 
     /// A token for the app itself, for public lists when nobody is logged in, as spotDL gets one.
-    private static func appToken(session: URLSession) async throws -> String {
-        guard let config = try? JSONSerialization.jsonObject(with: Data(contentsOf: configURL)) as? [String: Any],
-              let clientId = config["client_id"] as? String, let secret = config["client_secret"] as? String else {
+    private static func appToken(session: URLSession, id: String? = nil, secret: String? = nil) async throws -> String {
+        let settings = config()
+        guard let clientId = id ?? settings["client_id"] as? String, let secret = secret ?? settings["client_secret"] as? String else {
             throw Problem.failed
         }
         var request = URLRequest(url: URL(string: "https://accounts.spotify.com/api/token")!)
@@ -99,6 +156,7 @@ enum KnobShiftSpotifyAccount {
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         request.httpBody = Data("grant_type=client_credentials".utf8)
         let (data, response) = try await send(request, session: session)
+        if response.statusCode == 400 || response.statusCode == 401 { throw Problem.loggedOut }
         guard response.statusCode == 200, let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let token = object["access_token"] as? String else { throw Problem.failed }
         return token

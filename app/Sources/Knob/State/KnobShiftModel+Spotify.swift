@@ -334,6 +334,45 @@ extension KnobShiftModel {
         log("SPOTIFY", "Logged out of Spotify.")
     }
 
+    /// Checks and saves the person's own Spotify key. The login belongs to the key it was made
+    /// with, so it ends and asks to be done again. Returns true when the key was saved.
+    func saveSpotifyKey(id: String, secret: String) async -> Bool {
+        do {
+            try await KnobShiftSpotifyAccount.saveOwnKey(id: id, secret: secret)
+        } catch KnobShiftSpotifyAccount.KeyProblem.wrong {
+            spotifyStatus = "Spotify did not accept that Client ID and secret. Copy both again from your app's settings."
+            return false
+        } catch KnobShiftSpotifyAccount.KeyProblem.offline {
+            spotifyStatus = KnobShiftSpotDL.Failure.offline.message
+            return false
+        } catch {
+            spotifyStatus = "Could not save your key. Try again."
+            log("SPOTIFY", "Saving the Spotify key failed: \(error).")
+            return false
+        }
+        KnobShiftSpotDL.logOut()
+        spotifyLoggedIn = false
+        spotifyAccount = nil
+        spotifyStatus = "Your key is saved. Log in to Spotify again to use it."
+        log("SPOTIFY", "Using the person's own Spotify key now.")
+        return true
+    }
+
+    /// Goes back to the shared key, which also ends the login made with the own key.
+    func removeSpotifyKey() {
+        do {
+            try KnobShiftSpotifyAccount.removeOwnKey()
+        } catch {
+            spotifyStatus = "Could not remove your key. Try again."
+            return
+        }
+        KnobShiftSpotDL.logOut()
+        spotifyLoggedIn = false
+        spotifyAccount = nil
+        spotifyStatus = "Back on the shared key. Log in to Spotify again."
+        log("SPOTIFY", "Back on the shared Spotify key.")
+    }
+
     func showSpotifyPreviewForSnapshot() {
         spotifyLoggedIn = true
         spotifyAccount = KnobShiftSpotifyAccount.Account(name: "Simran", playlists: [

@@ -25,6 +25,7 @@ like a DJ, worked out fresh for each pair of songs.
 - KnobMix Now mixes into the next song sooner, waiting for the next phrase so the mix still lands on the beat
 - Shuffle shows the new order in the queue, and songs can be dragged into any order
 - Add your Spotify playlists, albums, songs and Liked Songs: tick the songs you want, and they download in the background with live progress, in Spotify's order
+- Use your own free Spotify key (with Spotify Premium), so Spotify imports never wait on the shared daily limit
 - Songs added in bulk appear at once and are prepared in the background, ready instantly next time
 - Songs without cover art get a cover of their own, and during a mix the cover fades into the next song's
 - The KnobShift tab in Knob's panel is a mini player with progress, previous, play and next, plus a button that opens the full player

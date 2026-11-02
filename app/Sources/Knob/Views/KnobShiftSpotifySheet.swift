@@ -71,6 +71,7 @@ struct KnobShiftSpotifySheet: View {
         VStack(alignment: .leading, spacing: 14) {
             linkField
             account
+            KnobShiftSpotifyKey(model: model)
             downloads
             status
         }

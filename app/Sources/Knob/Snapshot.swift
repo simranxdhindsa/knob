@@ -64,6 +64,10 @@ enum Snapshot {
             spotify.showSpotifyPickerForSnapshot()
             render(KnobShiftSpotifySheet(model: spotify, showsForm: true).environment(\.colorScheme, .dark), scheme: .dark,
                    to: folder.appendingPathComponent("knobshift-spotify-picker.png"))
+            render(KnobShiftSpotifyKey(model: spotify, startsOpen: true).padding(22).frame(width: 460)
+                    .background(LinearGradient(colors: [Screen.top, Screen.bottom], startPoint: .top, endPoint: .bottom))
+                    .environment(\.colorScheme, .dark), scheme: .dark,
+                   to: folder.appendingPathComponent("knobshift-spotify-key.png"))
             if let savedShiftEnabled {
                 UserDefaults.standard.set(savedShiftEnabled, forKey: PersistKey.knobShiftEnabled.rawValue)
             } else {
