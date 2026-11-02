@@ -81,7 +81,7 @@ Songs close in tempo glide to each other's speed with the **beats locked togethe
 
 ### 🎛️ A different transition every time
 KnobShift picks a transition for **each pair of songs**:
-- When the beats can lock, it's an **Underwater fade**, a **Lo-fi dip** or a **Tape slowdown**.
+- When the beats can lock, it's an **Underwater fade**, a **Lofi dip** or a **Tape slowdown**.
 - When the tempos are far apart, it's an **Echo out** or a **Reverb wash**.
 
 Every effect rises until the old verse ends and falls away by the handoff. Each way is timed to the song and never shorter than four seconds, and the effect breathes gently on the beat.

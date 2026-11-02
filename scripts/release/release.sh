@@ -117,7 +117,15 @@ if [ -n "${SPARKLE_PRIVATE_KEY:-}" ]; then
 else
     echo "Note: no update key, so installed copies would refuse this trial build's update."
 fi
-if [ -n "$previous_tag" ]; then
+# The first release of a new major.minor uses that version's section of CHANGELOG.md, written
+# for users; later releases list their commits.
+series=$(tr -d '[:space:]' < "$repo_dir/VERSION")
+previous_series=$(printf '%s' "${previous_tag#v}" | cut -d. -f1-2)
+changelog=$(awk -v head="## $series" '$0 == head { on = 1; next } /^## / { on = 0 } on && /^- / { sub(/^- /, ""); print }' \
+    "$repo_dir/CHANGELOG.md" 2>/dev/null || true)
+if [ -n "$changelog" ] && [ "$previous_series" != "$series" ]; then
+    printf '%s\n' "$changelog" > "$work/changes.txt"
+elif [ -n "$previous_tag" ]; then
     git -C "$repo_dir" log --no-merges --format='%s' "$previous_tag..HEAD" -- . ':!*.md' ':!docs' ':!.claude' \
         > "$work/changes.txt"
 else

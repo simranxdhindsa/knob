@@ -1,7 +1,8 @@
 """Writes appcast.xml (the update feed installed copies of Knob read) and the release notes.
 
-Called by scripts/release/release.sh. Change lines are commit subjects with the type prefix
-(FEATURE:, BUG:, ...) removed; CHORE and REFACTOR commits are left out of what users read.
+Called by scripts/release/release.sh. Change lines are either a version's section of
+CHANGELOG.md or commit subjects with their emoji and type prefix (FEATURE:, BUG:, ...) removed;
+CHORE, REFACTOR and DOCS commits are left out of what users read.
 """
 import argparse
 import email.utils
@@ -9,13 +10,14 @@ import html
 import re
 from xml.sax.saxutils import escape, quoteattr
 
-HIDDEN = {"CHORE", "REFACTOR"}
+HIDDEN = {"CHORE", "REFACTOR", "DOCS"}
 
 
 def changes(path):
     lines = []
     for raw in open(path, encoding="utf-8"):
-        match = re.match(r"\s*([A-Z]+):\s*(.+)", raw)
+        # Subjects may start with an emoji: "🐛 BUG: ...".
+        match = re.match(r"\s*(?:[^\sA-Za-z0-9]+\s+)?([A-Z]+):\s*(.+)", raw)
         kind, text = (match.group(1), match.group(2)) if match else ("", raw.strip())
         if text and kind not in HIDDEN and text not in lines:
             lines.append(text[0].upper() + text[1:])
