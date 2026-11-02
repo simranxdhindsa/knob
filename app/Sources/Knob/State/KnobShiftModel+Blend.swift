@@ -219,7 +219,7 @@ extension KnobShiftModel {
                     if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
                     guard let self, !Task.isCancelled else { return }
                     let progress = Double(step) / Double(steps)
-                    self.applyBlend(progress, pivot: pivot, voiceDone: voiceDone, keyframes: keyframes, sync: sync)
+                    self.applyBlend(progress, pivot: pivot, voiceDone: voiceDone, keyframes: keyframes, length: duration, sync: sync)
                     self.blendProgress = progress
                     if !handedOver, progress >= pivot {
                         handedOver = true
@@ -257,7 +257,7 @@ extension KnobShiftModel {
     /// song opens up fully, the basslines swap and the outgoing song fades out, thinning upward.
     /// Without a handoff it is one equal-power crossfade.
     private func applyBlend(_ progress: Double, pivot: Double, voiceDone: Double,
-                            keyframes: (start: Double, peak: Double, end: Double), sync: KnobShiftSync) {
+                            keyframes: (start: Double, peak: Double, end: Double), length: TimeInterval, sync: KnobShiftSync) {
         let outgoing: Double, incoming: Double, swap: Double, sweep: Double, beatsOnly: Double, voice: Double
         // The old singer's separated voice: it leaves before the new one arrives, never together.
         var oldVoice = 1.0
@@ -328,6 +328,25 @@ extension KnobShiftModel {
             envelope = 0.5 + 0.5 * cos((clamped - keyframes.peak) / max(keyframes.end - keyframes.peak, 0.001) * .pi)
         }
         applyExitEffects(exit, envelope: exitStrength * envelope)
+        logMilestones(clamped, keyframes: keyframes, pivot: pivot, length: length,
+                      oldVoice: oldVoice, newVoice: voice, swap: swap)
+    }
+
+    /// Each moment of the mix, logged once as it happens, with the time into the mix, so the
+    /// `npm run dev` terminal reads as a timeline of what is heard.
+    private func logMilestones(_ progress: Double, keyframes: (start: Double, peak: Double, end: Double), pivot: Double,
+                               length: TimeInterval, oldVoice: Double, newVoice: Double, swap: Double) {
+        let at = String(format: "%.1fs into the mix", progress * length)
+        announce("milestone effects start", when: progress > keyframes.start,
+                 "Effects begin \(at), rising to \(Int((exitStrength * 100).rounded()))% at their peak.")
+        announce("milestone effects peak", when: progress >= keyframes.peak,
+                 "Effects at their peak \(at), where the old voice ends.")
+        announce("milestone effects end", when: progress >= keyframes.end, "Effects gone \(at).")
+        announce("milestone opens", when: progress >= pivot, "New song opens up fully \(at).")
+        announce("milestone bass", when: swap >= 0.5, "Basslines swap \(at): the new bass takes over.")
+        announce("milestone old voice", when: outgoingOnStems && oldVoice < 0.99, "Old voice starts to clear \(at).")
+        announce("milestone old voice gone", when: outgoingOnStems && oldVoice <= 0.01, "Old voice gone \(at).")
+        announce("milestone new voice", when: blendHasStems && newVoice > 0.01, "New voice comes in \(at).")
     }
 
     private func logBlendStep(progress: Double, pivot: Double, elapsed: TimeInterval, sync: KnobShiftSync) {
@@ -336,9 +355,14 @@ extension KnobShiftModel {
         let eq = String(format: "  •  bass out %.0f%% in %.0f%%, new melody %.0f%%, sweep %.0f%%",
                         (1 - primaryDeck.bassCut) * 100, (1 - secondaryDeck.bassCut) * 100,
                         (1 - secondaryDeck.beatsOnly) * 100, primaryDeck.sweep * 100)
+        let old = primaryDeck, new = secondaryDeck
+        let effects = String(format: "  •  effects: reverb %.0f%%, echo %.0f%%, lofi %.0f%%, tape %.0f%%",
+                             old.reverbMix * 100, old.echoMix * 100, old.lofiMix * 100, old.tape * 100)
+        let voices = (outgoingOnStems ? String(format: "  •  old voice %.0f%% (hall %.0f%%)", old.voiceLevel * 100, old.voiceReverb * 100) : "")
+            + (blendHasStems ? String(format: "  •  new voice %.0f%% (reverb %.0f%%)", new.voiceLevel * 100, new.voiceReverb * 100) : "")
         log("KNOBMIX", String(format: "+%.2fs  %3.0f%% done  •  out %@ %.2f  •  in %@ %.2f",
                               elapsed, progress * 100,
-                              primaryDeck.name, primaryDeck.volume, secondaryDeck.name, secondaryDeck.volume) + tempo + eq,
+                              primaryDeck.name, primaryDeck.volume, secondaryDeck.name, secondaryDeck.volume) + tempo + eq + effects + voices,
             blend: Diagnostic.Blend(progress: progress, outgoing: Double(primaryDeck.volume),
                                     incoming: Double(secondaryDeck.volume),
                                     tempo: sync.isOn ? shared : nil))

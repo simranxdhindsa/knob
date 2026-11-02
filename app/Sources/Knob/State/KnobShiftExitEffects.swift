@@ -144,7 +144,7 @@ extension KnobShiftModel {
         announce("echo", when: deck.echoMix > 0.01, "Echo out: repeats every half beat, 45% feedback, rising to 40%.")
     }
 
-    private func announce(_ key: String, when active: Bool, _ message: String) {
+    func announce(_ key: String, when active: Bool, _ message: String) {
         guard active, !effectsLogged.contains(key) else { return }
         effectsLogged.insert(key)
         log("EFFECT", message)
