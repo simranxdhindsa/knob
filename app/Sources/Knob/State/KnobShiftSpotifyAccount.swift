@@ -45,6 +45,65 @@ enum KnobShiftSpotifyAccount {
         return Account(name: name, playlists: playlists)
     }
 
+    // MARK: Spotify's daily limit
+
+    /// Spotify answers QUOTA_EXCEEDED with a wait of up to a day once the Spotify key Knob uses
+    /// (spotDL's own, shared by everyone who uses spotDL) has used its requests up. spotDL then
+    /// sleeps through the whole wait without a word, so Knob asks Spotify first and remembers.
+    nonisolated(unsafe) private static var paused: Date?
+
+    /// When Spotify allows requests again, or nil when it allows them now (or the check fails,
+    /// in which case spotDL tries anyway and reports what it finds).
+    static func pausedUntil(userAuth: Bool, session: URLSession = .shared) async -> Date? {
+        if let paused, paused > Date() { return paused }
+        let token: String?
+        if userAuth, let user = try? await validToken(session: session) {
+            token = user.access_token
+        } else {
+            token = try? await appToken(session: session)
+        }
+        guard let token, let url = URL(string: "https://api.spotify.com/v1/markets") else { return nil }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        guard let (_, response) = try? await send(request, session: session) else { return nil }
+        notePause(response)
+        return paused.flatMap { $0 > Date() ? $0 : nil }
+    }
+
+    /// Remembers a long wait Spotify asked for; short waits are only retried.
+    private static func notePause(_ response: HTTPURLResponse) {
+        guard response.statusCode == 429,
+              let wait = Double(response.value(forHTTPHeaderField: "Retry-After") ?? ""), wait > 60 else { return }
+        paused = Date().addingTimeInterval(wait)
+    }
+
+    /// The sentence for the player while Spotify is paused, with when it opens again.
+    static var pausedMessage: String {
+        guard let paused, paused > Date() else { return "Spotify is busy. Try again in a minute." }
+        let clock = DateFormatter()
+        clock.dateFormat = Calendar.current.isDateInToday(paused) ? "h:mm a" : "EEEE h:mm a"
+        return "Spotify has paused requests from Knob for now. Try again after \(clock.string(from: paused))."
+    }
+
+    /// A token for the app itself, for public lists when nobody is logged in, as spotDL gets one.
+    private static func appToken(session: URLSession) async throws -> String {
+        guard let config = try? JSONSerialization.jsonObject(with: Data(contentsOf: configURL)) as? [String: Any],
+              let clientId = config["client_id"] as? String, let secret = config["client_secret"] as? String else {
+            throw Problem.failed
+        }
+        var request = URLRequest(url: URL(string: "https://accounts.spotify.com/api/token")!)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 15
+        request.setValue("Basic " + Data("\(clientId):\(secret)".utf8).base64EncodedString(), forHTTPHeaderField: "Authorization")
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Data("grant_type=client_credentials".utf8)
+        let (data, response) = try await send(request, session: session)
+        guard response.statusCode == 200, let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let token = object["access_token"] as? String else { throw Problem.failed }
+        return token
+    }
+
     // MARK: Spotify's answers
 
     private struct Me: Decodable { let display_name: String? }
@@ -131,6 +190,7 @@ enum KnobShiftSpotifyAccount {
                 token = try await refresh(token, session: session)
             case 429:
                 // Spotify says how long to wait; wait up to 10 seconds, otherwise give up politely.
+                notePause(response)
                 let wait = Double(response.value(forHTTPHeaderField: "Retry-After") ?? "") ?? 5
                 guard wait <= 10, attempt < 2 else { throw Problem.rateLimited }
                 try await Task.sleep(for: .seconds(wait))

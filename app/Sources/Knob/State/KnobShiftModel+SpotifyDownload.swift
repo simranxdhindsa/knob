@@ -145,6 +145,7 @@ extension KnobShiftModel {
         switch problem {
         case .offline: rowText = "No internet"
         case .rateLimited: rowText = "Spotify busy"
+        case .paused: rowText = "Spotify paused"
         case .noSpace: rowText = "No space"
         case .stalled: rowText = "Stopped"
         default: rowText = "Not found"
@@ -257,7 +258,7 @@ extension KnobShiftModel {
         try? FileManager.default.removeItem(at: saveFile)
         await collectDownloads(playlist.id, finishedOnly: false)
         let problem = result.stalled ? .stalled : KnobShiftSpotDL.classify(result.lines)
-        markRows(of: playlist.id, ids: [spotifyId], failure: problem == .offline ? "No internet" : "Not found")
+        markRows(of: playlist.id, ids: [spotifyId], failure: problem == .offline ? "No internet" : problem == .paused ? "Spotify paused" : "Not found")
     }
 
     /// Retries every song of a playlist that failed, as one download.

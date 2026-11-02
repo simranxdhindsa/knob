@@ -235,7 +235,11 @@ extension KnobShiftModel {
             spotifyStatus = "Your Spotify login ran out. Log in again."
         } catch {
             log("SPOTIFY", "Could not read the account's playlists: \(error).")
-            if spotifyAccount == nil { spotifyStatus = "Could not read your playlists. Check the internet and open this again." }
+            if error as? KnobShiftSpotifyAccount.Problem == .rateLimited {
+                spotifyStatus = KnobShiftSpotifyAccount.pausedMessage
+            } else if spotifyAccount == nil {
+                spotifyStatus = "Could not read your playlists. Check the internet and open this again."
+            }
         }
     }
 
