@@ -34,6 +34,7 @@ like a DJ, worked out fresh for each pair of songs.
 
 ### Fixes
 
+- Speakers that were muted before Knob turned on no longer stay silent behind it: the mute moves onto Knob, where the volume knob shows it
 - Knob's volume follows the same curve as your Mac's speakers, so 10% is as quiet as macOS's 10% instead of much louder; Knob updates its audio device with one password prompt the next time you turn it on
 - The volume no longer gets stuck on Fixed after turning Knob on
 - Tape slowdown eases the old song about 10% slower with its natural pitch, smoothly in and out, instead of a heavy pitch drop

@@ -76,12 +76,32 @@ enum HardwareDevices {
         AudioObjectSetPropertyData(id, &address, 0, nil, UInt32(MemoryLayout<Float32>.size), &value)
     }
 
+    /// Whether a device's output is muted; nil when it has no mute the app can set.
+    static func isMuted(_ id: AudioObjectID) -> Bool? {
+        var address = muteAddress
+        var settable: DarwinBoolean = false
+        guard AudioObjectHasProperty(id, &address),
+              AudioObjectIsPropertySettable(id, &address, &settable) == noErr, settable.boolValue else { return nil }
+        var value = UInt32(0), size = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr else { return nil }
+        return value != 0
+    }
+
+    static func setMuted(_ muted: Bool, of id: AudioObjectID) {
+        var address = muteAddress
+        var value = UInt32(muted ? 1 : 0)
+        AudioObjectSetPropertyData(id, &address, 0, nil, UInt32(MemoryLayout<UInt32>.size), &value)
+    }
+
     /// Calls `handler` on the main queue whenever the Mac's default output changes, whoever changed it.
     static func observeDefaultOutput(_ handler: @escaping () -> Void) {
         var address = defaultOutputAddress
         AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, .main) { _, _ in handler() }
     }
 
+    private static let muteAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioDevicePropertyMute,
+        mScope: kAudioDevicePropertyScopeOutput, mElement: kAudioObjectPropertyElementMain)
     private static let mainVolumeAddress = AudioObjectPropertyAddress(
         mSelector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
         mScope: kAudioDevicePropertyScopeOutput, mElement: kAudioObjectPropertyElementMain)
