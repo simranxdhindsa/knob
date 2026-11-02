@@ -154,8 +154,11 @@ extension KnobShiftModel {
             // and move with its rhythm (an even split of the whole mix when it is shorter).
             let seconds = min(max(8 * KnobShiftExitStyle.beat(of: current), 3), 6)
             let side = seconds / max(duration, 0.1)
-            let peak = duration >= 2 * seconds ? min(max(voiceDone, side), 1 - side) : 0.5
-            let keyframes = (start: max(peak - side, 0), peak: peak, end: min(peak + side, 1))
+            // Nothing colours the old song in the mix's first second: the new song is heard
+            // arriving first, then the effects begin.
+            let quiet = min(1 / max(duration, 0.1), 0.25)
+            let peak = duration >= 2 * seconds + 1 ? min(max(voiceDone, quiet + side), 1 - side) : (1 + quiet) / 2
+            let keyframes = (start: max(peak - side, quiet), peak: peak, end: min(peak + side, 1))
             log("EFFECT", String(format: "Keyframes: effects start %.1fs into the mix, rise for %.1fs to full where the old voice ends, then fall for %.1fs to nothing.",
                                  duration * keyframes.start, duration * (peak - keyframes.start), duration * (keyframes.end - peak)))
             mixState = .mixing
