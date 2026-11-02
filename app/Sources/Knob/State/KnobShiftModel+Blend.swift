@@ -6,12 +6,6 @@ import Foundation
 /// from KnobShiftPlan and KnobShiftSync; this part carries the plan out on the two decks and
 /// logs every step.
 extension KnobShiftModel {
-    /// Seconds the exit effects take to rise to their peak where the old voice ends, and again
-    /// to fall away: they stay near the end of the old song instead of covering the whole mix.
-    static let effectSide: TimeInterval = 4.5
-    /// The effects' strength at that peak: half, so the old song is coloured, never swamped.
-    static let effectPeak = 0.5
-
     private static let wallClock: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -155,11 +149,12 @@ extension KnobShiftModel {
             // Where the old voice ends: the old song's fade and the new voice wait for it.
             let voiceDone = min(max((voiceEnd - outgoingAt) / music, pivot), 1)
             let duration = sync.blendLength(forOutgoingMusic: music, voice: pivot)
-            // The effects peak where the old voice ends, the climax of the mix: about four and a
-            // half seconds up and four and a half down, so they pass in under ten seconds even
-            // in a long mix (an even split of the whole mix when it is shorter than nine).
-            let side = Self.effectSide / max(duration, 0.1)
-            let peak = duration >= 2 * Self.effectSide ? min(max(voiceDone, side), 1 - side) : 0.5
+            // The effects peak where the old voice ends, the climax of the mix: two bars of the
+            // old song up and two bars down (3 to 6 seconds each way), so they stay near its end
+            // and move with its rhythm (an even split of the whole mix when it is shorter).
+            let seconds = min(max(8 * KnobShiftExitStyle.beat(of: current), 3), 6)
+            let side = seconds / max(duration, 0.1)
+            let peak = duration >= 2 * seconds ? min(max(voiceDone, side), 1 - side) : 0.5
             let keyframes = (start: max(peak - side, 0), peak: peak, end: min(peak + side, 1))
             log("EFFECT", String(format: "Keyframes: effects start %.1fs into the mix, rise for %.1fs to full where the old voice ends, then fall for %.1fs to nothing.",
                                  duration * keyframes.start, duration * (peak - keyframes.start), duration * (keyframes.end - peak)))
@@ -321,7 +316,7 @@ extension KnobShiftModel {
         } else {
             envelope = cos((clamped - keyframes.peak) / max(keyframes.end - keyframes.peak, 0.001) * .pi / 2)
         }
-        applyExitEffects(exit, envelope: Self.effectPeak * envelope)
+        applyExitEffects(exit, envelope: exitStrength * envelope)
     }
 
     private func logBlendStep(progress: Double, pivot: Double, elapsed: TimeInterval, sync: KnobShiftSync) {
