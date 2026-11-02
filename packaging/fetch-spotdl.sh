@@ -15,8 +15,7 @@ mkdir -p "$out"
 SPOTDL_URL="https://github.com/spotDL/spotify-downloader/releases/download/v4.6.0/spotdl-4.6.0-darwin"
 SPOTDL_SHA="957bb335e773ab67fc7a65574b0465ad828849944025a84cdfc9466a4336e3bb"
 FFMPEG_URL="https://github.com/eugeneware/ffmpeg-static/releases/download/b4.4/darwin-arm64"
-# Pin this the first time the file is fetched (the script prints the value to use).
-FFMPEG_SHA=""
+FFMPEG_SHA="a2ad6f0fc42a3c8f5183ef1d53e906d6bb35478d14a6b67175c30ce6c17e9214"
 
 fetch() {
     local name=$1 url=$2 sha=$3 target="$out/$1"
