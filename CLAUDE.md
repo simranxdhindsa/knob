@@ -32,9 +32,12 @@ build/Knob.app/Contents/MacOS/Knob --demo                 # sample engine + samp
 build/Knob.app/Contents/MacOS/Knob --snapshot DIR         # PNGs: light/dark x effects/equalizer, engine on (panel-*) and off (offline-*)
 build/Knob.app/Contents/MacOS/Knob --volume-check 3       # real Mac volume: listen, set, restore
 build/Knob.app/Contents/MacOS/Knob --icons DIR            # app icon (1024px), installer background, About window
+build/Knob.app/Contents/MacOS/Knob --demo-frames DIR      # the real panel through a scripted story, 30fps PNGs (used by make.sh)
+scripts/demo-video/make.sh                                # re-record the README demo: docs/images/knob-demo.gif + build/demo/knob-demo.mp4
 packaging/build-dmg.sh                                    # dist/Knob-<version>.dmg (drag to Applications; needs dmgbuild)
 ```
 - Look at the `--snapshot` PNGs after every UI change: this terminal has no Screen Recording permission, so the live menu bar can't be captured.
+- **README demo video** (`docs/images/knob-demo.gif`): recorded from the real app, never a mockup. `--demo-frames` (`DemoFrames.swift`) plays the story offscreen on the demo engine; `scripts/demo-video/stage.html` adds the pointer, clicks and captions; `render.mjs` renders it frame by frame in headless Chrome and ffmpeg encodes it. Re-record with `make.sh` after visible panel changes, then look at the frames: pointer positions in `stage.html` are measured on the 768x1140 frames, so re-measure them if the layout moves. It shows the latest release tag as the version and gives the installed Knob its preset and tab back. Captions follow the UI copy rules (no dashes).
 - The user often has `npm run dev` running (`build/dev/Knob.app`). Never `pkill -x Knob`: that also kills their dev copy. Stop only the exact bundle you launched.
 - In zsh, `log` is a builtin: read the system log with `/usr/bin/log show`.
 - In zsh, never put several `-D` flags in one variable: zsh doesn't split it into words.
@@ -272,3 +275,7 @@ Brief, dated record of what was worked on per day, in the `Knob: <summary>` form
 
 ### 2026-10-31
 - Knob: started KnobShift, a local-music transition player with safe outro detection, two audio decks and Gentle, Balanced and Party modes; streaming services remain outside KnobShift because their players do not provide the audio access or permission it needs
+
+### 2026-11-04
+- Knob: the GitHub page is ready for new visitors: clear description and search topics, a share banner, Discussions, a Sponsor button, guides for contributors and bug report forms
+- Knob: a 15 second demo video at the top of the README, recorded from the real app and re-recordable with one command
