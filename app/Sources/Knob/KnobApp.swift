@@ -6,6 +6,7 @@ import SwiftUI
 ///   --demo              demo engine and demo volume, for trying the panel without the engine
 ///   --snapshot DIR      render the panel in light and dark mode to PNG files, then quit
 ///   --icons DIR         render the app icon (1024px) and the About window, then quit
+///   --demo-frames DIR   record the panel through a scripted story as 30fps PNG frames, then quit
 ///   --volume-check SEC  print real Mac volume changes for SEC seconds, set and restore, then quit
 ///   --knobshift-analysis-check FILE  analyse a local file without opening an audio output device
 ///   --knobshift-mix-check            KnobMix's transition rules against the real planner, no audio
@@ -15,6 +16,10 @@ struct KnobLauncher {
         let arguments = CommandLine.arguments
         if let index = arguments.firstIndex(of: "--snapshot"), index + 1 < arguments.count {
             Snapshot.run(into: URL(fileURLWithPath: arguments[index + 1]))
+            return
+        }
+        if let index = arguments.firstIndex(of: "--demo-frames"), index + 1 < arguments.count {
+            DemoFrames.run(into: URL(fileURLWithPath: arguments[index + 1]))
             return
         }
         if let index = arguments.firstIndex(of: "--icons"), index + 1 < arguments.count {
