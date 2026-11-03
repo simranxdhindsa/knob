@@ -54,12 +54,18 @@ xcrun --sdk "$sdk" swiftc -target "$target" -sdk "$sysroot" -swift-version 5 -On
   -framework AVFoundation -framework AudioToolbox -framework SwiftUI -framework UIKit \
   -o "$out/Knob"
 
-# 4. The app: binary, Info.plist and factory presets.
+# 4. The app: binary, Info.plist, factory presets and icon.
 rm -rf "$bundle"
 mkdir -p "$bundle/presets"
 cp "$out/Knob" "$bundle/Knob"
 cp "$repo_dir/ios/Info.plist" "$bundle/Info.plist"
 cp "$repo_dir/presets/"*.fac "$bundle/presets/"
+# The app icon (Knob's icon as a full square: iOS rounds the corners), compiled by Apple's asset
+# tool, which also says which Info.plist entries point at it.
+xcrun actool "$repo_dir/ios/Assets.xcassets" --compile "$bundle" --platform "$sdk" \
+  --minimum-deployment-target 17.0 --target-device iphone --app-icon AppIcon \
+  --output-partial-info-plist "$out/icon-info.plist" --output-format human-readable-text > "$out/actool.log"
+/usr/libexec/PlistBuddy -c "Merge $out/icon-info.plist" "$bundle/Info.plist" > /dev/null
 if [ "$kind" = simulator ]; then
   codesign --force --sign - "$bundle"
 else

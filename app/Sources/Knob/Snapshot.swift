@@ -145,6 +145,7 @@ enum Snapshot {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         Task { @MainActor in
             render(AppIconView(size: 1024), scheme: .dark, to: folder.appendingPathComponent("icon-1024.png"))
+            render(AppIconView(size: 1024, fullBleed: true), scheme: .dark, to: folder.appendingPathComponent("icon-ios-1024.png"))
             render(InstallerBackgroundView(), scheme: .light, to: folder.appendingPathComponent("installer-background.png"))
             let statuses: [(String, UpdateStatus)] = [("checking", .checking), ("downloading", .downloading(progress: nil)),
                                                      ("installing", .installing), ("uptodate", .upToDate),
