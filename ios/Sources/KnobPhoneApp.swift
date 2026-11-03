@@ -59,6 +59,14 @@ final class PhoneApp: ObservableObject {
             if let first = model.knobShift.tracks.first { model.knobShift.select(first) }
         }
         if environment["KNOB_PHONE_SHEET"] == "1" { PhoneSheets.shared.sound = true }
+        if environment["KNOB_PHONE_PLAY"] == "1" {
+            // What Knob's sound measured after a few seconds of playback, for the log.
+            try? await Task.sleep(for: .seconds(6))
+            let state = EngineState(json: try? await model.engine.send("getState", [:]))
+            model.knobShift.log("CHECK", String(format: "Knob's sound: %@, peaks %.3f and %.3f, spectrum total %.3f over %d bands.",
+                                                state.bypassed ? "off" : "on", state.peakLeft, state.peakRight,
+                                                state.spectrum.reduce(0, +), state.spectrum.count))
+        }
     }
     #endif
 

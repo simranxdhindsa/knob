@@ -29,9 +29,11 @@ final class PhoneEffectUnit: AUAudioUnit {
     private let output: AUAudioUnitBus
     private var inputs: AUAudioUnitBusArray!
     private var outputs: AUAudioUnitBusArray!
-    /// Interleaved stereo for the effects code; made once, before rendering starts.
-    private var scratch: UnsafeMutablePointer<Float>?
-    private var capacity = 0
+    /// Interleaved stereo for the effects code, made with the unit: the audio engine may take
+    /// the render block before it allocates render resources, so the block must never see a
+    /// buffer that is not there yet. Blocks longer than this pass through untouched.
+    private static let capacity = 4_096
+    private let scratch = UnsafeMutablePointer<Float>.allocate(capacity: PhoneEffectUnit.capacity * 2)
 
     override init(componentDescription: AudioComponentDescription, options: AudioComponentInstantiationOptions = []) throws {
         dsp = Self.engine?.dsp
@@ -41,10 +43,10 @@ final class PhoneEffectUnit: AUAudioUnit {
         try super.init(componentDescription: componentDescription, options: options)
         inputs = AUAudioUnitBusArray(audioUnit: self, busType: .input, busses: [input])
         outputs = AUAudioUnitBusArray(audioUnit: self, busType: .output, busses: [output])
-        maximumFramesToRender = 4_096
+        maximumFramesToRender = AUAudioFrameCount(Self.capacity)
     }
 
-    deinit { scratch?.deallocate() }
+    deinit { scratch.deallocate() }
 
     override var inputBusses: AUAudioUnitBusArray { inputs }
     override var outputBusses: AUAudioUnitBusArray { outputs }
@@ -52,9 +54,6 @@ final class PhoneEffectUnit: AUAudioUnit {
 
     override func allocateRenderResources() throws {
         try super.allocateRenderResources()
-        scratch?.deallocate()
-        capacity = Int(maximumFramesToRender)
-        scratch = .allocate(capacity: capacity * 2)
         guard let dsp else { return }
         var error = [CChar](repeating: 0, count: 256)
         if knob_phone_dsp_prepare(dsp, Int32(output.format.sampleRate), &error, error.count) != 0 {
@@ -62,16 +61,9 @@ final class PhoneEffectUnit: AUAudioUnit {
         }
     }
 
-    override func deallocateRenderResources() {
-        super.deallocateRenderResources()
-        scratch?.deallocate()
-        scratch = nil
-        capacity = 0
-    }
-
     override var internalRenderBlock: AUInternalRenderBlock {
         // Only plain values reach the audio thread: no self, nothing allocated while it plays.
-        let dsp = dsp, scratch = scratch, capacity = capacity
+        let dsp = dsp, scratch = scratch, capacity = Self.capacity
         #if DEBUG
         let silent = Self.silent
         #else
@@ -84,7 +76,7 @@ final class PhoneEffectUnit: AUAudioUnit {
             guard status == noErr else { return status }
             let buffers = UnsafeMutableAudioBufferListPointer(outputData)
             let count = Int(frames)
-            guard let dsp, let scratch, count <= capacity, buffers.count >= 2,
+            guard let dsp, count <= capacity, buffers.count >= 2,
                   let left = buffers[0].mData?.assumingMemoryBound(to: Float.self),
                   let right = buffers[1].mData?.assumingMemoryBound(to: Float.self) else { return noErr }
             for frame in 0..<count {
