@@ -174,6 +174,9 @@ final class KnobShiftModel: ObservableObject {
     @Published internal(set) var playlists: [KnobShiftPlaylist] = []
     @Published internal(set) var removedPlaylists: [KnobShiftRemovedPlaylist] = []
     @Published internal(set) var spotifyLoggedIn = false
+    /// Signed in to YouTube with the sign in copied from the user's browser, and copying it now.
+    @Published internal(set) var youtubeSignedIn = false
+    @Published internal(set) var youtubeSigningIn = false
     /// One plain sentence about the latest Spotify step, shown in the Spotify sheet.
     @Published internal(set) var spotifyStatus: String?
     @Published internal(set) var spotifyBusy = false
