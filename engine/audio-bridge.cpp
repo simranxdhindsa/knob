@@ -3,9 +3,25 @@
 #include <sstream>
 #include <stdexcept>
 #include <thread>
+#include <vector>
 #include <mach/mach_time.h>
 
 namespace knob {
+// Headsets have a mic as well as speakers. An IOProc on such a device opens the mic too, which
+// makes macOS switch it to call mode (thin, quiet sound). Knob never reads that input, so turn
+// every input stream off for this IOProc. Must run before the device starts.
+static void disableInputStreams(AudioDeviceID device, AudioDeviceIOProcID proc) noexcept {
+    AudioObjectPropertyAddress a{kAudioDevicePropertyIOProcStreamUsage, kAudioDevicePropertyScopeInput,
+                                 kAudioObjectPropertyElementMain};
+    UInt32 size = 0;
+    if (AudioObjectGetPropertyDataSize(device, &a, 0, nullptr, &size) != noErr || size < sizeof(AudioHardwareIOProcStreamUsage)) return;
+    std::vector<char> raw(size);
+    auto* usage = reinterpret_cast<AudioHardwareIOProcStreamUsage*>(raw.data());
+    usage->mIOProc = reinterpret_cast<void*>(proc);
+    if (AudioObjectGetPropertyData(device, &a, 0, nullptr, &size, usage) != noErr) return;
+    for (UInt32 i = 0; i < usage->mNumberStreams; ++i) usage->mStreamIsOn[i] = 0;
+    AudioObjectSetPropertyData(device, &a, 0, nullptr, size, usage);
+}
 static bool floatStereo(const AudioStreamBasicDescription& f) {
     return f.mFormatID == kAudioFormatLinearPCM && (f.mFormatFlags & kAudioFormatFlagIsFloat) &&
            !(f.mFormatFlags & kAudioFormatFlagIsBigEndian) && f.mBitsPerChannel == 32 && f.mChannelsPerFrame == 2;
@@ -63,6 +79,7 @@ void AudioBridge::start(const std::string& outputUID) {
         captureTick_ = renderTick_ = 0;
         checkAudio(AudioDeviceCreateIOProcID(input_, capture, this, &captureID_), "create capture IOProc");
         checkAudio(AudioDeviceCreateIOProcID(output_, render, this, &renderID_), "create render IOProc");
+        disableInputStreams(output_, renderID_);
         listeners(true);
         checkAudio(AudioDeviceStart(output_, renderID_), "start render");
         // Restarting capture right after stopping it (switching outputs) can race the HAL's
