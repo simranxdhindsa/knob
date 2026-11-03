@@ -11,6 +11,10 @@ Five effects, a 10 band equalizer and presets in a panel that feels like studio 
 
 <br/>
 
+<img src="docs/images/knob-demo.gif" width="100%" alt="Knob in 15 seconds: the volume knob turns from 45 to 78 percent, the next preset reshapes all five effects, the bass faders rise on the 10 band equalizer over the live spectrum, and KnobShift starts mixing into the next song." />
+
+<br/>
+
 ![macOS](https://img.shields.io/badge/macOS-14%2B-111111?style=for-the-badge&logo=apple&logoColor=white)
 ![Swift](https://img.shields.io/badge/SwiftUI-Menu%20bar-F05138?style=for-the-badge&logo=swift&logoColor=white)
 ![C++](https://img.shields.io/badge/C%2B%2B-Core%20Audio-00599C?style=for-the-badge&logo=cplusplus&logoColor=white)
