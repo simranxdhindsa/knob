@@ -67,6 +67,7 @@ enum KnobShiftYouTubeTests {
         expect(g.name == "ਖੀਰ ਤੇ ਵੈਰ" && g.artists == ["Sidhu Moose Wala"], "Gurmukhi kept")
         let h = split("Song Name", "SomeArtistVEVO")
         expect(h.artists == ["SomeArtist"], "VEVO dropped from the channel")
+        expect(split("La Diabla", "Xavi Oficial").artists == ["Xavi"], "Official dropped from the channel")
         let i = split("Artist One & Artist Two - Together", "Label")
         expect(i.name == "Together" && i.artists == ["Artist One", "Artist Two"], "two artists joined by &")
     }

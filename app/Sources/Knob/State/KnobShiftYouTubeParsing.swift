@@ -150,7 +150,7 @@ enum KnobShiftYouTubeParsing {
 
     private static func cleanChannel(_ channel: String) -> String {
         var text = channel.trimmingCharacters(in: .whitespaces)
-        for suffix in [" - Topic", "VEVO"] where text.hasSuffix(suffix) && text.count > suffix.count {
+        for suffix in [" - Topic", "VEVO", " Official", " Oficial"] where text.hasSuffix(suffix) && text.count > suffix.count {
             text = String(text.dropLast(suffix.count)).trimmingCharacters(in: .whitespaces)
         }
         return text
