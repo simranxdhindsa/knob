@@ -76,42 +76,75 @@ Naggnee into Sardaari, aligned against both files:
 | Speed | both exactly normal speed, though 25% apart in tempo | none (sync only within 8%) |
 | Old song's exit | treble goes first, the middle lingers | low pass closing to 1 kHz, bass swapped |
 
-So the plan now: the old song keeps its voice and outro and leaves at its own
-fade (at most eight bars after its voice); the new song's verse lands as it
-leaves, so two singers never overlap; the new intro plays quietly underneath
-first (up to 24 seconds, often from its very start); three bars before the old
-song is gone the new one opens up fully. A song that sings to the end, and
-KnobMix Now, still leave two bars after the handoff. The steps below describe
-the earlier design where they differ.
+Apple's long overlap let the old voice run on over the new song for 4 to 12
+seconds, which sounded wrong, so since 2026-11-03 KnobMix follows DJ practice
+instead: two voices are never heard together, and a mix is short.
 
-The vocal handoff, counted in bars of the outgoing song's own tempo:
+The rules (`KnobShiftPlan`, checked by `--knobshift-mix-check`):
 
-1. The handoff point is where the outgoing song's last vocal line ends. When
-   the singing runs right to the end (under a bar of music after it), the
-   handoff moves to the last music break at least four bars before the end
-   and within the last minute. Example: Putt Jam Te Lau sings to 3:42, so it
-   hands over at its 3:30 break instead of mixing in its last 4 seconds.
-2. The incoming song's main verse is the first steady line at that song's
-   normal singing level; quieter intro ad-libs do not count, and neither does
-   any voice before the beat comes in (a tag or shout over the intro). The
-   verse is then placed on the four bar phrase grid counted from the beat
-   entry, because the classifier hears a line up to a bar late.
-   Example: Sardaari has a loud tag at 0:02 to 0:05 and drums from 0:06, so
-   its verse lands at 0:17.6, not 0:01.5.
-3. Two bars before the handoff the incoming song comes in, started two bars
-   before its own main verse rather than from its beginning, so only its beats
-   play under the old voice and its verse lands on the handoff. With a shorter
-   run-up it starts after its leading silence, but always at least one bar early.
-4. Until the handoff the outgoing voice stays up front (dipping to 85%) while
-   the incoming beats rise to 70%: their bass and melody range (a 12 dB dip
-   around 1.5 kHz) are held back, so only the beats mix.
-5. At the handoff the incoming song opens up fully, the basslines swap, and the
-   outgoing song fades out over two bars, thinning upward through a rising
-   filter, then stops. It does not play its whole outro, so leftover shouts or
-   ad-libs after its last line are never heard over the new verse.
-6. Songs without vocals use their measured fade. With no voice and no fade,
-   the songs meet cleanly at the audible end: `PRESERVING ENDING`.
-7. Seeking past the planned start still blends over whatever music is left.
+1. **Length.** About 8 seconds, in whole bars of the old song's beat, never more
+   than 10 (`length(bar:)` keeps it to 6 to 9.5 so a tempo glide stays under 10).
+   A long outro is skipped, never filled.
+2. **Old voice first.** The new song's beats come in at most 2 seconds before the
+   old voice ends (one bar on fast songs), quietly and beats only. The new song
+   opens up fully only once the old voice has ended.
+3. **Old song leaves.** After its voice the old song plays out with its exit
+   effects for the rest of the mix, then is gone.
+4. **New voice last.** The new song's main verse lands as the old song is gone.
+   Its separated voice is held silent until the mix's last 2 seconds; the old
+   separated voice clears within half a second of its end (`voiceLevels`).
+5. **Singing to the end.** When the singing runs right to the end (under a bar
+   of music after it), the voice is cut in the last minute, at least four bars
+   before the end (`cutPoint`): at the last music break, else where a sung line
+   ends, else where the song starts fading under the voice. Example: Why So sings
+   through its fade to 3:52.5, so it is cut at its 3:41.25 line ending.
+6. **Vocal throw.** A cut voice (singing to the end, or KnobMix Now) and tempos
+   more than 8% apart leave as a vocal throw of about 5 seconds after the cut,
+   in whole beats (`throwLength`, `throwLevels`): the old music fades slowly in
+   time with the new beats, the old separated voice alone slows like tape to 85%
+   speed as heard, its pitch falling, into a hall rising to 60%, and is gone
+   before the new voice comes in. Without a separated voice the old song echoes
+   out within the first 40%.
+7. **Matching wider tempos.** Up to 8% apart the old song eases on its own. In a
+   vocal throw the songs also lock up to 20% apart, meeting in the middle: the
+   new beats run up to 8% off their own speed while only they play, the old song
+   carries the rest (up to 12%, or alone when the new beats have under a bar to
+   themselves). The shared tempo reaches the new song's own only in the last 10%
+   of the mix, so the old voice is never rushed by the whole gap. Strong beats
+   meet strong beats (every second beat from each song's beat entry,
+   `strongBeat`), so a song counted at double or half time never puts its kick
+   on the other's snare. Further apart, the old music drops within about half a
+   second.
+8. **Exit effects.** Beat locked mixes use the tape slowdown into a hall: the
+   hall starts on the old voice's last word and rises to 35% on the beat pulse,
+   and the slowdown is a wind down over the last 1.5 seconds of the exit (never
+   more than its last half, `windDown`). In a vocal throw the voice slows instead
+   of the whole deck. A closing low pass and the bass swap apply to every exit.
+   No flanger, by choice.
+9. Songs without vocals mix over the last 6 to 9.5 seconds of their fade. With
+   no voice and no fade, the songs meet cleanly at the audible end.
+
+Measured on real songs with the real planner (`--knobshift-sync-check`) and the
+muted engine (`--knobshift-check`):
+
+| Pair | Mix | Beats |
+| --- | --- | --- |
+| Low Fade into Bodyguard (female first verse) | 8.0s, old voice gone at 2.4s, new voice from 6.5s | locked |
+| Bodyguard into Kaali Hoodie | 8.3s | locked |
+| Jee Karuga into Why So | 7.7s | locked |
+| Sardaari into Bodyguard | 3.3s, cut at its 3:36.9 break | locked |
+| Putt Jam Te Lau into Sardaari | 4.0s, cut at its 3:30.6 break | locked |
+| Kaali Hoodie into Jee Karuga | 1.7s echo out, old sound gone at 0.7s | 172 and 186 BPM, not locked |
+| Why So into Sardaari | 0.8s, Why So sings to its last second with no break | 90 and 82.5 BPM, not locked |
+
+**Main verse.** The incoming song's main verse is the first steady line at that
+song's normal singing level; quieter intro ad-libs do not count, and neither does
+any voice before the beat comes in (a tag or shout over the intro). The verse is
+placed on the four bar phrase grid counted from the beat entry, because the
+classifier hears a line up to a bar late. Example: Sardaari has a loud tag at
+0:02 to 0:05 and drums from 0:06, so its verse lands at 0:17.6, not 0:01.5.
+Before the handoff the incoming bass and melody range are held back, so only its
+beats mix under the old voice.
 
 The log gives the exact clock time of every planned mix, for example "the mix
 starts at 12:23:36 AM, in 6s", and the time the voices hand over.
@@ -372,3 +405,53 @@ spotDL runs with `COLUMNS=1000`, because its display otherwise wraps at 80 colum
   - `KNOB_SPOTDL`, `KNOB_FFMPEG`: the helper paths.
   - `KNOB_SPOTDL_IDLE`: the silence limit, in seconds.
   - `KNOB_SONG_MB`: the space estimate per song.
+
+## YouTube
+
+yt-dlp (bundled in `Contents/Resources/yt-dlp`, fetched and pinned by `packaging/fetch-spotdl.sh`, Apple silicon only) reads a YouTube video, playlist, YouTube Music album or Liked videos and downloads each song into `~/Music/KnobShift/YouTube/<playlist>/`. Everything after reading the list is the Spotify code: the picker, queue rows, progress, Cancel, Retry, Update, remove and restore, and resume after a relaunch.
+
+### How it fits the Spotify code
+
+- **Ids.** A YouTube playlist's id is `yt:` plus YouTube's id, so `KnobShiftPlaylist.source` is read from the id and playlists saved before 3.0 load unchanged. Songs keep the video id in `spotifyId`.
+- **Files.** Songs are saved as `07 Song - Artist [yt-VIDEOID].m4a`. The `yt-` keeps the id apart from Spotify's 22 character ids and from ordinary brackets (`KnobShiftPlaylists.songId(inFileName:)`), and the name shows through `Track.split`, so no tags are needed.
+- **Song list.** yt-dlp's list is turned into spotDL's save file shape (`KnobShiftYouTubeParsing.listing`) and kept in `knobshift-songs.spotdl`, so resume and retry need no second read.
+- **Branch points.** Only three places check the source: reading a list (`readYouTube`), downloading (`runDownload` hands YouTube playlists to `runYouTubeDownload`), and single song retries.
+- **One lane.** YouTube downloads share the Spotify download lane, because spotDL downloads from YouTube too and the two must not hit YouTube at once.
+- **Runner.** spotDL and yt-dlp both run through `State/KnobShiftHelperProcess.swift`: line output, cancel with every child, an idle limit, and stop on quit.
+
+### Being gentle with YouTube
+
+- **One at a time.** yt-dlp runs once per song, with a pause of 2 to 4 seconds between songs.
+- **Stops early.** A bot check, no internet twice in a row or a full disk stops the rest of the playlist; the remaining rows say why, with Retry.
+- **Name search.** A video that is gone, private, blocked in this country or age restricted is searched as `ytsearch1:<artist> <name>` (under 15 minutes) and saved under the original id, so it lands in the same row.
+- **Safe arguments.** Pasted links are rebuilt from validated ids (`parseLink`). The link always comes after `--`, so nothing in it is read as an option.
+
+### Signing in and the dashboard
+
+Knob signs in the way TV apps do, with Google's device flow (`State/KnobShiftGoogleAuth.swift`). Nothing is read from any browser.
+
+1. **Google key.** The person adds their own Google key in the YouTube sheet: an OAuth client of the type "TVs and Limited Input devices", with YouTube Data API v3 turned on and their account added as a test user. A key made for a TV launcher works as it is. Saving it asks Google for a code first, so a wrong key or key type is refused straight away.
+2. **Code.** SIGN IN WITH GOOGLE shows a short code, copies it and opens google.com/device. Knob asks Google every few seconds until the code is entered. The scope is `youtube.readonly`.
+3. **Storage.** The key and the refresh token live in `google-youtube.json` (owner only) in Knob's Application Support folder, beside yt-dlp's folder rather than inside it. The access token stays in memory. Sign out asks Google to forget the sign in; REMOVE deletes the key too. While Google keeps the app in test mode, a sign in lasts 7 days, then Knob signs out with a message.
+4. **Old sign in.** Cookie files from the earlier browser sign in are deleted at launch.
+
+The dashboard (`KnobShiftYouTubeAPI.swift`, `KnobShiftYouTubeHub.swift`, `KnobShiftModel+YouTubeDashboard.swift`, `Views/KnobShiftYouTubeDashboard.swift`):
+
+| Row | Where it comes from | Daily allowance used |
+|---|---|---|
+| Liked music | `videos?myRating=like`, up to 200 | 1 per 50 |
+| Your playlists | `playlists?mine=true`; a card opens `playlistItems` | 1 per 50 |
+| New music from subscriptions | the 30 most relevant subscriptions (read once a day), each channel's public feed for the last 30 days, then categories and lengths | feeds are free, 1 per 50 videos |
+| Popular music in the Mac's country | `chart=mostPopular&videoCategoryId=10` | 1 |
+
+- **Music only** (on by default, `PersistKey.knobShiftYouTubeMusicOnly`) keeps category 10 between 1 and 15 minutes. The person's own playlists are never filtered.
+- Rows are read at most every 2 hours. A row opens in the same song picker, under the ids `yt:LL`, `yt:KNOBNEW` and `yt:KNOBPOPULAR`; Update reads them again through Google (`updateYouTubeFromGoogle`).
+- A pasted link to a private playlist of the person's own is read through Google instead of yt-dlp.
+- Downloads never sign in. Private and signed in only videos are searched by name instead.
+
+### Checks
+
+- **Self test, offline:** `--knobshift-youtube-check selftest`. It covers links, title cleanup, list reading, file ids, sources and folders, yt-dlp arguments, error reading, Google's sign in answers, the YouTube Data API's answers, channel feeds and the music filter.
+- **Dashboard UAT:** `--knobshift-youtube-check uat` (development builds). It goes through the dashboard with the same calls the buttons make, against a fake Google inside the app and in temporary folders: key, sign in and cancel, rows, Music only, picker into the queue, Update, cancel a read, a Google hiccup, a sign in running out, sign out and REMOVE.
+- **Real list:** `--knobshift-youtube-check LINK`; add `--download` to download the first song into a temporary folder.
+- **Test overrides:** `KNOB_YTDLP` and `KNOB_FFMPEG` (helper paths), `KNOB_YOUTUBE_ROOT` (the music folder).

@@ -86,14 +86,12 @@ struct RealisticKnob: View {
         let inner = size * 0.415
         // Each mark as (position on the sweep 0...1, lit).
         let marks: [(at: Double, lit: Bool)] = {
+            let lit = litCount(v)
             if let steps, steps > 0 {
-                let number = Int((v * Double(steps)).rounded())
-                return (1...steps).map { (Double($0) / Double(steps), number >= $0) }
+                return (1...steps).map { (Double($0) / Double(steps), lit >= $0) }
             }
             let count = Self.marks
-            return (0..<count).map { i in
-                (Double(i) / Double(count - 1), v * Double(count - 1) >= Double(i) - 0.001)
-            }
+            return (0..<count).map { (Double($0) / Double(count - 1), lit > $0) }
         }()
         return ZStack {
             ForEach(marks.indices, id: \.self) { i in
@@ -189,9 +187,16 @@ struct RealisticKnob: View {
             }
     }
 
+    /// How many indicator marks are lit at `v`. The haptic click fires exactly when this changes,
+    /// so every click is a mark switching on or off.
+    private func litCount(_ v: Double) -> Int {
+        if let steps, steps > 0 { return Int((v * Double(steps)).rounded()) }
+        return Int((v * Double(Self.marks - 1) + 0.001).rounded(.down)) + 1
+    }
+
     private func set(_ newValue: Double, animated: Bool) {
         let clamped = min(max(newValue, 0), 1)
-        if !animated { Haptics.moved(from: value, to: clamped) }
+        if !animated { Haptics.indicatorMoved(from: value, to: clamped, lit: litCount) }
         var transaction = Transaction(animation: animated ? Motion.knob : nil)
         transaction.disablesAnimations = !animated
         withTransaction(transaction) { value = clamped }

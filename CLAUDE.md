@@ -51,6 +51,7 @@ npm run dev:once   # build and launch once
 - Edits in `app/`, `engine/` and `dsp/` show up in about 3 seconds (the first build of the day takes about a minute). `driver/` edits can't be swapped live and still need a reinstall.
 - The dev copy is `build/dev/Knob.app` with bundle ID `io.github.simranxdhindsa.knob.dev`, kept apart from an installed Knob and its settings.
 - It launches with `KNOB_DEV_OPEN_POPOVER=1`, which makes Knob also show its panel in a floating "Knob (dev)" window (`DevWindow.swift`). The menu bar icon is often hidden behind the MacBook notch, so this window is where the user sees changes. It never takes focus from the editor and remembers where it was dragged.
+- **Audio permission in dev:** without a fixed signature, each rebuild gets a new ad-hoc one and macOS asks for audio access again on every relaunch. Run `bash scripts/dev-signing-setup.sh` once (one password prompt) to make a local "Knob Dev" certificate; `dev.sh` signs the dev copy with it when it exists. Installed copies keep their permission through the fixed "Knob Release" certificate.
 - Live code injection without relaunching needs full Xcode, which this Mac doesn't have; relaunching is the intended approach.
 - A failed build leaves the last good build running and prints the error.
 
@@ -125,6 +126,8 @@ After every task, output a short commit message (don't run git commit). One-line
 `REFACTOR:` code restructure with no behaviour change
 `STYLE:` UI-only change
 `CHORE:` config, tooling, dependency update
+
+**Keep commit messages short:** one brief line (about 10 words) after the prefix, for example `BUG: Bluetooth headsets no longer switch to call mode`. No lists of every detail.
 
 **Changelog rule: write for users, not developers.** Once Knob has a `CHANGELOG.md`, every entry must make sense to someone reading it cold: say what they can now do or what got fixed, in plain words, not internal names or implementation detail. No em dashes.
 

@@ -25,7 +25,7 @@ struct KnobShiftSpotifyPicker: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(review.name).font(.system(size: 13, weight: .bold)).foregroundStyle(Screen.text).lineLimit(1)
-                    Text("\(review.songs.count) song\(review.songs.count == 1 ? "" : "s") on Spotify" + (review.queued.isEmpty ? "" : ", \(review.queued.count) in your queue"))
+                    Text("\(review.songs.count) song\(review.songs.count == 1 ? "" : "s") on \(review.source == .youtube ? "YouTube" : "Spotify")" + (review.queued.isEmpty ? "" : ", \(review.queued.count) in your queue"))
                         .font(.system(size: 10)).foregroundStyle(Screen.textTertiary)
                 }
                 Spacer()

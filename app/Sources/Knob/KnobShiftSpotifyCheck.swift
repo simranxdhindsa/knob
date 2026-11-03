@@ -53,11 +53,11 @@ enum KnobShiftSpotifyCheck {
         expect(KnobShiftPlaylists.parseLink("hello") == nil, "plain text")
         // File names.
         let file = "07 Jee Karuga (feat. Sargi Maan) - Kulwinder Sohi [\(id)]"
-        expect(KnobShiftPlaylists.spotifyId(inFileName: file) == id, "Spotify id from a file name")
+        expect(KnobShiftPlaylists.songId(inFileName: file) == id, "Spotify id from a file name")
         expect(KnobShiftPlaylists.plainTitle(file) == "Jee Karuga (feat. Sargi Maan) - Kulwinder Sohi", "plain title")
         expect(KnobShiftModel.Track.split(file).name == "Jee Karuga (feat. Sargi Maan)", "name without position and id")
         expect(KnobShiftPlaylists.plainTitle("18 Lakh - Rehal") == "18 Lakh - Rehal", "ordinary titles untouched")
-        expect(KnobShiftPlaylists.spotifyId(inFileName: "Song [short]") == nil, "only real ids")
+        expect(KnobShiftPlaylists.songId(inFileName: "Song [short]") == nil, "only real ids")
 
         // Folders, remove, restore and purge, in a temporary place.
         let root = KnobShiftPlaylists.root

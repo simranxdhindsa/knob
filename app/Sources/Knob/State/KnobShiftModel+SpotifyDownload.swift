@@ -51,6 +51,10 @@ extension KnobShiftModel {
         downloadProgress[playlistId] = progress
         setStage("Downloading", for: playlistId, ids: Set(fetch.map(\.song_id)))
         publishProgressSoon()
+        if playlist.source == .youtube {
+            await runYouTubeDownload(playlist, songs: fetch)
+            return
+        }
 
         let folder = KnobShiftPlaylists.folder(for: playlist)
         let saveFile = folder.appendingPathComponent(".knobshift-download.spotdl")
@@ -103,7 +107,7 @@ extension KnobShiftModel {
     }
 
     /// Finished files reach the queue at most once a second, in one change.
-    private func collectSoon(_ playlistId: String) {
+    func collectSoon(_ playlistId: String) {
         guard collectScheduled.insert(playlistId).inserted else { return }
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(1))
@@ -167,7 +171,7 @@ extension KnobShiftModel {
     }
 
     /// Drops the playlist's progress, unless more of its songs wait for another run.
-    private func finishProgress(_ playlistId: String) {
+    func finishProgress(_ playlistId: String) {
         if let more = queuedDownloads[playlistId], !more.isEmpty {
             downloadProgress[playlistId] = KnobShiftImport.Progress(songs: more)
         } else {
@@ -182,16 +186,19 @@ extension KnobShiftModel {
     /// waiting leave the queue, and Update playlist offers them again.
     func cancelDownload(_ playlist: KnobShiftPlaylist, quietly: Bool = false) {
         spotifyLane.removeWaiting(playlist.id)
+        if playlist.source == .youtube { cancelYouTubeRetry(playlist) }
         queuedDownloads[playlist.id] = nil
         let progress = downloadProgress.removeValue(forKey: playlist.id)
         if let job = spotifyJobs.removeValue(forKey: playlist.id) {
-            KnobShiftSpotDL.shared.cancel(job)
-            // Songs spotDL was in the middle of may have left half written files behind.
+            if playlist.source == .youtube { KnobShiftYouTube.shared.cancel(job) } else { KnobShiftSpotDL.shared.cancel(job) }
+            // Songs the helper was in the middle of may have left half written files behind.
             let unfinished = Set(progress?.order ?? []).subtracting(progress?.landed ?? [])
             let folder = KnobShiftPlaylists.folder(for: playlist)
+            let youtube = playlist.source == .youtube
             Task.detached(priority: .utility) {
                 try? await Task.sleep(for: .seconds(4))
                 Self.removeRecentFiles(in: folder, ids: unfinished)
+                if youtube { Self.removeYouTubeLeftovers(in: folder, ids: unfinished) }
             }
         }
         let landed = progress?.landed ?? []
@@ -241,6 +248,10 @@ extension KnobShiftModel {
 
     private func runRetry(spotifyId: String, rowId: UUID, playlist: KnobShiftPlaylist) async {
         guard pending.contains(where: { $0.id == rowId && $0.waitingForDownload }) else { return }
+        if playlist.source == .youtube {
+            await runYouTubeRetry(songId: spotifyId, playlist: playlist)
+            return
+        }
         setStage("Downloading", for: playlist.id, ids: [spotifyId])
         let folder = KnobShiftPlaylists.folder(for: playlist)
         let saveFile = folder.appendingPathComponent(".knobshift-retry-\(spotifyId).spotdl")
@@ -333,7 +344,7 @@ extension KnobShiftModel {
         if changed { pending = rows }
     }
 
-    private func setStage(_ stage: String, for playlistId: String, ids: Set<String>) {
+    func setStage(_ stage: String, for playlistId: String, ids: Set<String>) {
         var rows = pending
         var changed = false
         for index in rows.indices where rows[index].playlistId == playlistId && rows[index].waitingForDownload

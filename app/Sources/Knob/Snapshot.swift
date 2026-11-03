@@ -62,6 +62,27 @@ enum Snapshot {
             spotify.showSpotifyPickerForSnapshot()
             render(KnobShiftSpotifySheet(model: spotify, showsForm: true).environment(\.colorScheme, .dark), scheme: .dark,
                    to: folder.appendingPathComponent("knobshift-spotify-picker.png"))
+            // The YouTube sheet: its one time notice, the form signed out and signed in, and the picker.
+            let youtube = KnobShiftModel(restoresQueue: false)
+            for (name, form) in [("notice", false), ("form", true)] {
+                render(KnobShiftYouTubeSheet(model: youtube, showsForm: form).environment(\.colorScheme, .dark), scheme: .dark,
+                       to: folder.appendingPathComponent("knobshift-youtube-\(name).png"))
+            }
+            render(KnobShiftGoogleKey(model: youtube, startsOpen: true).padding(22).frame(width: 460)
+                    .background(Screen.bottom).environment(\.colorScheme, .dark), scheme: .dark,
+                   to: folder.appendingPathComponent("knobshift-youtube-key.png"))
+            youtube.showYouTubeCodeForSnapshot()
+            render(KnobShiftYouTubeSheet(model: youtube, showsForm: true).environment(\.colorScheme, .dark), scheme: .dark,
+                   to: folder.appendingPathComponent("knobshift-youtube-code.png"))
+            youtube.showYouTubeLoadingForSnapshot()
+            render(KnobShiftYouTubeSheet(model: youtube, showsForm: true).environment(\.colorScheme, .dark), scheme: .dark,
+                   to: folder.appendingPathComponent("knobshift-youtube-loading.png"))
+            youtube.showYouTubePreviewForSnapshot()
+            render(KnobShiftYouTubeSheet(model: youtube, showsForm: true).environment(\.colorScheme, .dark), scheme: .dark,
+                   to: folder.appendingPathComponent("knobshift-youtube-signedin.png"))
+            youtube.showYouTubePickerForSnapshot()
+            render(KnobShiftYouTubeSheet(model: youtube, showsForm: true).environment(\.colorScheme, .dark), scheme: .dark,
+                   to: folder.appendingPathComponent("knobshift-youtube-picker.png"))
             for (name, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {
                 render(HeaderBar(model: model).knobMenu.padding(16).background(Palette.of(scheme).panelBottom)
                         .environment(\.colorScheme, scheme), scheme: scheme,

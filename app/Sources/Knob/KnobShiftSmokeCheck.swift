@@ -18,6 +18,15 @@ enum KnobShiftSmokeCheck {
             let expectedNext = model.tracks[1]
             // Start the way people usually do: by clicking the song in the queue, not Play.
             model.playForCheck(volume: volume, bySelecting: model.tracks[0])
+            #if DEBUG
+            // KNOB_RECORD=FILE.m4a records the mix as heard, muted, for listening afterwards.
+            let recordTo = ProcessInfo.processInfo.environment["KNOB_RECORD"].map { URL(fileURLWithPath: $0) }
+            let recorder = KnobShiftDemoRecorder()
+            if recordTo != nil {
+                model.primaryDeck.recordOutput(into: recorder)
+                model.secondaryDeck.recordOutput(into: recorder)
+            }
+            #endif
             // Jump to a few seconds before the planned transition, so long real songs are quick
             // to check while the seek-then-plan path is exercised too.
             let plan = KnobShiftPlan.make(from: model.tracks[0], to: expectedNext)
@@ -56,6 +65,17 @@ enum KnobShiftSmokeCheck {
             }
             print(String(format: "KnobShift handoff: %@, next song clock %.2fs", blended ? "blended" : "clean", model.playbackTime))
             if volume > 0 { try? await Task.sleep(for: .seconds(4)) }
+            #if DEBUG
+            if let recordTo {
+                // A few seconds of the new song after the mix, then the file.
+                try? await Task.sleep(for: .seconds(6))
+                do {
+                    print(String(format: "Recorded %.1fs of the mix to %@", try recorder.write(to: recordTo), recordTo.path))
+                } catch {
+                    fail("could not write the recording: \(error.localizedDescription)")
+                }
+            }
+            #endif
             model.stop()
             guard !model.isPlaying, model.nowPlaying == nil else { fail("local playback did not stop cleanly") }
             print("KnobShift smoke check passed")

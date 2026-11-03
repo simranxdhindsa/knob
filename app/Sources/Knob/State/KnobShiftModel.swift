@@ -174,6 +174,10 @@ final class KnobShiftModel: ObservableObject {
     @Published internal(set) var playlists: [KnobShiftPlaylist] = []
     @Published internal(set) var removedPlaylists: [KnobShiftRemovedPlaylist] = []
     @Published internal(set) var spotifyLoggedIn = false
+    /// Signed in to YouTube with Google, and signing in now; the dashboard's rows are in youtubeHub.
+    @Published internal(set) var youtubeSignedIn = false
+    @Published internal(set) var youtubeSigningIn = false
+    let youtubeHub = KnobShiftYouTubeHub()
     /// One plain sentence about the latest Spotify step, shown in the Spotify sheet.
     @Published internal(set) var spotifyStatus: String?
     @Published internal(set) var spotifyBusy = false
@@ -228,6 +232,9 @@ final class KnobShiftModel: ObservableObject {
     var exitStyle: KnobShiftExitStyle?
     /// How far the slowdown goes for this song: 0.8...1.2, so 8% to 12% slower at its peak.
     var tapeDepth = 1.0
+    /// The leaving song's separated voice is slowing alone (a vocal throw), so the whole deck
+    /// is not slowed too.
+    var throwingVoice = false
     /// The exit effects' strength at their peak for the current mix, at most half.
     var exitStrength = 0.5
     var transitionTask: Task<Void, Never>?
@@ -354,8 +361,8 @@ final class KnobShiftModel: ObservableObject {
                 if let failed = pending.firstIndex(where: { $0.id == song.id }) {
                     pending[failed].isActive = false
                     pending[failed].failure = "Could not read this file"
-                    // A Spotify download that broke off: delete it, so Retry downloads it again.
-                    if song.spotifyId != nil, song.url.standardizedFileURL.path.hasPrefix(KnobShiftPlaylists.root.standardizedFileURL.path) {
+                    // A Spotify or YouTube download that broke off: delete it, so Retry downloads it again.
+                    if song.spotifyId != nil, KnobShiftPlaylists.isDownload(song.url) {
                         try? FileManager.default.removeItem(at: song.url)
                         pending[failed].waitingForDownload = true
                         pending[failed].failure = "Download broke"

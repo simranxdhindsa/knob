@@ -70,6 +70,8 @@ enum Screen {
     static let tabThumb = Color(hex: 0x2A2A2A)
     /// Spotify's own green, only for its mark beside "Spotify playlist".
     static let spotify = Color(hex: 0x1ED760)
+    /// YouTube's own red, only for its mark beside "YouTube".
+    static let youtube = Color(hex: 0xFF0033)
 }
 
 /// The VU meter's own tokens. Its face, ink and hub follow `Palette` like the knobs; only the
