@@ -2,7 +2,8 @@
 # Builds Knob for iPhone into build/ios/<sdk>/Knob.app, from the same KnobShift, panel and sound
 # code as the Mac app (no Xcode project, like app/build-app.sh).
 #   ios/build-ios.sh [simulator|device] [run]
-# "run" installs it on the booted simulator (booting an iPhone first if none is) and opens it.
+# "run" installs it on the booted simulator (booting an iPhone first if none is), or on the
+# connected iPhone for "device", and opens it.
 set -euo pipefail
 
 repo_dir="$(cd "$(dirname "$0")/.." && pwd)"
@@ -61,8 +62,31 @@ cp "$repo_dir/ios/Info.plist" "$bundle/Info.plist"
 cp "$repo_dir/presets/"*.fac "$bundle/presets/"
 if [ "$kind" = simulator ]; then
   codesign --force --sign - "$bundle"
+else
+  # A real iPhone needs Apple's signature: the Apple Development certificate and the profile
+  # for this app ID that Xcode makes for the Apple ID added in Xcode (Settings, Accounts).
+  app_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$repo_dir/ios/Info.plist")"
+  profile="$(grep -l "$app_id" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/"*.mobileprovision \
+    "$HOME/Library/MobileDevice/Provisioning Profiles/"*.mobileprovision 2>/dev/null | head -1 || true)"
+  if [ -z "$profile" ]; then
+    echo "No signing profile for $app_id yet. Let Xcode make one for your Apple ID first." >&2
+    exit 1
+  fi
+  cp "$profile" "$bundle/embedded.mobileprovision"
+  security cms -D -i "$profile" > "$out/profile.plist"
+  /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' "$out/profile.plist" > "$out/entitlements.plist"
+  identity="$(security find-identity -v -p codesigning | grep -m1 '"Apple Development' | sed -E 's/.*"(.*)"/\1/')"
+  codesign --force --sign "$identity" --entitlements "$out/entitlements.plist" "$bundle"
 fi
 echo "Built $bundle"
+
+if [ "${2:-}" = run ] && [ "$kind" = device ]; then
+  # The first connected iPhone (not a simulator).
+  phone="$(xcrun devicectl list devices 2>/dev/null | grep -E 'connected .* physical' | grep -oE '[0-9A-F]{8}-[0-9A-F]{16}' | head -1)"
+  [ -n "$phone" ] || { echo "Connect your iPhone with a cable and unlock it." >&2; exit 1; }
+  xcrun devicectl device install app --device "$phone" "$bundle"
+  xcrun devicectl device process launch --device "$phone" io.github.simranxdhindsa.knob.phone
+fi
 
 if [ "${2:-}" = run ] && [ "$kind" = simulator ]; then
   if ! xcrun simctl list devices booted | grep -q Booted; then
