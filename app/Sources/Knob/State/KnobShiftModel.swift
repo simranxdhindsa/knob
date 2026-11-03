@@ -49,6 +49,8 @@ final class KnobShiftModel: ObservableObject {
         var musicBreaks: [TimeInterval] = []
         /// Where each sung line ends, for KnobMix Now to leave a song between lines.
         var vocalLineEnds: [TimeInterval]? = nil
+        /// Where the song's last hook (its final repeat of the main section) begins.
+        var lastHookStart: TimeInterval? = nil
 
         /// Where the song is actually heard, without leading or trailing silence.
         func audibleEnd(duration: TimeInterval) -> TimeInterval { max(0, duration - trailingSilence) }
