@@ -45,10 +45,13 @@ struct LaunchKnobPose: View {
     var size: CGFloat
     var knobScale: Double = 1
     var knobOpacity: Double = 1
+    /// Degrees the pointer strains past the end stop.
+    var overshoot: Double = 0
 
     var body: some View {
         RealisticKnob(value: .constant(value), size: size, showsMinMax: false,
-                      accessibilityLabel: "Knob", accessibilityValue: "", springsToChanges: false)
+                      accessibilityLabel: "Knob", accessibilityValue: "", springsToChanges: false,
+                      pointerOvershoot: overshoot)
             .allowsHitTesting(false)
             .scaleEffect(knobScale)
             .opacity(knobOpacity)

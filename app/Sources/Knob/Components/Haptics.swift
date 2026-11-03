@@ -20,6 +20,18 @@ enum Haptics {
     static func mark() { perform(.generic, spaced: false) }
     static func detent() { perform(.levelChange, spaced: false) }
 
+    /// One push of a knob straining against its end stop, `intensity` 0...1 (the iPhone
+    /// opening). The iPhone's rigid tap at that strength; on the Mac, the trackpad's tick.
+    static func strain(_ intensity: Double) {
+        #if os(macOS)
+        tick()
+        #else
+        DispatchQueue.main.async {
+            UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: CGFloat(min(max(intensity, 0.05), 1)))
+        }
+        #endif
+    }
+
     #if os(macOS)
     typealias Pattern = NSHapticFeedbackManager.FeedbackPattern
     #else
