@@ -26,7 +26,7 @@ enum KnobShiftYouTubeParsing {
     }
 
     enum Failure: Error, Equatable {
-        case unavailable, privateVideo, ageRestricted, botCheck, offline, noSpace, nothingFound, failed, stalled, missingHelper
+        case unavailable, privateVideo, ageRestricted, botCheck, offline, noSpace, nothingFound, failed, stalled, missingHelper, signInExpired
 
         /// Plain sentences for the player; no dashes.
         var message: String {
@@ -41,6 +41,7 @@ enum KnobShiftYouTubeParsing {
             case .failed: return "YouTube import did not finish. Try again."
             case .stalled: return "YouTube stopped answering, so the import was stopped. Try again."
             case .missingHelper: return "YouTube import is unavailable in this copy of Knob."
+            case .signInExpired: return "Your YouTube sign in ran out. Sign in to YouTube again."
             }
         }
 
@@ -53,6 +54,7 @@ enum KnobShiftYouTubeParsing {
             case .offline: return "No internet"
             case .noSpace: return "No space"
             case .stalled: return "Stopped"
+            case .signInExpired: return "Sign in again"
             default: return "Not found"
             }
         }
@@ -308,6 +310,7 @@ enum KnobShiftYouTubeParsing {
     /// What went wrong, read from yt-dlp's messages; nil when nothing did.
     static func classify(_ lines: [String]) -> Failure? {
         let text = lines.joined(separator: "\n").lowercased()
+        if text.contains("cookies are no longer valid") { return .signInExpired }
         if text.contains("not a bot") || text.contains("youtube_bot_check") || text.contains("http error 429")
             || text.contains("too many requests") { return .botCheck }
         if text.contains("confirm your age") || text.contains("age restricted") || text.contains("age-restricted") { return .ageRestricted }
@@ -320,5 +323,62 @@ enum KnobShiftYouTubeParsing {
         if text.contains("nodename nor servname") || text.contains("network is unreachable") || text.contains("timed out")
             || text.contains("urlopen error") || text.contains("temporary failure in name resolution") { return .offline }
         return nil
+    }
+}
+
+// MARK: Signing in
+
+extension KnobShiftYouTubeParsing {
+    /// Why copying the sign in from a browser did not work.
+    enum SignInProblem: Error, Equatable {
+        case notSignedIn, browserMissing, keychainDenied, fullDiskAccess, offline, failed
+
+        /// Plain sentences for the player; no dashes. `browser` is the browser's name.
+        func message(_ browser: String) -> String {
+            switch self {
+            case .notSignedIn: return "You are not signed in to YouTube in \(browser). Sign in there first, then try again."
+            case .browserMissing: return "\(browser) has no sign ins on this Mac yet. Open it, sign in to YouTube, then try again."
+            case .keychainDenied: return "macOS did not allow reading \(browser)'s sign in. Try again and choose Allow when macOS asks."
+            case .fullDiskAccess: return "Safari keeps its sign ins locked. Allow Knob in System Settings, Privacy and Security, Full Disk Access, or use another browser."
+            case .offline: return "No internet connection. Try again when you are back online."
+            case .failed: return "Signing in to YouTube did not work. Try again."
+            }
+        }
+    }
+
+    /// Accounts YouTube sets only for a signed in person.
+    private static let accountCookies: Set<String> = ["SAPISID", "__Secure-3PAPISID", "__Secure-1PAPISID", "LOGIN_INFO"]
+
+    /// Only YouTube's cookies out of a browser's whole cookie file, so Knob never keeps any other
+    /// site's sign in, and whether they hold a YouTube account.
+    static func youtubeCookies(from jar: String) -> (text: String, signedIn: Bool) {
+        var kept = ["# Netscape HTTP Cookie File"]
+        var signedIn = false
+        for line in jar.components(separatedBy: .newlines) {
+            let fields = line.components(separatedBy: "\t")
+            guard fields.count >= 7, !line.hasPrefix("# "), !line.hasPrefix("#\t") else { continue }
+            let domain = fields[0].replacingOccurrences(of: "#HttpOnly_", with: "").lowercased()
+            guard domain == "youtube.com" || domain.hasSuffix(".youtube.com") else { continue }
+            kept.append(line)
+            if accountCookies.contains(fields[5]) { signedIn = true }
+        }
+        return (kept.joined(separator: "\n") + "\n", signedIn)
+    }
+
+    /// What went wrong while reading a browser's sign in, from yt-dlp's messages.
+    static func signInProblem(_ lines: [String]) -> SignInProblem {
+        let text = lines.joined(separator: "\n").lowercased()
+        if text.contains("operation not permitted") || text.contains("full disk access") { return .fullDiskAccess }
+        if text.contains("could not find") && text.contains("cookies database") { return .browserMissing }
+        if text.contains("cannot decrypt") || text.contains("keychain") || text.contains("failed to decrypt") { return .keychainDenied }
+        if classify(lines) == .offline { return .offline }
+        return .failed
+    }
+
+    /// Copies the browser's cookies into `file` while reading the first of Liked videos, which
+    /// only works for a signed in person, so the same step checks the sign in.
+    static func signInArguments(browser: String, into file: URL) -> [String] {
+        ["--ignore-config", "--no-color", "--cookies-from-browser", browser, "--cookies", file.path,
+         "--flat-playlist", "--playlist-items", "1", "--dump-single-json", "--", "https://www.youtube.com/playlist?list=LL"]
     }
 }

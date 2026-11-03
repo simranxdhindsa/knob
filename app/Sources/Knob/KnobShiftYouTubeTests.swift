@@ -21,6 +21,7 @@ enum KnobShiftYouTubeTests {
         playlists()
         arguments()
         problems()
+        signIn()
         print(failures == 0 ? "KnobShift YouTube self test passed" : "KnobShift YouTube self test: \(failures) failure(s)")
     }
 
@@ -172,6 +173,32 @@ enum KnobShiftYouTubeTests {
         expect(classify(["<urlopen error [Errno 8] nodename nor servname provided, or not known>"]) == .offline, "offline")
         expect(classify(["ERROR: Postprocessing: [Errno 28] No space left on device"]) == .noSpace, "disk full")
         expect(classify(["[download] 100% of 3.5MiB"]) == nil, "a normal run is no failure")
+        expect(classify(["WARNING: [youtube] The provided YouTube account cookies are no longer valid."]) == .signInExpired, "sign in ran out")
         expect(!KnobShiftYouTubeParsing.Failure.botCheck.message.contains("-"), "messages have no dashes")
+    }
+
+    private static func signIn() {
+        print("Signing in with a browser")
+        let jar = """
+        # Netscape HTTP Cookie File
+        .youtube.com\tTRUE\t/\tTRUE\t1893456000\tSAPISID\tabc
+        .youtube.com\tTRUE\t/\tTRUE\t1893456000\tPREF\tf6=40000000
+        .google.com\tTRUE\t/\tTRUE\t1893456000\tSID\tsecret
+        .bank.example\tTRUE\t/\tTRUE\t1893456000\tsession\tprivate
+        music.youtube.com\tFALSE\t/\tTRUE\t1893456000\tVISITOR_INFO1_LIVE\tx
+        """
+        let kept = KnobShiftYouTubeParsing.youtubeCookies(from: jar)
+        expect(kept.signedIn, "a YouTube account cookie means signed in")
+        expect(kept.text.contains("SAPISID") && kept.text.contains("VISITOR_INFO1_LIVE"), "YouTube's cookies kept")
+        expect(!kept.text.contains("bank.example") && !kept.text.contains("google.com"), "every other site's cookies dropped")
+        expect(kept.text.hasPrefix("# Netscape HTTP Cookie File"), "still a cookie file yt-dlp reads")
+        expect(!KnobShiftYouTubeParsing.youtubeCookies(from: ".youtube.com\tTRUE\t/\tTRUE\t1\tPREF\tx").signedIn, "visitor cookies alone are not a sign in")
+        let problem = KnobShiftYouTubeParsing.signInProblem
+        expect(problem(["ERROR: could not find chrome cookies database in \"/Users/x/Library/Application Support/Google/Chrome\""]) == .browserMissing, "browser never used")
+        expect(problem(["ERROR: [Errno 1] Operation not permitted: '/Users/x/Library/Containers/com.apple.Safari/Data/Library/Cookies/Cookies.binarycookies'"]) == .fullDiskAccess, "Safari needs Full Disk Access")
+        expect(problem(["WARNING: cannot decrypt v10 cookies: no key found"]) == .keychainDenied, "keychain access refused")
+        expect(problem(["<urlopen error [Errno 8] nodename nor servname provided, or not known>"]) == .offline, "offline while signing in")
+        expect(KnobShiftYouTubeParsing.signInArguments(browser: "chrome", into: URL(fileURLWithPath: "/t/c.txt")).suffix(2)
+               == ["--", "https://www.youtube.com/playlist?list=LL"], "signing in reads Liked videos to check it worked")
     }
 }

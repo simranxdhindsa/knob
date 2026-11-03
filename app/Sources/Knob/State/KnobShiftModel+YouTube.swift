@@ -53,8 +53,8 @@ extension KnobShiftModel {
             return
         } catch let failure as YouTubeFailure {
             guard spotifyReadJob == job else { return }
-            spotifyStatus = failure.message
             log("YOUTUBE", "Could not read \(link.url): \(failure).")
+            if failure == .signInExpired { signOutOfYouTube(expired: true) } else { spotifyStatus = failure.message }
             return
         } catch {
             guard spotifyReadJob == job else { return }
@@ -98,7 +98,7 @@ extension KnobShiftModel {
                 downloadProgress[playlist.id]?.markMissing(song.song_id)
                 markRows(of: playlist.id, ids: [song.song_id], failure: problem.rowText)
                 missing += 1
-                if [.botCheck, .offline, .noSpace].contains(problem) {
+                if [.botCheck, .offline, .noSpace, .signInExpired].contains(problem) {
                     stoppedBy = problem
                     break
                 }
@@ -116,6 +116,7 @@ extension KnobShiftModel {
             let left = Set(fetch.map(\.song_id))
             markRows(of: playlist.id, ids: left, failure: stoppedBy.rowText)
             missing = pending.reduce(0) { $0 + ($1.playlistId == playlist.id && $1.failure != nil && left.contains($1.spotifyId ?? "") ? 1 : 0) }
+            if stoppedBy == .signInExpired { signOutOfYouTube(expired: true) }
             spotifyStatus = "\(playlist.name) stopped early: \(stoppedBy.message)"
         } else {
             spotifyStatus = missing == 0
@@ -164,6 +165,41 @@ extension KnobShiftModel {
         }
         problem = result.stalled ? .stalled : KnobShiftYouTubeParsing.classify(result.lines) ?? .unavailable
         return problem == .failed ? .unavailable : problem
+    }
+
+    // MARK: Signing in
+
+    /// Copies the YouTube sign in from the browser the person picked. One step at a time, like
+    /// reading a list.
+    func signInToYouTube(with browser: KnobShiftYouTube.Browser) async {
+        guard youtubeAvailable, !youtubeSigningIn, spotifyReadJob == nil else { return }
+        youtubeSigningIn = true
+        defer { youtubeSigningIn = false }
+        spotifyStatus = browser.id == "safari"
+            ? "Reading your YouTube sign in from Safari."
+            : "Reading your YouTube sign in from \(browser.name). If macOS asks, choose Allow."
+        log("YOUTUBE", "Signing in with \(browser.name).")
+        do {
+            try await KnobShiftYouTube.shared.signIn(with: browser, id: UUID())
+            youtubeSignedIn = true
+            spotifyStatus = "Signed in to YouTube with \(browser.name). Liked videos and private playlists can be added now."
+            log("YOUTUBE", "Signed in to YouTube with \(browser.name).")
+        } catch is CancellationError {
+            spotifyStatus = nil
+        } catch let problem as KnobShiftYouTubeParsing.SignInProblem {
+            spotifyStatus = problem.message(browser.name)
+            log("YOUTUBE", "Signing in with \(browser.name) did not work: \(problem).")
+        } catch {
+            spotifyStatus = KnobShiftYouTubeParsing.SignInProblem.failed.message(browser.name)
+            log("YOUTUBE", "Signing in with \(browser.name) did not work: \(error.localizedDescription)")
+        }
+    }
+
+    func signOutOfYouTube(expired: Bool = false) {
+        KnobShiftYouTube.signOut()
+        youtubeSignedIn = false
+        spotifyStatus = expired ? YouTubeFailure.signInExpired.message : "Signed out of YouTube. Knob's copy of the sign in is deleted."
+        log("YOUTUBE", expired ? "The YouTube sign in ran out; signed out." : "Signed out of YouTube.")
     }
 
     /// yt-dlp's own temporary files ("….part", "….ytdl", a cover not yet embedded) left by a
