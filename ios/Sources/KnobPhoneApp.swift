@@ -95,6 +95,7 @@ final class PhoneApp: ObservableObject {
 struct PhoneRoot: View {
     @ObservedObject var model: KnobModel
     @ObservedObject private var sheets = PhoneSheets.shared
+    @ObservedObject private var link = PhoneMacLink.shared
     /// The opening animation runs once per launch, over the player (PhoneLaunch).
     @State private var launching = true
     @State private var revealed = false
@@ -108,6 +109,12 @@ struct PhoneRoot: View {
                 .opacity(revealed ? 1 : 0)
                 .environment(\.hidesPlayButton, launching)
                 .onPreferenceChange(PlayButtonFrame.self) { playButton = $0 }
+            // A finished sync's "done" card, over the player (KnobDoneCard).
+            if let done = link.done {
+                KnobDoneCard(title: done.title, detail: done.detail, onFinished: { link.done = nil })
+                    .id(done.id)
+                    .padding(.horizontal, 24)
+            }
             if launching {
                 PhoneLaunch(playButton: playButton,
                             onReveal: { withAnimation(.easeOut(duration: 0.5)) { revealed = true } },

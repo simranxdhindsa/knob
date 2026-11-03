@@ -32,6 +32,15 @@ enum Haptics {
         #endif
     }
 
+    /// Something finished well (a sync, a save): the iPhone's success tap; on the Mac, a firm click.
+    static func success() {
+        #if os(macOS)
+        detent()
+        #else
+        DispatchQueue.main.async { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+        #endif
+    }
+
     #if os(macOS)
     typealias Pattern = NSHapticFeedbackManager.FeedbackPattern
     #else

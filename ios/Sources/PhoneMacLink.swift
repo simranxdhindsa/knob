@@ -24,6 +24,14 @@ final class PhoneMacLink: ObservableObject {
     @Published private(set) var toCopy = 0
     /// The Mac's playlists as last read, for the sheet's list.
     @Published private(set) var library: KnobShiftLink.Library?
+    /// The "done" card over the player once a sync closes its sheet (KnobDoneCard).
+    struct Done: Equatable, Identifiable {
+        let id = UUID()
+        let title: String
+        let detail: String
+    }
+    @Published var done: Done?
+    private var pendingDone: Done?
 
     private var follow: Task<Void, Never>?
     private var followRounds = 0
@@ -290,6 +298,12 @@ final class PhoneMacLink: ObservableObject {
         if plan.noRoom > 0 { parts.append("This iPhone is almost full, so \(Self.songs(plan.noRoom)) stayed on your Mac.") }
         if plan.keptRemoved > 0 { parts.append("\(plan.keptRemoved) playlist\(plan.keptRemoved == 1 ? "" : "s") you removed here stayed removed.") }
         report(parts.joined(separator: " "), failed: result.error != nil)
+        if result.error == nil {
+            let more = waiting > 0 ? " More come over as your Mac downloads them." : ""
+            pendingDone = result.copied == 0 && plan.rows.isEmpty
+                ? Done(title: "All synced", detail: "Everything from \(mac) is on this iPhone.\(more)")
+                : Done(title: "Synced", detail: "\(Self.songs(result.copied)) copied from \(mac).\(more)")
+        }
         let stillComing = waiting > 0 || library.playlists.contains(where: \.downloading)
         if stillComing, result.error == nil { followUp(model) } else { stopFollowing() }
     }
@@ -301,6 +315,10 @@ final class PhoneMacLink: ObservableObject {
             try? await Task.sleep(for: .milliseconds(1_200))
             guard let self, !self.busy, !self.failed else { return }
             PhoneSheets.shared.mac = nil
+            // The card comes once the sheet has slid down.
+            try? await Task.sleep(for: .milliseconds(450))
+            self.done = self.pendingDone
+            self.pendingDone = nil
         }
     }
 
