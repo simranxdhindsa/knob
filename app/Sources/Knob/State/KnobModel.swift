@@ -81,7 +81,7 @@ final class KnobModel: ObservableObject {
         volumeControl.start()
         startPlatform()
         presets = Preset.all()
-        if let path = UserDefaults.standard.string(forKey: PersistKey.lastPreset.rawValue) {
+        if let path = UserDefaults.standard.string(forKey: PersistKey.lastPreset.rawValue).map(Platform.relocated) {
             currentPreset = presets.first { $0.url.path == path }
         }
         Task { await refresh() }

@@ -7,7 +7,8 @@ extension KnobShiftModel {
     /// Knob is not sandboxed, so a user-selected local path remains readable after relaunch.
     /// Missing or moved files are quietly removed from the saved queue on restore.
     func restoreQueue() async {
-        let paths = UserDefaults.standard.stringArray(forKey: PersistKey.knobShiftQueue.rawValue) ?? []
+        // On the iPhone the app's folders move with every install, so saved paths are relocated.
+        let paths = (UserDefaults.standard.stringArray(forKey: PersistKey.knobShiftQueue.rawValue) ?? []).map(Platform.relocated)
         log("RESTORE", "Restoring \(paths.count) song(s).")
         let found = await Task.detached(priority: .userInitiated) {
             paths.filter { FileManager.default.fileExists(atPath: $0) }.map { URL(fileURLWithPath: $0) }

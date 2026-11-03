@@ -21,6 +21,25 @@ enum Platform {
         #endif
     }
 
+    /// A saved file path made usable again. An iPhone app's folders move to a new place on every
+    /// install or update (/var/mobile/Containers/Data/Application/<id>/, and the app itself under
+    /// .../Bundle/Application/<id>/), so a path saved before then points at the old place; the
+    /// same file is looked up under the app's current folders. On the Mac paths never move.
+    static func relocated(_ path: String) -> String {
+        #if os(macOS)
+        path
+        #else
+        if FileManager.default.fileExists(atPath: path) { return path }
+        if let app = path.range(of: ".app/") {
+            return Bundle.main.bundlePath + "/" + path[app.upperBound...]
+        }
+        for folder in ["/Documents/", "/Library/", "/tmp/"] {
+            if let found = path.range(of: folder) { return NSHomeDirectory() + path[found.lowerBound...] }
+        }
+        return path
+        #endif
+    }
+
     /// What people call this device, for sentences like "the files stay on your Mac".
     static var deviceName: String {
         #if os(macOS)
