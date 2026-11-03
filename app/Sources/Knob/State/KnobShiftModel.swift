@@ -178,6 +178,8 @@ final class KnobShiftModel: ObservableObject {
     @Published internal(set) var playlists: [KnobShiftPlaylist] = []
     @Published internal(set) var removedPlaylists: [KnobShiftRemovedPlaylist] = []
     var persistScheduled = false
+    /// When the song in the player and its position were last saved (rememberNowPlaying).
+    var rememberedAt = Date.distantPast
     #if os(macOS)
     @Published internal(set) var spotifyLoggedIn = false
     /// Signed in to YouTube with Google, and signing in now; the dashboard's rows are in youtubeHub.
@@ -490,6 +492,7 @@ final class KnobShiftModel: ObservableObject {
             primaryDeck.pause()
             progressTask?.cancel()
             isPlaying = false
+            rememberNowPlaying()
         } else {
             log("PLAY", "Resumed at \(Self.seconds(playbackTime)).")
             do { try startEngineIfNeeded() }
@@ -570,6 +573,7 @@ final class KnobShiftModel: ObservableObject {
             startProgressUpdates()
         }
         log("DECK", "\(primaryDeck.name) is primary: \(track.title) from \(Self.seconds(time)) of \(Self.seconds(track.duration)), \(remaining) frames, \(play ? "playing" : "paused").")
+        rememberNowPlaying()
     }
 
     /// Every way of making sound goes through here: Play, clicking a song, Next, Previous,
@@ -614,6 +618,8 @@ final class KnobShiftModel: ObservableObject {
         progressTask = Task { [weak self] in
             while !Task.isCancelled {
                 self?.updatePlaybackTime()
+                // Where the song is, saved every 5 seconds, so even a crash loses little.
+                if let self, Date().timeIntervalSince(self.rememberedAt) >= 5 { self.rememberNowPlaying() }
                 try? await Task.sleep(for: .milliseconds(100))
             }
         }

@@ -55,6 +55,8 @@ final class PhoneApp: ObservableObject {
             await model.knobShift.addTracks(files.filter { !$0.lastPathComponent.hasPrefix(".") }.sorted { $0.path < $1.path })
         }
         if environment["KNOB_PHONE_PLAY"] == "1" {
+            // The saved queue comes back in the background: wait for it.
+            for _ in 0..<150 where model.knobShift.tracks.isEmpty { try? await Task.sleep(for: .milliseconds(100)) }
             model.userSetPower(true)
             if let first = model.knobShift.tracks.first { model.knobShift.select(first) }
         }

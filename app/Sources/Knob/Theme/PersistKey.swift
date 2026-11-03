@@ -16,6 +16,9 @@ enum PersistKey: String {
     case askedKeyAccess = "knob.audio.askedKeyAccess"
     /// Paths for the local files the user has added to KnobShift's queue.
     case knobShiftQueue = "knob.shift.queue"
+    /// The song last in the player and where it was, so the next launch has it ready to play.
+    case knobShiftLastSong = "knob.shift.lastSong"
+    case knobShiftLastPosition = "knob.shift.lastPosition"
     /// Whether the dedicated KnobShift window was visible when Knob last quit.
     case knobShiftWindowOpen = "knob.shift.windowOpen"
     case knobShiftSpotifyNoticeAccepted = "knob.shift.spotify.noticeAccepted"
