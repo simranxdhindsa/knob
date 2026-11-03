@@ -68,6 +68,7 @@ struct KnobShiftPlayerView: View {
     @ObservedObject var model: KnobShiftModel
     @State private var importing = false
     @State private var showingSpotify = false
+    @State private var showingYouTube = false
 
     var body: some View {
         let palette = Palette.of(scheme)
@@ -87,6 +88,7 @@ struct KnobShiftPlayerView: View {
             .ignoresSafeArea()
         }
         .sheet(isPresented: $showingSpotify) { KnobShiftSpotifySheet(model: model).focusEffectDisabled() }
+        .sheet(isPresented: $showingYouTube) { KnobShiftYouTubeSheet(model: model).focusEffectDisabled() }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result else { return }
             Task { await model.addTracks(urls) }
@@ -113,7 +115,7 @@ struct KnobShiftPlayerView: View {
                 KnobShiftNowPlaying(model: model, compact: false)
                 VStack(spacing: 14) {
                     KnobShiftUpNext(model: model)
-                    KnobShiftQueue(model: model, onAdd: { importing = true }, onSpotify: { showingSpotify = true })
+                    KnobShiftQueue(model: model, onAdd: { importing = true }, onSpotify: { showingSpotify = true }, onYouTube: { showingYouTube = true })
                 }
                 .frame(width: min(360, width * 0.42))
             }
@@ -121,7 +123,7 @@ struct KnobShiftPlayerView: View {
             VStack(spacing: 12) {
                 KnobShiftNowPlaying(model: model, compact: true)
                 KnobShiftUpNext(model: model)
-                KnobShiftQueue(model: model, onAdd: { importing = true }, onSpotify: { showingSpotify = true })
+                KnobShiftQueue(model: model, onAdd: { importing = true }, onSpotify: { showingSpotify = true }, onYouTube: { showingYouTube = true })
             }
         }
     }

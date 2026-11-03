@@ -18,6 +18,11 @@ extension KnobShiftModel {
         /// What starts ticked: everything except songs unticked last time.
         let initial: Set<String>
         let isUpdate: Bool
+
+        /// The same picker shows YouTube lists; their ids start with "yt:".
+        var source: KnobShiftPlaylist.Source {
+            playlistId.hasPrefix(KnobShiftPlaylists.youtubePrefix) ? .youtube : .spotify
+        }
     }
 
     var spotifyAvailable: Bool { KnobShiftSpotDL.isAvailable }

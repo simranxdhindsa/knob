@@ -202,6 +202,30 @@ extension KnobShiftModel {
         log("YOUTUBE", expired ? "The YouTube sign in ran out; signed out." : "Signed out of YouTube.")
     }
 
+    // MARK: Snapshots
+
+    /// Screenshot only: signed in, with a YouTube playlist downloading.
+    func showYouTubePreviewForSnapshot() {
+        youtubeSignedIn = true
+        let id = KnobShiftPlaylists.youtubePrefix + "PLroad"
+        playlists = [KnobShiftPlaylist(id: id, name: "Punjabi Hits 2026", link: "", kind: .playlist,
+                                       folderName: "Punjabi Hits 2026", spotifyOrder: [], addedAt: Date())]
+        var progress = KnobShiftImport.Progress(songs: Self.previewSongs(["Kya Baat Aa", "Sardaari", "Bodyguard", "Lalkaara"]))
+        progress.started = true
+        progress.markLanded(Self.previewSongs(["Kya Baat Aa"])[0].song_id)
+        spotifyProgress[id] = progress
+        spotifyStatus = "4 songs from Punjabi Hits 2026 are downloading."
+    }
+
+    /// Screenshot only: the song picker for a YouTube list, with one song already in the queue.
+    func showYouTubePickerForSnapshot() {
+        let songs = Self.previewSongs(["Kya Baat Aa", "Sardaari", "Bodyguard", "Lalkaara", "Ghaint", "Jee Karuga (feat. Sargi Maan)",
+                                       "Why So", "No Luck", "Shaukeen"])
+        spotifyReview = SpotifyReview(playlistId: KnobShiftPlaylists.youtubePrefix + "PLroad", name: "Punjabi Hits 2026", kind: .playlist,
+                                      query: "", songs: songs, queued: [songs[0].song_id],
+                                      initial: Set(songs.map(\.song_id)), isUpdate: true)
+    }
+
     /// yt-dlp's own temporary files ("….part", "….ytdl", a cover not yet embedded) left by a
     /// download that was stopped halfway.
     nonisolated static func removeYouTubeLeftovers(in folder: URL) {

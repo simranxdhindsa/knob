@@ -40,6 +40,8 @@ struct KnobShiftPlaylistRows: View {
         }
     }
 
+    private func service(_ playlist: KnobShiftPlaylist) -> String { playlist.source == .youtube ? "YouTube" : "Spotify" }
+
     private func row(_ playlist: KnobShiftPlaylist) -> some View {
         let count = model.songCount(in: playlist)
         let progress = model.spotifyProgress[playlist.id]
@@ -52,7 +54,7 @@ struct KnobShiftPlaylistRows: View {
                 if let progress {
                     KnobShiftImportBar(progress: progress, compact: true)
                 } else {
-                    Text(failed > 0 ? "\(count.ready) of \(count.total) ready, \(failed) not downloaded" : "\(count.total) song\(count.total == 1 ? "" : "s") from Spotify")
+                    Text(failed > 0 ? "\(count.ready) of \(count.total) ready, \(failed) not downloaded" : "\(count.total) song\(count.total == 1 ? "" : "s") from \(service(playlist))")
                         .font(.system(size: 9.5)).foregroundStyle(Screen.textTertiary).lineLimit(1)
                 }
             }
@@ -76,8 +78,8 @@ struct KnobShiftPlaylistRows: View {
                 }
                 .buttonStyle(.plain).foregroundStyle(Screen.textSecondary)
                 .disabled(model.spotifyReadJob != nil)
-                .help("Update from Spotify and pick songs")
-                .accessibilityLabel("Update \(playlist.name) from Spotify")
+                .help("Update from \(service(playlist)) and pick songs")
+                .accessibilityLabel("Update \(playlist.name) from \(service(playlist))")
             }
             Button { confirmRemove = playlist } label: {
                 Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
