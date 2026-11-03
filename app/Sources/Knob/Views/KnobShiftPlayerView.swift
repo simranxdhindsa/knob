@@ -5,8 +5,6 @@ import UniformTypeIdentifiers
 /// Mac shows it in its own window (KnobShiftWindow.swift); the iPhone app's main screen is this
 /// player, with Knob's sound controls behind the header's sound button. The deck and cards are in
 /// KnobShiftNowPlaying.swift and KnobShiftQueue.swift.
-/// Streaming services are not offered: Knob cannot safely or permissibly decode, preload and
-/// overlap their protected audio streams.
 struct KnobShiftPlayerView: View {
     static let minimumSize = CGSize(width: 440, height: 520)
     static let initialSize = CGSize(width: 820, height: 600)
@@ -21,6 +19,10 @@ struct KnobShiftPlayerView: View {
     @State private var importing = false
     @State private var showingSpotify = false
     @State private var showingYouTube = false
+    #if os(iOS)
+    /// Add from Spotify, YouTube or Sync, all through Knob on the Mac (PhoneMacSheet).
+    @ObservedObject private var sheets = PhoneSheets.shared
+    #endif
 
     var body: some View {
         let palette = Palette.of(scheme)
@@ -44,6 +46,8 @@ struct KnobShiftPlayerView: View {
         #if os(macOS)
         .sheet(isPresented: $showingSpotify) { KnobShiftSpotifySheet(model: model).focusEffectDisabled() }
         .sheet(isPresented: $showingYouTube) { KnobShiftYouTubeSheet(model: model).focusEffectDisabled() }
+        #else
+        .sheet(item: $sheets.mac) { PhoneMacSheet(model: model, source: $0) }
         #endif
         .fileImporter(isPresented: $importing, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result else { return }
@@ -78,13 +82,22 @@ struct KnobShiftPlayerView: View {
         }
     }
 
+    private var queue: some View {
+        #if os(macOS)
+        KnobShiftQueue(model: model, onAdd: { importing = true }, onSpotify: { showingSpotify = true }, onYouTube: { showingYouTube = true })
+        #else
+        KnobShiftQueue(model: model, onAdd: { importing = true }, onSpotify: { sheets.mac = .spotify }, onYouTube: { sheets.mac = .youtube },
+                       onSync: { sheets.mac = .sync })
+        #endif
+    }
+
     @ViewBuilder private func workspace(width: CGFloat) -> some View {
         if width >= 760 {
             HStack(alignment: .top, spacing: 18) {
                 KnobShiftNowPlaying(model: model, compact: false)
                 VStack(spacing: 14) {
                     KnobShiftUpNext(model: model)
-                    KnobShiftQueue(model: model, onAdd: { importing = true }, onSpotify: { showingSpotify = true }, onYouTube: { showingYouTube = true })
+                    queue
                 }
                 .frame(width: min(360, width * 0.42))
             }
@@ -92,7 +105,7 @@ struct KnobShiftPlayerView: View {
             VStack(spacing: 12) {
                 KnobShiftNowPlaying(model: model, compact: true)
                 KnobShiftUpNext(model: model)
-                KnobShiftQueue(model: model, onAdd: { importing = true }, onSpotify: { showingSpotify = true }, onYouTube: { showingYouTube = true })
+                queue
             }
         }
     }

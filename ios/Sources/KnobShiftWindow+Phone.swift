@@ -13,4 +13,6 @@ enum KnobShiftWindow {
 final class PhoneSheets: ObservableObject {
     static let shared = PhoneSheets()
     @Published var sound = false
+    /// Add from Spotify, YouTube or Sync (PhoneMacSheet).
+    @Published var mac: PhoneMacSheet.Source?
 }

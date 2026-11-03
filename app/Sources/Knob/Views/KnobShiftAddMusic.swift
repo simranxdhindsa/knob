@@ -8,12 +8,15 @@ struct KnobShiftAddMusic: View {
     var onMac: () -> Void
     var onSpotify: () -> Void
     var onYouTube: () -> Void = {}
+    /// Sync from your Mac (the iPhone app).
+    var sync: Bool = false
+    var onSync: () -> Void = {}
     /// Snapshots show the card open.
     var startsOpen = false
 
     @State private var open = false
 
-    private var hasChoices: Bool { spotify || youtube }
+    private var hasChoices: Bool { spotify || youtube || sync }
 
     var body: some View {
         Button {
@@ -29,8 +32,10 @@ struct KnobShiftAddMusic: View {
         .focusEffectDisabled()
         .accessibilityHint(hasChoices ? "Opens a choice of songs on this Mac, Spotify or YouTube" : "Adds songs from this Mac")
         .popover(isPresented: $open, arrowEdge: .bottom) {
-            KnobShiftAddMusicCard(spotify: spotify, youtube: youtube,
-                                  onMac: { pick(onMac) }, onSpotify: { pick(onSpotify) }, onYouTube: { pick(onYouTube) })
+            KnobShiftAddMusicCard(spotify: spotify, youtube: youtube, sync: sync,
+                                  onMac: { pick(onMac) }, onSpotify: { pick(onSpotify) }, onYouTube: { pick(onYouTube) },
+                                  onSync: { pick(onSync) })
+                .presentationCompactAdaptation(.popover)
         }
         .onAppear { if startsOpen { open = true } }
     }
@@ -47,15 +52,23 @@ struct KnobShiftAddMusic: View {
 struct KnobShiftAddMusicCard: View {
     var spotify = true
     var youtube = true
+    var sync = false
     var onMac: () -> Void
     var onSpotify: () -> Void
     var onYouTube: () -> Void = {}
+    var onSync: () -> Void = {}
 
     var body: some View {
         DropdownCard(width: 240) {
+            #if os(macOS)
             DropdownRow(title: "Songs on your Mac", detail: "Music files from Finder", action: onMac) {
                 Image(systemName: "apple.logo").font(.system(size: 14, weight: .medium))
             }
+            #else
+            DropdownRow(title: "Songs on your iPhone", detail: "Music files from Files", action: onMac) {
+                Image(systemName: "iphone").font(.system(size: 14, weight: .medium))
+            }
+            #endif
             if spotify {
                 DropdownRow(title: "Spotify playlist", detail: "Playlists, albums or Liked Songs", action: onSpotify) {
                     SpotifyMark().frame(width: 16, height: 16)
@@ -64,6 +77,11 @@ struct KnobShiftAddMusicCard: View {
             if youtube {
                 DropdownRow(title: "YouTube", detail: "Videos, playlists or albums", action: onYouTube) {
                     YouTubeMark().frame(width: 18, height: 18)
+                }
+            }
+            if sync {
+                DropdownRow(title: "Sync from your Mac", detail: "Playlists Knob on your Mac has", action: onSync) {
+                    Image(systemName: "laptopcomputer.and.iphone").font(.system(size: 13, weight: .medium))
                 }
             }
         }

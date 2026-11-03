@@ -51,10 +51,19 @@ extension KnobShiftModel {
     /// Removes many songs at once, ready or still preparing: a selection, or the whole queue.
     /// One change and one save, however many songs. The files stay on the Mac; a Spotify song
     /// still waiting to download is not downloaded again later.
-    func remove(ids: Set<UUID>) {
+    func remove(ids: Set<UUID>, remembers: Bool = true) {
         guard !ids.isEmpty else { return }
         if let playing = nowPlaying, ids.contains(playing.id) { stop() }
         let leaving = tracks.filter { ids.contains($0.id) }.count
+        #if os(iOS)
+        // Songs synced from the Mac and taken out here stay out on the next sync (emptying the
+        // whole queue is not taken as not wanting them).
+        if remembers {
+        let leavingSongs = tracks.filter { ids.contains($0.id) }.map { ($0.playlistId, $0.spotifyId) }
+            + pending.filter { ids.contains($0.id) }.map { ($0.playlistId, $0.spotifyId) }
+        KnobShiftSyncPlan.decline(leavingSongs.compactMap { pair in pair.0.flatMap { p in pair.1.map { "\(p)/\($0)" } } })
+        }
+        #endif
         tracks.removeAll { ids.contains($0.id) }
         unshuffled.removeAll { ids.contains($0.id) }
         var skippedByPlaylist: [String: [String]] = [:]
@@ -83,6 +92,6 @@ extension KnobShiftModel {
 
     /// Empties the queue.
     func removeAll() {
-        remove(ids: Set(tracks.map(\.id)).union(pending.map(\.id)))
+        remove(ids: Set(tracks.map(\.id)).union(pending.map(\.id)), remembers: false)
     }
 }

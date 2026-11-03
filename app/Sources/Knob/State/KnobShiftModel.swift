@@ -109,6 +109,8 @@ final class KnobShiftModel: ObservableObject {
         var isActive = false
         /// Set when preparing failed; the queue offers Retry.
         var failure: String?
+        /// Where it joins the queue once prepared (a song synced from the Mac); nil adds it at the end.
+        var placement: KnobShiftSyncPlan.Placement? = nil
         var title: String { url.deletingPathExtension().lastPathComponent }
         /// "Title - Artist" file names split the same way as ready songs.
         var name: String { spotifyName ?? Track.split(title).name }
@@ -369,8 +371,7 @@ final class KnobShiftModel: ObservableObject {
                 track.spotifyId = song.spotifyId ?? origin?.spotifyId
                 track.playlistId = song.playlistId ?? origin?.playlistId
                 pending.removeAll { $0.id == song.id }
-                tracks.append(track)
-                if isShuffled { unshuffled.append(track) }
+                place(track, at: song.placement)
                 logAnalysis(result)
                 refreshPlanIfNeeded()
             } catch {
@@ -393,6 +394,22 @@ final class KnobShiftModel: ObservableObject {
             transitionDescription = "Ready. Choose a song to begin."
             log("READY", "Prepared \(tracks.count) song(s).")
         }
+    }
+
+    /// Adds a prepared song where it was planned to go: next to a song of its playlist, or last.
+    private func place(_ track: Track, at placement: KnobShiftSyncPlan.Placement?) {
+        func index(in list: [Track]) -> Int {
+            switch placement {
+            case .after(let id)?: return list.lastIndex { $0.spotifyId == id }.map { $0 + 1 } ?? list.count
+            case .before(let id)?: return list.firstIndex { $0.spotifyId == id } ?? list.count
+            default: return list.count
+            }
+        }
+        let at = index(in: tracks)
+        // The song playing keeps its place in the order: one added before it moves it along.
+        if at <= currentIndex, !tracks.isEmpty, nowPlaying != nil { currentIndex += 1 }
+        tracks.insert(track, at: at)
+        if isShuffled { unshuffled.insert(track, at: index(in: unshuffled)) }
     }
 
     private func setProgress(_ value: Double, for id: UUID) {

@@ -47,6 +47,12 @@
 	<array>
 		<string>audio</string>
 	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Knob finds Knob on your Mac over your home Wi-Fi, to copy your Spotify and YouTube playlists to this iPhone.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_knobshift._tcp</string>
+	</array>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>

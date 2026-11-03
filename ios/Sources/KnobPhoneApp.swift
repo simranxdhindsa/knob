@@ -47,7 +47,8 @@ final class PhoneApp: ObservableObject {
     /// Development checks in the simulator, set with SIMCTL_CHILD_ before `simctl launch`:
     /// KNOB_PHONE_SILENT=1 measures Knob's sound but plays nothing, KNOB_PHONE_ADD=1 queues every
     /// song in KnobShift/Imported, KNOB_PHONE_PLAY=1 turns Knob on and plays, and
-    /// KNOB_PHONE_SHEET=1 opens the sound controls.
+    /// KNOB_PHONE_SHEET=1 opens the sound controls. KNOB_PHONE_MAC=spotify, youtube or sync opens
+    /// that sheet, and KNOB_PHONE_SYNC=1 syncs with Knob on the Mac.
     private static func runChecks(_ model: KnobModel) async {
         let environment = ProcessInfo.processInfo.environment
         PhoneEffectUnit.silent = environment["KNOB_PHONE_SILENT"] == "1"
@@ -62,6 +63,8 @@ final class PhoneApp: ObservableObject {
             if let first = model.knobShift.tracks.first { model.knobShift.select(first) }
         }
         if environment["KNOB_PHONE_SHEET"] == "1" { PhoneSheets.shared.sound = true }
+        if let sheet = environment["KNOB_PHONE_MAC"].flatMap(PhoneMacSheet.Source.init(rawValue:)) { PhoneSheets.shared.mac = sheet }
+        if environment["KNOB_PHONE_SYNC"] == "1" { await PhoneMacLink.shared.sync(model.knobShift) }
         if environment["KNOB_PHONE_PLAY"] == "1" {
             // What Knob's sound measured after a few seconds of playback, for the log.
             try? await Task.sleep(for: .seconds(6))

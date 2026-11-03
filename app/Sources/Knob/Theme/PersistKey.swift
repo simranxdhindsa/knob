@@ -19,6 +19,8 @@ enum PersistKey: String {
     /// The song last in the player and where it was, so the next launch has it ready to play.
     case knobShiftLastSong = "knob.shift.lastSong"
     case knobShiftLastPosition = "knob.shift.lastPosition"
+    /// Songs synced from the Mac and taken out of the iPhone's queue, as "playlist/song".
+    case knobShiftPhoneDeclined = "knob.shift.phone.declined"
     /// Whether the dedicated KnobShift window was visible when Knob last quit.
     case knobShiftWindowOpen = "knob.shift.windowOpen"
     case knobShiftSpotifyNoticeAccepted = "knob.shift.spotify.noticeAccepted"

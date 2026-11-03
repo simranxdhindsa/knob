@@ -41,6 +41,7 @@ struct KnobShiftQueue: View {
     var onAdd: () -> Void
     var onSpotify: () -> Void = {}
     var onYouTube: () -> Void = {}
+    var onSync: () -> Void = {}
     @State private var selection: Set<UUID> = []
     @State private var confirmingRemoveAll = false
 
@@ -141,7 +142,7 @@ struct KnobShiftQueue: View {
         #if os(macOS)
         KnobShiftAddMusic(spotify: model.spotifyAvailable, youtube: model.youtubeAvailable, onMac: onAdd, onSpotify: onSpotify, onYouTube: onYouTube)
         #else
-        KnobShiftAddMusic(spotify: false, youtube: false, onMac: onAdd, onSpotify: onSpotify, onYouTube: onYouTube)
+        KnobShiftAddMusic(spotify: true, youtube: true, onMac: onAdd, onSpotify: onSpotify, onYouTube: onYouTube, sync: true, onSync: onSync)
         #endif
     }
 
