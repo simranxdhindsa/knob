@@ -3,9 +3,11 @@
 
 <img src="docs/images/banner.svg" alt="Knob: Turn · Tune · Flow" width="100%" />
 
-### Studio sound for every output on your Mac.
+# Knob
 
-A real volume knob for HDMI monitors, five effects, a 10-band equalizer and presets,<br/>all in a menu bar panel that feels like studio hardware.
+### Free Mac music player and studio sound, right in your menu bar.
+
+Five effects, a 10 band equalizer and presets in a panel that feels like studio hardware,<br/>plus KnobShift, a music player that blends every song smoothly into the next.
 
 <br/>
 
@@ -23,9 +25,11 @@ A real volume knob for HDMI monitors, five effects, a 10-band equalizer and pres
 
 ## 💡 Why Knob
 
-Plug a Mac into an HDMI or DisplayPort monitor and the volume keys stop working. The level is stuck at 100% and the only way to turn it down is the monitor's own buttons.
+Knob places its own audio device between your apps and your speakers. The Mac treats it like real hardware, and because every sound now passes through Knob, it can make that sound better on the way.
 
-Knob places its own audio device between your apps and your speakers. The Mac treats it like real hardware, so the **volume keys, Control Center and Knob's own knob all work again, on any output**. And because every sound now passes through Knob, it can make that sound better on the way.
+- **Studio sound for everything you hear.** Five effects, a 10 band EQ and presets shape music, films and calls alike, on any output.
+- **Songs that flow.** KnobShift plays the music on your Mac and blends each song into the next, with the beats in step and the voices never clashing.
+- **Volume keys on every output.** On HDMI and DisplayPort monitors, where macOS locks the level at 100%, the **volume keys, Control Center and Knob's own knob all work again**.
 
 > **Your level never jumps.** When Knob takes over the output, it carries your volume across, and when it hands the output back, it carries it back. Nothing blasts at 100%, even after a crash.
 
