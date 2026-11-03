@@ -14,6 +14,16 @@ and mix into each other like every other song.
 - Sign in with Google to see your own YouTube in KnobShift: your liked music, your playlists, new music from channels you follow and what is popular in your country, with thumbnails
 - Music only is on by default, so vlogs, Shorts and long mixes stay out of your lists; turn it off to see every video
 - A YouTube video that is gone, private or blocked in your country is replaced by the closest match found by its name
+- KnobMix mixes are about 8 seconds and never longer than 10, so a long outro is skipped instead of dragging on
+- Two singers are never heard together: the old voice finishes its line and fades into a hall before the new voice comes in
+- The long tape slowdown is back on every mix where the beats lock, and both songs slow down together so their beats stay in time
+- A song that sings to its very end is cut at a break or at the end of a line, and its voice slows like tape into a hall while its music fades in time with the new beats
+- Songs up to 20% apart in tempo now lock their beats by meeting in the middle, and the strong beats of both songs always land together
+
+### Fixes
+
+- Pressing ADD in the song picker closes the window, and the songs keep downloading in the background
+- A song that keeps singing through its fade no longer mixes in its last seconds
 
 ## 2.0
 
