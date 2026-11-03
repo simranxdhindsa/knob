@@ -94,17 +94,21 @@ The rules (`KnobShiftPlan`, checked by `--knobshift-mix-check`):
    Its separated voice is held silent until the mix's last 2 seconds; the old
    separated voice clears within half a second of its end (`voiceLevels`).
 5. **Singing to the end.** When the singing runs right to the end (under a bar
-   of music after it), the voice is cut at the last music break at least four
-   bars before the end and within the last minute, and the old song is gone
-   within 2 seconds, in whole beats. KnobMix Now cuts the same way.
+   of music after it), the voice is cut in the last minute, at least four bars
+   before the end (`cutPoint`): at the last music break, else where a sung line
+   ends, else where the song starts fading under the voice. The old song is gone
+   within 2 seconds, in whole beats. KnobMix Now cuts the same way. Example: Why
+   So sings through its fade to 3:52.5, so it is cut at its 3:41.25 line ending.
 6. **Tempos that cannot lock** (more than 8% apart): no new beats play under the
    old song. The new song starts on the downbeat as the old voice ends, and the
    old song echoes out: its own sound drops within the first 40% of a 2 second
    exit while its echo or reverb, at full strength, rings on after it (the deck
    volume sits before those effects).
-7. **Exit effects.** Beat locked mixes always use the tape slowdown into a hall:
-   it starts on the old voice's last word, deepens to about 11% slower and holds
-   as the old song leaves, with the hall rising to 35% on the beat pulse. Mixes
+7. **Exit effects.** Beat locked mixes always use the tape slowdown into a hall.
+   The hall starts on the old voice's last word and rises to 35% on the beat
+   pulse. The slowdown never touches the old voice: it is a wind down over the
+   last 1.5 seconds of the exit (never more than its last half, `windDown`), to
+   about 11% slower, because a slowing song drifts off the locked beat. Mixes
    that cannot lock use the echo out or the reverb wash. A closing low pass and
    the bass swap apply to every exit. No flanger, by choice.
 8. Songs without vocals mix over the last 6 to 9.5 seconds of their fade. With
