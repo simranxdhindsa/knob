@@ -90,14 +90,19 @@ struct PhoneRoot: View {
     /// The opening animation runs once per launch, over the player (PhoneLaunch).
     @State private var launching = true
     @State private var revealed = false
+    /// Where the player's Play button is, for the opening's knob to land on.
+    @State private var playButton = CGRect.zero
 
     var body: some View {
         ZStack {
+            // The player only fades in, never moves, so its Play button stays where the knob lands.
             KnobShiftPlayerView(model: model.knobShift, onSound: { sheets.sound = true }, prepareImports: PhoneLibrary.keep)
-                .scaleEffect(revealed ? 1 : 1.06)
                 .opacity(revealed ? 1 : 0)
+                .environment(\.hidesPlayButton, launching)
+                .onPreferenceChange(PlayButtonFrame.self) { playButton = $0 }
             if launching {
-                PhoneLaunch(onReveal: { withAnimation(Motion.gentle) { revealed = true } },
+                PhoneLaunch(playButton: playButton,
+                            onReveal: { withAnimation(.easeOut(duration: 0.5)) { revealed = true } },
                             onFinished: { launching = false })
             }
         }
