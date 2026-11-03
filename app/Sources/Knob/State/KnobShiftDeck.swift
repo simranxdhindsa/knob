@@ -242,4 +242,12 @@ final class KnobShiftDeck {
               playerTime.sampleRate > 0 else { return nil }
         return startOffset + max(0, Double(playerTime.sampleTime) / playerTime.sampleRate)
     }
+
+    #if DEBUG
+    /// Development checks only: hands the deck's finished sound (after every effect) to the
+    /// demo recorder.
+    func recordOutput(into recorder: KnobShiftDemoRecorder) {
+        room.installTap(onBus: 0, bufferSize: 4096, format: nil) { buffer, time in recorder.add(buffer, at: time) }
+    }
+    #endif
 }

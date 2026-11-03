@@ -27,7 +27,6 @@ enum KnobShiftMixTests {
         cutWithLockedBeats()
         glide()
         singsThroughItsFade()
-        windDown()
         wideGap()
         throwVoices()
         voices()
@@ -187,14 +186,6 @@ enum KnobShiftMixTests {
         expect(abs(KnobShiftPlan.make(from: current, to: next).handoff - 214.4) < 0.01, "a sung line ending is used before the fade")
     }
 
-    private static func windDown() {
-        print("The tape slowdown winds down at the very end")
-        let wind = KnobShiftExitStyle.windDown
-        expect(wind(0, 6) == 0 && wind(0.74, 6) == 0, "6s exit: no slowdown while the beats are locked")
-        expect(wind(1, 6) == 1 && wind(0.9, 6) > 0.5, "6s exit: the full slowdown over its last 1.5s")
-        expect(wind(0.49, 2) == 0 && wind(0.8, 2) > 0.5 && wind(1, 2) == 1, "2s exit: a wind down over its last second, long enough to hear")
-    }
-
     private static func wideGap() {
         print("Tempos 16% apart still lock, as a vocal throw (Kaali Hoodie into Ghostface Killah)")
         let current = song("Kaali", tempo: 172, duration: 164.86, voice: 3...163.5, lastLine: 120, breaks: [139.93])
@@ -228,19 +219,19 @@ enum KnobShiftMixTests {
             let levels = KnobShiftModel.voiceLevels(progress: progress, voiceDone: voiceDone, length: length)
             if newVoiceStart == nil, levels.new > 0.01 { newVoiceStart = progress }
             if oldVoiceGone == nil, progress >= voiceDone, levels.old <= 0.01 { oldVoiceGone = progress }
-            if levels.new > 0.01, levels.old > 0.01 { expect(false, "the voices overlap at \(progress)"); break }
+            if levels.new > 0.01, levels.old > 0.35 { expect(false, "two full voices at \(progress)"); break }
         }
-        expect((oldVoiceGone ?? 1) * length - voiceDone * length <= 0.6, "the old voice clears within half a second of its end")
+        expect((oldVoiceGone ?? 1) * length - voiceDone * length <= 1.6, "the old voice fades into its hall within 1.5s of its end")
         expect((newVoiceStart ?? 0) >= 1 - 2 / length - 0.01, "the new voice comes in only in the last 2s")
         // A short echo out, and a crossfade that starts after the old voice (a seek or late start).
         for (length, voiceDone) in [(1.7, 0.0), (8.0, 0.0), (3.0, 0.5)] {
             var together = false, newRose = false
             for step in 0...400 {
                 let levels = KnobShiftModel.voiceLevels(progress: Double(step) / 400, voiceDone: voiceDone, length: length)
-                if levels.new > 0.01, levels.old > 0.01 { together = true }
+                if levels.new > 0.01, levels.old > 0.35 { together = true }
                 if levels.new > 0.99 { newRose = true }
             }
-            expect(!together && newRose, "\(length)s mix, old voice done at \(Int(voiceDone * 100))%: never together, and the new voice arrives")
+            expect(!together && newRose, "\(length)s mix, old voice done at \(Int(voiceDone * 100))%: only a quiet tail meets the new voice, and it arrives")
         }
     }
 }

@@ -40,15 +40,6 @@ enum KnobShiftExitStyle: CaseIterable {
         return pair
     }
 
-    /// How far the tape slowdown has wound down, 0...1, over a leaving song's exit of `seconds`
-    /// (`exit` 0 where its voice ends, 1 when it is gone): its last 1.5 seconds, never more than
-    /// its last half, so it is heard while the old beats stay locked through most of the exit.
-    static func windDown(exit: Double, seconds: TimeInterval) -> Double {
-        let from = max(0.5, 1 - 1.5 / max(seconds, 0.1))
-        let share = min(max((exit - from) / (1 - from), 0), 1)
-        return share * share * (3 - 2 * share)
-    }
-
     /// The effects' strength at their peak for a pair: 40%, 45% or 50%, never more.
     static func strength(_ current: KnobShiftModel.Track, _ next: KnobShiftModel.Track) -> Double {
         0.4 + 0.05 * Double((seed(current, next) / 3) % 3)
@@ -130,13 +121,14 @@ extension KnobShiftModel {
         }
         switch style {
         case .tapeSlowdown:
-            // The hall rises from the old voice's last word; the slowdown is a wind down in the
-            // last quarter of the exit only (KnobShiftExitStyle.windDown), once the voice is gone
-            // and the song is already fading, so the old beats stay locked to the new ones until
-            // then.
-            let curve = min(max(envelope / max(exitStrength, 0.01), exit), 1)
-            deck.tape = throwingVoice ? 0 : tapeDepth * KnobShiftExitStyle.windDown(exit: exit, seconds: exitSeconds)
-            deck.reverbMix = 0.35 * curve
+            // The long tape slowdown, this song's full curve: easing in over the old voice's last
+            // words, deepest (about 10% slower) where it ends, easing out as the song goes. The
+            // new song slows by exactly as much at the same moment, so the two wind down
+            // together and their beats stay locked. A vocal throw slows only the old voice.
+            let curve = min(envelope / max(exitStrength, 0.01), 1)
+            deck.tape = throwingVoice ? 0 : tapeDepth * curve
+            secondaryDeck.tape = throwingVoice ? 0 : tapeDepth * curve
+            deck.reverbMix = 0.35 * max(curve, exit)
         case .echoOut:
             deck.echoMix = 0.6 * envelope
             deck.reverbMix = 0.15 * envelope
@@ -154,7 +146,7 @@ extension KnobShiftModel {
         announce("treble", when: exit > 0.01, "Treble fade on the leaving song: a low pass closing from 20 kHz to 1 kHz.")
         announce("reverb", when: deck.reverbMix > 0.01, style == .reverbWash
                  ? "Reverb wash: large hall rising to 65%, ringing on after the old song is gone." : "Reverb tail: hall rising to \(Int((style == .tapeSlowdown ? 0.35 : 0.15) * 100))%.")
-        announce("tape", when: deck.tape > 0.01, String(format: "Slowdown for this song: in the last seconds of its exit it winds down to %.0f%% speed, keeping its natural pitch.",
+        announce("tape", when: deck.tape > 0.01, String(format: "Long tape slowdown: both songs ease to %.0f%% speed where the old voice ends, together so their beats stay locked, then back.",
                                                         (1 - 0.10 * tapeDepth) * 100))
         announce("echo", when: deck.echoMix > 0.01, "Echo out: repeats every half beat, 45% feedback, rising to 60%, ringing on after the old song is gone.")
     }

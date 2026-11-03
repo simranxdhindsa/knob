@@ -162,12 +162,22 @@ extension KnobShiftModel {
             // Beats that cannot lock echo out instead: the effects rise at once, while the old
             // song's own sound drops away, and their tail rings on after it.
             let quiet = sync.isOn ? min(1 / max(duration, 0.1), 0.25) : 0
-            let effectsFrom = max(quiet, voiceDone - 1 / max(duration, 0.1))
-            let peak = sync.isOn ? min(max(voiceDone + 0.6 * (1 - voiceDone), effectsFrom + 0.05), 0.95) : 0.25
-            let keyframes = (start: effectsFrom, peak: peak, end: 1.0)
-            exitSeconds = duration * (1 - voiceDone)
-            log("EFFECT", String(format: "Keyframes: effects start %.1fs into the mix, on the old voice's last word, rise for %.1fs to full as the old song leaves, then fall for %.1fs as it is gone.",
-                                 duration * keyframes.start, duration * (peak - keyframes.start), duration * (keyframes.end - peak)))
+            var keyframes: (start: Double, peak: Double, end: Double)
+            if sync.isOn, !voiceThrow {
+                // The long tape slowdown: it eases in over the old voice's last words, is deepest
+                // where the voice ends (the climax of the mix) and eases out as the old song goes,
+                // two bars each way (3 to 6 seconds), or an even split of a shorter mix.
+                let seconds = min(max(8 * KnobShiftExitStyle.beat(of: current), 3), 6)
+                let side = seconds / max(duration, 0.1)
+                let peak = duration >= 2 * seconds + 1 ? min(max(voiceDone, quiet + side), 1 - side) : (1 + quiet) / 2
+                keyframes = (start: max(peak - side, quiet), peak: peak, end: min(peak + side, 1))
+            } else {
+                let effectsFrom = max(quiet, voiceDone - 1 / max(duration, 0.1))
+                let peak = sync.isOn ? min(max(voiceDone + 0.6 * (1 - voiceDone), effectsFrom + 0.05), 0.95) : 0.25
+                keyframes = (start: effectsFrom, peak: peak, end: 1.0)
+            }
+            log("EFFECT", String(format: "Keyframes: effects start %.1fs into the mix, rise for %.1fs to full, then fall for %.1fs.",
+                                 duration * keyframes.start, duration * (keyframes.peak - keyframes.start), duration * (keyframes.end - keyframes.peak)))
             mixState = .mixing
             mixNowWaiting = false
             mixingInto = next
@@ -252,14 +262,17 @@ extension KnobShiftModel {
         }
     }
 
-    /// The two separated voices at a point of the blend: the old voice clears within half a
-    /// second of its end, and the new one rises only in the mix's last 2 seconds, as the old
-    /// song is going, so the two singers are never heard together.
+    /// The two separated voices at a point of the blend, handing over smoothly: the old voice
+    /// fades into its hall over 1.5 seconds after it ends, and the new one rises through its
+    /// reverb (over 0.8 seconds) in the mix's last 2 seconds, once the old tail is down to a
+    /// third. They only meet as a quiet reverb crossover, never two full voices.
     nonisolated static func voiceLevels(progress: Double, voiceDone: Double, length: TimeInterval) -> (old: Double, new: Double) {
         let seconds = max(length, 0.1)
-        let old = progress < voiceDone ? 1 : max(0, 1 - (progress - voiceDone) * seconds / 0.5)
-        let arrives = max(voiceDone + 0.5 / seconds, 1 - KnobShiftPlan.overlap / seconds)
-        let new = progress < arrives ? 0 : min((progress - arrives) * seconds / 0.4, 1)
+        let old = progress < voiceDone ? 1 : max(0, 1 - (progress - voiceDone) * seconds / 1.5)
+        let arrives = max(voiceDone + 1.0 / seconds, 1 - KnobShiftPlan.overlap / seconds)
+        // A short mix leaves less room: the rise fits what is left, so it is full by the end.
+        let rise = max(0.2, min(0.8, (1 - arrives) * seconds))
+        let new = progress < arrives ? 0 : min((progress - arrives) * seconds / rise, 1)
         return (old, new)
     }
 
