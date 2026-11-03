@@ -109,7 +109,8 @@ extension KnobShiftModel {
             self.log("TIMING", "Plan fired \(String(format: "%.0f", late * 1_000)) ms after its target. Clock reads \(Self.seconds(self.playbackTime)), \(self.primaryDeck.name) is at \(self.deckClock(self.primaryDeck)).")
             if blends {
                 self.beginBlend(from: current, to: next, endingAt: end, handoff: plan.handoff,
-                                voiceEnd: plan.voiceEnd ?? plan.handoff, offset: plan.incomingOffset, sync: sync)
+                                voiceEnd: plan.voiceEnd ?? plan.handoff, offset: plan.incomingOffset, sync: sync,
+                                voiceThrow: plan.voiceThrow)
             } else {
                 self.advance(to: next, offset: plan.incomingOffset)
             }
@@ -126,9 +127,11 @@ extension KnobShiftModel {
         // A little headroom so the scheduled start is never already in the past.
         let earliest = now + 0.05
         let beat = 60 / sync.outgoingTempo
-        guard let outgoingBeat = current.analysis.beatGrid.first(where: { $0 >= earliest }),
-              outgoingBeat - now <= beat + 0.05,
-              let incomingBeat = next.analysis.beatGrid.first(where: { $0 >= offset }) else {
+        // Strong beats meet strong beats (every second beat from where the drums come in), so a
+        // song counted at double or half time never lands its kick on the other's snare.
+        guard let outgoingBeat = Self.strongBeat(in: current.analysis, atOrAfter: earliest),
+              outgoingBeat - now <= 2 * beat + 0.05,
+              let incomingBeat = Self.strongBeat(in: next.analysis, atOrAfter: offset) else {
             return (0, offset, "No beat lock: no beat found close enough, so \(next.title) starts now.")
         }
         // The outgoing song may already be playing faster or slower, so its next beat arrives
@@ -139,7 +142,7 @@ extension KnobShiftModel {
     }
 
     private func beginBlend(from current: Track, to next: Track, endingAt end: TimeInterval, handoff: TimeInterval,
-                            voiceEnd: TimeInterval, offset: TimeInterval, sync: KnobShiftSync) {
+                            voiceEnd: TimeInterval, offset: TimeInterval, sync: KnobShiftSync, voiceThrow: Bool = false) {
         do {
             let lock = beatLock(from: current, to: next, offset: offset, sync: sync)
             let outgoingAt = (primaryDeck.position ?? playbackTime) + lock.delay * primaryDeck.rate
@@ -148,19 +151,33 @@ extension KnobShiftModel {
             let pivot = min(max((handoff - outgoingAt) / music, 0), 1)
             // Where the old voice ends: the old song's fade and the new voice wait for it.
             let voiceDone = min(max((voiceEnd - outgoingAt) / music, pivot), 1)
-            let duration = sync.blendLength(forOutgoingMusic: music, voice: pivot)
-            // The effects peak where the old voice ends, the climax of the mix: two bars of the
-            // old song up and two bars down (3 to 6 seconds each way), so they stay near its end
-            // and move with its rhythm (an even split of the whole mix when it is shorter).
-            let seconds = min(max(8 * KnobShiftExitStyle.beat(of: current), 3), 6)
-            let side = seconds / max(duration, 0.1)
-            // Nothing colours the old song in the mix's first second: the new song is heard
-            // arriving first, then the effects begin.
-            let quiet = min(1 / max(duration, 0.1), 0.25)
-            let peak = duration >= 2 * seconds + 1 ? min(max(voiceDone, quiet + side), 1 - side) : (1 + quiet) / 2
-            let keyframes = (start: max(peak - side, quiet), peak: peak, end: min(peak + side, 1))
-            log("EFFECT", String(format: "Keyframes: effects start %.1fs into the mix, rise for %.1fs to full where the old voice ends, then fall for %.1fs to nothing.",
-                                 duration * keyframes.start, duration * (peak - keyframes.start), duration * (keyframes.end - peak)))
+            // Where the shared tempo reaches the new song's own: at the handoff, except in a
+            // vocal throw between tempos far apart, where it waits until the old song is almost
+            // silent, so the old voice is never rushed or dragged by the whole gap.
+            let tempoAt = voiceThrow && sync.wide ? max(pivot, 0.9) : pivot
+            let duration = sync.blendLength(forOutgoingMusic: music, voice: tempoAt)
+            // The effects begin on the old voice's last word (about a second before it ends),
+            // are fullest as the old song is leaving (its slowdown deepest, its reverb widest)
+            // and finish as it is gone, so they fill its short exit after the voice.
+            // Beats that cannot lock echo out instead: the effects rise at once, while the old
+            // song's own sound drops away, and their tail rings on after it.
+            let quiet = sync.isOn ? min(1 / max(duration, 0.1), 0.25) : 0
+            var keyframes: (start: Double, peak: Double, end: Double)
+            if sync.isOn, !voiceThrow {
+                // The long tape slowdown: it eases in over the old voice's last words, is deepest
+                // where the voice ends (the climax of the mix) and eases out as the old song goes,
+                // two bars each way (3 to 6 seconds), or an even split of a shorter mix.
+                let seconds = min(max(8 * KnobShiftExitStyle.beat(of: current), 3), 6)
+                let side = seconds / max(duration, 0.1)
+                let peak = duration >= 2 * seconds + 1 ? min(max(voiceDone, quiet + side), 1 - side) : (1 + quiet) / 2
+                keyframes = (start: max(peak - side, quiet), peak: peak, end: min(peak + side, 1))
+            } else {
+                let effectsFrom = max(quiet, voiceDone - 1 / max(duration, 0.1))
+                let peak = sync.isOn ? min(max(voiceDone + 0.6 * (1 - voiceDone), effectsFrom + 0.05), 0.95) : 0.25
+                keyframes = (start: effectsFrom, peak: peak, end: 1.0)
+            }
+            log("EFFECT", String(format: "Keyframes: effects start %.1fs into the mix, rise for %.1fs to full, then fall for %.1fs.",
+                                 duration * keyframes.start, duration * (keyframes.peak - keyframes.start), duration * (keyframes.end - keyframes.peak)))
             mixState = .mixing
             mixNowWaiting = false
             mixingInto = next
@@ -184,7 +201,7 @@ extension KnobShiftModel {
             secondaryDeck.resetTransitionEffects()
             armExitEffects(from: current, to: next, sync: sync)
             secondaryDeck.volume = 0
-            secondaryDeck.rate = sync.rates(progress: 0, voice: pivot).incoming
+            secondaryDeck.rate = sync.rates(progress: 0, voice: tempoAt).incoming
             secondaryDeck.bassCut = 1
             secondaryDeck.startOffset = lock.incomingStart
             blendHasStems = scheduleIncoming(next, file: file, from: lock.incomingStart, startFrame: startFrame, frames: frames)
@@ -219,7 +236,8 @@ extension KnobShiftModel {
                     if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
                     guard let self, !Task.isCancelled else { return }
                     let progress = Double(step) / Double(steps)
-                    self.applyBlend(progress, pivot: pivot, voiceDone: voiceDone, keyframes: keyframes, length: duration, sync: sync)
+                    self.applyBlend(progress, pivot: pivot, voiceDone: voiceDone, keyframes: keyframes, length: duration, sync: sync,
+                                    voiceThrow: voiceThrow, tempoAt: tempoAt)
                     self.blendProgress = progress
                     if !handedOver, progress >= pivot {
                         handedOver = true
@@ -229,7 +247,7 @@ extension KnobShiftModel {
                     let bucket = Int(progress * 20)
                     if bucket != lastLogged {
                         lastLogged = bucket
-                        self.logBlendStep(progress: progress, pivot: pivot, elapsed: Date().timeIntervalSince(started), sync: sync)
+                        self.logBlendStep(progress: progress, pivot: tempoAt, elapsed: Date().timeIntervalSince(started), sync: sync)
                     }
                 }
                 guard let self, !Task.isCancelled else { return }
@@ -242,6 +260,45 @@ extension KnobShiftModel {
             notice = "KnobShift could not prepare the next song."
             advance(to: next, offset: offset)
         }
+    }
+
+    /// The two separated voices at a point of the blend, handing over smoothly: the old voice
+    /// fades into its hall over 1.5 seconds after it ends, and the new one rises through its
+    /// reverb (over 0.8 seconds) in the mix's last 2 seconds, once the old tail is down to a
+    /// third. They only meet as a quiet reverb crossover, never two full voices.
+    nonisolated static func voiceLevels(progress: Double, voiceDone: Double, length: TimeInterval) -> (old: Double, new: Double) {
+        let seconds = max(length, 0.1)
+        let old = progress < voiceDone ? 1 : max(0, 1 - (progress - voiceDone) * seconds / 1.5)
+        let arrives = max(voiceDone + 1.0 / seconds, 1 - KnobShiftPlan.overlap / seconds)
+        // A short mix leaves less room: the rise fits what is left, so it is full by the end.
+        let rise = max(0.2, min(0.8, (1 - arrives) * seconds))
+        let new = progress < arrives ? 0 : min((progress - arrives) * seconds / rise, 1)
+        return (old, new)
+    }
+
+    /// A vocal throw at `share` of the way from the cut (0) to the end of the mix (1): the old
+    /// music fading slowly in time with the new beats, gone at 85%; the old voice slowing like
+    /// tape (to 15% slower, its pitch falling) into a hall while it fades, gone at 90%; the new
+    /// voice only after that. Beats that cannot lock lose the old music within the first 12%
+    /// instead, so they barely meet.
+    nonisolated static func throwLevels(share: Double, locked: Bool = true) -> (music: Double, voice: Double, tape: Double, reverb: Double, newVoice: Double) {
+        let music = locked ? cos(shape(min(share / 0.85, 1)) * .pi / 2) : 1 - shape(min(share / 0.12, 1))
+        let fading = min(share / 0.9, 1)
+        let voice = cos(shape(fading) * .pi / 2)
+        let tape = shape(min(share / 0.8, 1))
+        let reverb = 0.6 * shape(min(share / 0.5, 1))
+        let newVoice = share < 0.92 ? 0 : min((share - 0.92) / 0.08, 1)
+        return (music, voice < 0.005 ? 0 : voice, tape, reverb, newVoice)
+    }
+
+    /// The first strong beat at or after `time`: an even numbered beat counted from where the
+    /// song's drums come in (its first and third beats of each bar).
+    nonisolated static func strongBeat(in analysis: Analysis, atOrAfter time: TimeInterval) -> TimeInterval? {
+        let grid = analysis.beatGrid
+        let entry = grid.firstIndex { $0 >= (analysis.beatEntry ?? grid.first ?? 0) - 0.05 } ?? 0
+        guard let first = grid.firstIndex(where: { $0 >= time }) else { return nil }
+        let index = (first - entry) % 2 == 0 ? first : first + 1
+        return index < grid.count ? grid[index] : nil
     }
 
     /// The crossfade curve: a smooth start and finish (smoothstep).
@@ -257,8 +314,9 @@ extension KnobShiftModel {
     /// song opens up fully, the basslines swap and the outgoing song fades out, thinning upward.
     /// Without a handoff it is one equal-power crossfade.
     private func applyBlend(_ progress: Double, pivot: Double, voiceDone: Double,
-                            keyframes: (start: Double, peak: Double, end: Double), length: TimeInterval, sync: KnobShiftSync) {
-        let outgoing: Double, incoming: Double, swap: Double, sweep: Double, beatsOnly: Double, voice: Double
+                            keyframes: (start: Double, peak: Double, end: Double), length: TimeInterval, sync: KnobShiftSync,
+                            voiceThrow: Bool = false, tempoAt: Double? = nil) {
+        var outgoing: Double, incoming: Double, swap: Double, sweep: Double, beatsOnly: Double, voice: Double
         // The old singer's separated voice: it leaves before the new one arrives, never together.
         var oldVoice = 1.0
         // How far the leaving song is through its exit, 0...1: the lo-fi exit follows this.
@@ -285,24 +343,60 @@ extension KnobShiftModel {
                 swap = min(fall / 0.25, 1)
                 sweep = leaving
                 beatsOnly = max(0, 1 - fall / 0.25)
-                // The old voice clears over the first tenth of the exit, then the new voice rises.
-                oldVoice = progress < voiceDone ? 1 : max(0, 1 - leaving / 0.1)
-                voice = progress < voiceDone ? 0 : min(max((leaving - 0.1) / 0.25, 0), 1)
+                let voices = Self.voiceLevels(progress: progress, voiceDone: voiceDone, length: length)
+                oldVoice = voices.old
+                voice = voices.new
                 exit = leaving
             }
+        } else if !sync.isOn {
+            // Echo out: the old song's own sound is gone within the first 40% (its echo and
+            // reverb ring on, after the volume), so its beats never clash with the new ones.
+            let dropped = Self.shape(min(progress / 0.4, 1))
+            outgoing = cos(dropped * .pi / 2)
+            incoming = sin(Self.shape(min(progress / 0.6, 1)) * .pi / 2)
+            swap = dropped
+            sweep = dropped
+            beatsOnly = 0
+            let voices = Self.voiceLevels(progress: progress, voiceDone: 0, length: length)
+            oldVoice = voices.old
+            voice = voices.new
+            exit = dropped
         } else {
+            // One crossfade (the mix started at or after the old voice's end, after a seek or
+            // a late start): the voices still follow the never together rule.
             let shaped = Self.shape(progress)
             outgoing = cos(shaped * .pi / 2)
             incoming = sin(shaped * .pi / 2)
             swap = min(max((shaped - 0.4) / 0.2, 0), 1)
             sweep = max(0, (shaped - 0.5) / 0.5)
             beatsOnly = 0
-            voice = 1
+            let voices = Self.voiceLevels(progress: progress, voiceDone: voiceDone, length: length)
+            oldVoice = voices.old
+            voice = voices.new
             exit = max(0, (shaped - 0.5) / 0.5)
+        }
+        // A vocal throw after the cut: the old music drops out, its separated voice alone slows
+        // into a hall and fades, and the new voice waits until it is gone. Without separated
+        // parts the whole old song leaves within the first 40%, as an echo out.
+        throwingVoice = voiceThrow && outgoingOnStems && progress >= voiceDone
+        if voiceThrow, progress >= voiceDone {
+            let share = voiceDone < 1 ? min(max((progress - voiceDone) / (1 - voiceDone), 0), 1) : 1
+            let levels = Self.throwLevels(share: share, locked: sync.isOn)
+            if outgoingOnStems {
+                outgoing = 1
+                primaryDeck.musicStemLevel = Float(levels.music)
+                primaryDeck.throwVoice(speed: 1 - 0.15 * levels.tape)
+                primaryDeck.voiceReverb = levels.reverb
+                oldVoice = levels.voice
+            } else {
+                outgoing = min(outgoing, cos(Self.shape(min(share / 0.4, 1)) * .pi / 2))
+            }
+            voice = levels.newVoice
+            swap = max(swap, 1 - levels.music)
         }
         primaryDeck.volume = Float(outgoing)
         secondaryDeck.volume = Float(incoming)
-        let rates = sync.rates(progress: progress, voice: pivot)
+        let rates = sync.rates(progress: progress, voice: tempoAt ?? pivot)
         primaryDeck.rate = rates.outgoing
         secondaryDeck.rate = rates.incoming
         // Bass swap so two basslines never stack.

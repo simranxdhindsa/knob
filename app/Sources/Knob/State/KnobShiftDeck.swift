@@ -116,6 +116,14 @@ final class KnobShiftDeck {
     }
 
     /// Hall reverb on the voice alone, 0...1.
+    /// The separated voice at `speed` of normal as heard (0.85 is 15% slower, its pitch falling
+    /// like tape), whatever speed the whole deck plays at to stay on the beat.
+    func throwVoice(speed: Double) {
+        let heard = min(max(speed, 0.5), 1)
+        voiceStretch.rate = Float(heard / max(stretch.rate == 0 ? 1 : Double(stretch.rate), 0.1))
+        voiceStretch.pitch = Float(1_200 * log2(heard))
+    }
+
     var voiceReverb: Double = 0 {
         didSet {
             let wet = min(max(voiceReverb, 0), 1)
@@ -234,4 +242,12 @@ final class KnobShiftDeck {
               playerTime.sampleRate > 0 else { return nil }
         return startOffset + max(0, Double(playerTime.sampleTime) / playerTime.sampleRate)
     }
+
+    #if DEBUG
+    /// Development checks only: hands the deck's finished sound (after every effect) to the
+    /// demo recorder.
+    func recordOutput(into recorder: KnobShiftDemoRecorder) {
+        room.installTap(onBus: 0, bufferSize: 4096, format: nil) { buffer, time in recorder.add(buffer, at: time) }
+    }
+    #endif
 }

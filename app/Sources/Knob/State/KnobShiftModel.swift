@@ -232,6 +232,9 @@ final class KnobShiftModel: ObservableObject {
     var exitStyle: KnobShiftExitStyle?
     /// How far the slowdown goes for this song: 0.8...1.2, so 8% to 12% slower at its peak.
     var tapeDepth = 1.0
+    /// The leaving song's separated voice is slowing alone (a vocal throw), so the whole deck
+    /// is not slowed too.
+    var throwingVoice = false
     /// The exit effects' strength at their peak for the current mix, at most half.
     var exitStrength = 0.5
     var transitionTask: Task<Void, Never>?

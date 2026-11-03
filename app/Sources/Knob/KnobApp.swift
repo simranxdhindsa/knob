@@ -8,6 +8,7 @@ import SwiftUI
 ///   --icons DIR         render the app icon (1024px) and the About window, then quit
 ///   --volume-check SEC  print real Mac volume changes for SEC seconds, set and restore, then quit
 ///   --knobshift-analysis-check FILE  analyse a local file without opening an audio output device
+///   --knobshift-mix-check            KnobMix's transition rules against the real planner, no audio
 @main
 struct KnobLauncher {
     static func main() {
@@ -46,6 +47,10 @@ struct KnobLauncher {
         if let index = arguments.firstIndex(of: "--knobshift-spotify-check"), index + 1 < arguments.count {
             KnobShiftSpotifyCheck.run(Array(arguments[(index + 1)...]))
             return
+        }
+        if arguments.contains("--knobshift-mix-check") {
+            MainActor.assumeIsolated { KnobShiftMixTests.run() }
+            exit(MainActor.assumeIsolated { KnobShiftMixTests.failures } == 0 ? 0 : 1)
         }
         if let index = arguments.firstIndex(of: "--knobshift-youtube-check"), index + 1 < arguments.count {
             KnobShiftYouTubeCheck.run(Array(arguments[(index + 1)...]))

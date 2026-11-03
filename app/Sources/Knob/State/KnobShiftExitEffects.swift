@@ -1,16 +1,14 @@
 import AVFoundation
 
-/// How the leaving song sounds as it goes. Apple Music's AutoMix gave its iOS 26 transitions an
-/// "underwater" feel (a closing low-pass) and since iOS 27 varies its transition types between
-/// songs, so KnobShift chooses one of these per song pair, all subtle. The choice is fixed for a
-/// pair, so the same two songs always mix the same way. Effects apply to the leaving song only.
+/// How the leaving song sounds as it goes, after its voice: a closing low-pass on every exit,
+/// plus a tape slowdown into a hall when the beats lock, or an echo out or reverb wash that rings
+/// on after the old song is gone when they cannot. The choice is fixed for a pair, so the same
+/// two songs always mix the same way. Effects apply to the leaving song only.
 enum KnobShiftExitStyle: CaseIterable {
-    case underwater, lofiDip, tapeSlowdown, echoOut, reverbWash
+    case tapeSlowdown, echoOut, reverbWash
 
     var name: String {
         switch self {
-        case .underwater: return "Underwater fade"
-        case .lofiDip: return "Lo-fi dip"
         case .tapeSlowdown: return "Tape slowdown"
         case .echoOut: return "Echo out"
         case .reverbWash: return "Reverb wash"
@@ -28,9 +26,9 @@ enum KnobShiftExitStyle: CaseIterable {
             }
             return (.echoOut, "the tempos are far apart, so its last beats echo away instead of clashing")
         }
-        let styles: [KnobShiftExitStyle] = [.underwater, .lofiDip, .tapeSlowdown]
-        let style = styles[pair % styles.count]
-        return (style, "the tempos match, so a filter style keeps the beat going")
+        // Beats that lock always get the tape slowdown into a hall: the old song winds down as
+        // it leaves while the new one keeps the beat.
+        return (.tapeSlowdown, "the tempos match, so the old song winds down into a hall as it leaves")
     }
 
     /// A number fixed for a pair of songs, so the same two songs always mix the same way.
@@ -70,7 +68,7 @@ extension KnobShiftModel {
         tapeDepth = 0.8 + 0.4 * min(max((130 - beatsPerMinute) / 60, 0), 1)
         primaryDeck.armTransitionEffects(echoEvery: beat / 2, hall: choice.style == .reverbWash ? .largeHall : .mediumHall)
         log("EFFECT", "\(choice.style.name) on \(current.title): \(choice.reason). Peak strength \(Int((exitStrength * 100).rounded()))%.")
-        log("EFFECT", String(format: "Beat pulse at %.1f BPM: the effects build between kicks and drop on every beat, to 0%% on the first beat of each bar, 50%% on the second and fourth, 10%% on the third.", 60 / beat))
+        if choice.style == .tapeSlowdown { log("EFFECT", String(format: "Beat pulse at %.1f BPM: the effects build between kicks and drop on every beat, to 0%% on the first beat of each bar, 50%% on the second and fourth, 10%% on the third.", 60 / beat)) }
     }
 
     /// How much of the exit effects to let through right now, following the leaving song's own
@@ -100,8 +98,15 @@ extension KnobShiftModel {
     func applyExitEffects(_ exit: Double, envelope: Double) {
         guard let style = exitStyle else { return }
         let deck = primaryDeck
-        let pulse = envelope > 0.01 ? beatPulse() : nil
+        // An echo out or reverb wash carries the old song after its own sound is gone, so it
+        // follows no beat and runs at full strength: only what reaches it before the old song
+        // drops rings on afterwards.
+        let carries = style == .echoOut || style == .reverbWash
+        let pulse = envelope > 0.01 && !carries ? beatPulse() : nil
         let level = pulse?.level ?? 1
+        // It holds at full once the old song's own sound is gone (`exit` reaches 1), so its tail
+        // keeps ringing after the mix; the next mix resets it (resetTransitionEffects).
+        let envelope = carries ? min(max(envelope / max(exitStrength, 0.01), exit), 1) : envelope
         if let pulse, pulse.beatInBar == 0, !effectsLogged.contains("bar \(pulse.bar)") {
             effectsLogged.insert("bar \(pulse.bar)")
             log("EFFECT", String(format: "Bar %d, beat 1: effects drop to 0%% on the kick, exit %.0f%% done.", pulse.bar + 1, exit * 100))
@@ -115,36 +120,35 @@ extension KnobShiftModel {
             deck.sweep *= 0.5 + 0.5 * level
         }
         switch style {
-        case .underwater:
-            deck.reverbMix = 0.12 * envelope
-        case .lofiDip:
-            deck.lofiMix = 0.18 * envelope
-            deck.reverbMix = 0.08 * envelope
         case .tapeSlowdown:
-            // The full curve, 0 up to this song's slowdown at the peak and back, not capped by
-            // the other effects' strength: about 10% slower where the old voice ends.
-            deck.tape = tapeDepth * min(envelope / max(exitStrength, 0.01), 1)
-            deck.reverbMix = 0.1 * envelope
+            // The long tape slowdown, this song's full curve: easing in over the old voice's last
+            // words, deepest (about 10% slower) where it ends, easing out as the song goes. The
+            // new song slows by exactly as much at the same moment, so the two wind down
+            // together and their beats stay locked. A vocal throw slows only the old voice.
+            let curve = min(envelope / max(exitStrength, 0.01), 1)
+            deck.tape = throwingVoice ? 0 : tapeDepth * curve
+            secondaryDeck.tape = throwingVoice ? 0 : tapeDepth * curve
+            deck.reverbMix = 0.35 * max(curve, exit)
         case .echoOut:
-            deck.echoMix = 0.4 * envelope
+            deck.echoMix = 0.6 * envelope
+            deck.reverbMix = 0.15 * envelope
         case .reverbWash:
-            deck.reverbMix = 0.5 * envelope
+            deck.reverbMix = 0.65 * envelope
         }
         // The singers: the old voice gains a hall while its music keeps the beat; the new voice
         // arrives through a reverb that clears as it takes over. The old voice is never slowed
         // on its own: it would drift behind its music (about 0.3s by the end) and the faint
         // trace of it left in the music would sing its last word twice.
-        if outgoingOnStems { deck.voiceReverb = 0.25 * envelope * Double(deck.voiceLevel) }
+        if outgoingOnStems, !throwingVoice { deck.voiceReverb = 0.25 * envelope * Double(deck.voiceLevel) }
         if blendHasStems { secondaryDeck.voiceReverb = 0.35 * envelope }
         announce("old voice", when: outgoingOnStems && envelope > 0.01, "Old voice gets a hall that peaks where it ends; it stays in time with its music and is gone before the new voice comes in.")
         announce("new voice", when: blendHasStems && envelope > 0.01, "New voice comes in through a reverb that clears as it takes over.")
-        announce("treble", when: exit > 0.01, "Treble fade on the leaving song: a low pass closing from 20 kHz to 1 kHz, the underwater sound.")
+        announce("treble", when: exit > 0.01, "Treble fade on the leaving song: a low pass closing from 20 kHz to 1 kHz.")
         announce("reverb", when: deck.reverbMix > 0.01, style == .reverbWash
-                 ? "Reverb wash: large hall rising to 50%." : "Reverb tail: hall rising to \(Int((style == .underwater ? 0.12 : style == .lofiDip ? 0.08 : 0.1) * 100))%.")
-        announce("lofi", when: deck.lofiMix > 0.01, "Lo-fi colour: vintage crunch rising to 18%.")
-        announce("tape", when: deck.tape > 0.01, String(format: "Slowdown for this song: it eases to %.0f%% speed where the old voice ends, keeping its natural pitch, then back.",
+                 ? "Reverb wash: large hall rising to 65%, ringing on after the old song is gone." : "Reverb tail: hall rising to \(Int((style == .tapeSlowdown ? 0.35 : 0.15) * 100))%.")
+        announce("tape", when: deck.tape > 0.01, String(format: "Long tape slowdown: both songs ease to %.0f%% speed where the old voice ends, together so their beats stay locked, then back.",
                                                         (1 - 0.10 * tapeDepth) * 100))
-        announce("echo", when: deck.echoMix > 0.01, "Echo out: repeats every half beat, 45% feedback, rising to 40%.")
+        announce("echo", when: deck.echoMix > 0.01, "Echo out: repeats every half beat, 45% feedback, rising to 60%, ringing on after the old song is gone.")
     }
 
     func announce(_ key: String, when active: Bool, _ message: String) {

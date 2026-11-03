@@ -37,18 +37,20 @@ enum KnobShiftAnalysisCheck {
             plan.reasoning.forEach { print("  \($0)") }
             sync.notes.forEach { print("  \($0)") }
             guard plan.duration > 0 else { print("KnobShift sync check: clean handoff, no blend to line up"); return }
-            guard let outgoingStart = a.analysis.beatGrid.first(where: { $0 >= plan.start }),
-                  let incomingStart = b.analysis.beatGrid.first(where: { $0 >= plan.incomingOffset }) else {
+            // The same strong beats the deck's beat lock lines up.
+            guard let outgoingStart = KnobShiftModel.strongBeat(in: a.analysis, atOrAfter: plan.start),
+                  let incomingStart = KnobShiftModel.strongBeat(in: b.analysis, atOrAfter: plan.incomingOffset) else {
                 fail("no beats near the blend start")
             }
             let music = plan.start + plan.duration - outgoingStart
             // At half or double time only every second beat of the faster grid should line up.
             let ratio = (b.analysis.tempo ?? 1) / max(sync.incomingTempo, 1)
             // Count every second beat from the one the incoming song really starts on.
-            let firstIncoming = b.analysis.beatGrid.firstIndex { $0 >= plan.incomingOffset } ?? 0
+            let firstIncoming = b.analysis.beatGrid.firstIndex { $0 >= incomingStart - 0.001 } ?? 0
             let incomingBeats = ratio > 1.5 ? stride(from: firstIncoming, to: b.analysis.beatGrid.count, by: 2).map { b.analysis.beatGrid[$0] }
                 : b.analysis.beatGrid
-            let outgoingBeats = ratio < 0.67 ? stride(from: 0, to: a.analysis.beatGrid.count, by: 2).map { a.analysis.beatGrid[$0] }
+            let firstOutgoing = a.analysis.beatGrid.firstIndex { $0 >= outgoingStart - 0.001 } ?? 0
+            let outgoingBeats = ratio < 0.67 ? stride(from: firstOutgoing, to: a.analysis.beatGrid.count, by: 2).map { a.analysis.beatGrid[$0] }
                 : a.analysis.beatGrid
             for (label, glide) in [("with tempo sync", sync), ("without tempo sync", KnobShiftSync.off)] {
                 let voice = min(max((plan.handoff - outgoingStart) / music, 0), 1)
