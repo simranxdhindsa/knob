@@ -51,10 +51,10 @@ struct KnobShiftSpotifyKey: View {
                 .font(.system(size: 10.5)).foregroundStyle(Screen.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 3) {
-                step(1, "Open the Spotify developer page and create an app.")
-                step(2, "Add this Redirect URI: \(Self.redirect)")
-                step(3, "Tick Web API and save.")
-                step(4, "In the app's settings, copy the Client ID and the Client secret.")
+                KeyFormStep(number: 1, text: "Open the Spotify developer page and create an app.")
+                KeyFormStep(number: 2, text: "Add this Redirect URI: \(Self.redirect)")
+                KeyFormStep(number: 3, text: "Tick Web API and save.")
+                KeyFormStep(number: 4, text: "In the app's settings, copy the Client ID and the Client secret.")
             }
             HStack(spacing: 12) {
                 Link(destination: Self.dashboard) {
@@ -71,8 +71,8 @@ struct KnobShiftSpotifyKey: View {
                 }
                 .buttonStyle(.plain)
             }
-            field("Client ID") { TextField("Client ID", text: $clientId) }
-            field("Client secret") { SecureField("Client secret", text: $secret) }
+            KeyFormField(label: "Client ID", text: $clientId)
+            KeyFormField(label: "Client secret", secure: true, text: $secret)
             HStack {
                 Spacer()
                 Button(action: save) {
@@ -103,26 +103,5 @@ struct KnobShiftSpotifyKey: View {
                 withAnimation(Motion.gentle) { open = false }
             }
         }
-    }
-
-    private func step(_ number: Int, _ text: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text("\(number)").font(.system(size: 9.5, weight: .bold).monospacedDigit()).foregroundStyle(Palette.accent)
-            Text(text).font(.system(size: 10.5)).foregroundStyle(Screen.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
-        }
-    }
-
-    private func field<Content: View>(_ label: String, @ViewBuilder _ content: () -> Content) -> some View {
-        content()
-            .textFieldStyle(.plain)
-            .font(.system(size: 11.5).monospaced())
-            .foregroundStyle(Screen.text)
-            .padding(.horizontal, 12)
-            .frame(height: 30)
-            .background(Capsule().fill(Screen.tabTrack))
-            .overlay(Capsule().strokeBorder(Screen.highlight, lineWidth: 1))
-            .accessibilityLabel(label)
     }
 }

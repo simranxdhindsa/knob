@@ -19,8 +19,13 @@ extension KnobShiftModel {
             spotifyStatus = "Paste a YouTube video, playlist or album link."
             return
         }
-        if link.kind == .liked, !youtubeSignedIn {
-            spotifyStatus = "Sign in to YouTube to add your Liked videos."
+        if link.kind == .liked {
+            // Liked videos are private: only the Google sign in can read them.
+            guard youtubeSignedIn else {
+                spotifyStatus = "Sign in with Google to add your Liked videos."
+                return
+            }
+            await openYouTubeShelf(.liked)
             return
         }
         await readYouTube(link)
@@ -39,7 +44,7 @@ extension KnobShiftModel {
         spotifyReview = nil
         let existing = playlists.first { $0.id == link.id }
         spotifyStatus = "Reading \(existing?.name ?? "the songs") from YouTube."
-        log("YOUTUBE", "Reading \(link.url) from YouTube\(youtubeSignedIn ? ", signed in" : "").")
+        log("YOUTUBE", "Reading \(link.url) from YouTube.")
         defer {
             if spotifyReadJob == job {
                 spotifyReadJob = nil
@@ -54,7 +59,14 @@ extension KnobShiftModel {
         } catch let failure as YouTubeFailure {
             guard spotifyReadJob == job else { return }
             log("YOUTUBE", "Could not read \(link.url): \(failure).")
-            if failure == .signInExpired { signOutOfYouTube(expired: true) } else { spotifyStatus = failure.message }
+            // A private playlist of the person's own is read with the Google sign in instead.
+            if failure == .privateVideo, link.kind == .playlist, youtubeSignedIn {
+                spotifyReadJob = nil
+                spotifyBusy = false
+                await openYouTubePlaylist(id: String(link.id.dropFirst(KnobShiftPlaylists.youtubePrefix.count)), name: existing?.name)
+                return
+            }
+            spotifyStatus = failure.message
             return
         } catch {
             guard spotifyReadJob == job else { return }
@@ -63,16 +75,24 @@ extension KnobShiftModel {
         }
         guard spotifyReadJob == job else { return }
 
-        let songs = read.listing.songs
-        spotifyRaw[link.id, default: [:]].merge(read.listing.raw) { _, new in new }
-        let queued = queuedSpotifyIds(in: link.id)
-        let name = existing?.name ?? read.name ?? (link.kind == .liked ? "Liked videos" : "YouTube playlist")
+        showYouTubeReview(id: link.id, name: read.name ?? "YouTube playlist", kind: link.kind, query: link.url,
+                          listing: read.listing, skipped: read.skipped)
+    }
+
+    /// Opens the song picker for a YouTube list read by yt-dlp or from the dashboard.
+    func showYouTubeReview(id: String, name: String, kind: KnobShiftPlaylist.Kind, query: String,
+                           listing: KnobShiftSpotDL.Listing, skipped: Int) {
+        let existing = playlists.first { $0.id == id }
+        let songs = listing.songs
+        spotifyRaw[id, default: [:]].merge(listing.raw) { _, new in new }
+        let queued = queuedSpotifyIds(in: id)
+        let name = existing?.name ?? name
         let initial = KnobShiftImport.initialSelection(songs: songs, skipped: Set(existing?.skipped ?? [])).union(queued)
-        spotifyReview = SpotifyReview(playlistId: link.id, name: name, kind: link.kind, query: link.url, songs: songs,
+        spotifyReview = SpotifyReview(playlistId: id, name: name, kind: kind, query: query, songs: songs,
                                       queued: queued, initial: initial, isUpdate: existing != nil)
-        spotifyStatus = read.skipped == 0 ? nil
-            : "\(read.skipped) video\(read.skipped == 1 ? " was" : "s were") left out because YouTube does not offer \(read.skipped == 1 ? "it" : "them") here (private, deleted or for members only)."
-        log("YOUTUBE", "\(name): \(songs.count) song(s) read, \(read.skipped) left out, \(queued.count) already in the queue.")
+        spotifyStatus = skipped == 0 ? nil
+            : "\(skipped) video\(skipped == 1 ? " was" : "s were") left out because YouTube does not offer \(skipped == 1 ? "it" : "them") here (private, deleted or for members only)."
+        log("YOUTUBE", "\(name): \(songs.count) song(s) read, \(skipped) left out, \(queued.count) already in the queue.")
     }
 
     // MARK: Downloading
@@ -84,7 +104,7 @@ extension KnobShiftModel {
         // One id for the whole run: each song's yt-dlp runs under it, so Cancel stops whichever is running.
         let job = UUID()
         spotifyJobs[playlist.id] = job
-        log("YOUTUBE", "Downloading \(fetch.count) song(s) of \(playlist.name) into \(folder.path)\(youtubeSignedIn ? ", signed in" : "").")
+        log("YOUTUBE", "Downloading \(fetch.count) song(s) of \(playlist.name) into \(folder.path).")
         var stoppedBy: YouTubeFailure?
         var missing = 0
         // One slow answer is not the internet being gone: offline stops the rest only twice running.
@@ -101,7 +121,7 @@ extension KnobShiftModel {
                 markRows(of: playlist.id, ids: [song.song_id], failure: problem.rowText)
                 missing += 1
                 offlineInARow = problem == .offline ? offlineInARow + 1 : 0
-                if [.botCheck, .noSpace, .signInExpired].contains(problem) || offlineInARow >= 2 {
+                if [.botCheck, .noSpace].contains(problem) || offlineInARow >= 2 {
                     stoppedBy = problem
                     break
                 }
@@ -120,7 +140,6 @@ extension KnobShiftModel {
             let left = Set(fetch.map(\.song_id))
             markRows(of: playlist.id, ids: left, failure: stoppedBy.rowText)
             missing = pending.reduce(0) { $0 + ($1.playlistId == playlist.id && $1.failure != nil && left.contains($1.spotifyId ?? "") ? 1 : 0) }
-            if stoppedBy == .signInExpired { signOutOfYouTube(expired: true) }
             spotifyStatus = "\(playlist.name) stopped early: \(stoppedBy.message)"
         } else {
             spotifyStatus = missing == 0
@@ -157,8 +176,8 @@ extension KnobShiftModel {
     }
 
     /// Downloads one song; nil when its file is there. A video YouTube will not give (gone,
-    /// private, blocked in this country, or needing a sign in that is missing) is searched by
-    /// artist and name, and the closest match is saved in its place.
+    /// private, blocked in this country, or for signed in viewers only) is searched by artist
+    /// and name, and the closest match is saved in its place.
     private func downloadYouTubeSong(_ song: KnobShiftSpotDL.Song, into folder: URL, playlist: KnobShiftPlaylist,
                                      job: UUID) async -> YouTubeFailure? {
         setStage("Downloading", for: playlist.id, ids: [song.song_id])
@@ -185,66 +204,44 @@ extension KnobShiftModel {
         return problem == .failed ? .unavailable : problem
     }
 
-    // MARK: Signing in
-
-    /// Copies the YouTube sign in from the browser the person picked. One step at a time, like
-    /// reading a list.
-    func signInToYouTube(with browser: KnobShiftYouTube.Browser) async {
-        guard youtubeAvailable, !youtubeSigningIn, spotifyReadJob == nil else { return }
-        let job = UUID()
-        youtubeSigningIn = true
-        youtubeSignInJob = job
-        youtubeNeedsDiskAccess = false
-        defer {
-            if youtubeSignInJob == job {
-                youtubeSigningIn = false
-                youtubeSignInJob = nil
-            }
-        }
-        spotifyStatus = browser.id == "safari"
-            ? "Reading your YouTube sign in from Safari."
-            : "Reading your YouTube sign in from \(browser.name). If macOS asks, choose Allow."
-        log("YOUTUBE", "Signing in with \(browser.name).")
-        do {
-            try await KnobShiftYouTube.shared.signIn(with: browser, id: job) { [weak self] line in
-                Task { @MainActor in self?.log("YOUTUBE", line) }
-            }
-            youtubeSignedIn = true
-            spotifyStatus = "Signed in to YouTube with \(browser.name). Liked videos and private playlists can be added now."
-            log("YOUTUBE", "Signed in to YouTube with \(browser.name).")
-        } catch is CancellationError {
-            spotifyStatus = nil
-        } catch let problem as KnobShiftYouTubeParsing.SignInProblem {
-            spotifyStatus = problem.message(browser.name)
-            youtubeNeedsDiskAccess = problem == .fullDiskAccess
-            log("YOUTUBE", "Signing in with \(browser.name) did not work: \(problem).")
-        } catch {
-            spotifyStatus = KnobShiftYouTubeParsing.SignInProblem.failed.message(browser.name)
-            log("YOUTUBE", "Signing in with \(browser.name) did not work: \(error.localizedDescription)")
-        }
-    }
-
-    func cancelYouTubeSignIn() {
-        guard let job = youtubeSignInJob else { return }
-        youtubeSignInJob = nil
-        youtubeSigningIn = false
-        KnobShiftYouTube.shared.cancel(job)
-        spotifyStatus = "Stopped signing in to YouTube."
-        log("YOUTUBE", "Signing in cancelled.")
-    }
-
-    func signOutOfYouTube(expired: Bool = false) {
-        KnobShiftYouTube.signOut()
-        youtubeSignedIn = false
-        spotifyStatus = expired ? YouTubeFailure.signInExpired.message : "Signed out of YouTube. Knob's copy of the sign in is deleted."
-        log("YOUTUBE", expired ? "The YouTube sign in ran out; signed out." : "Signed out of YouTube.")
-    }
-
     // MARK: Snapshots
 
-    /// Screenshot only: signed in, with a YouTube playlist downloading.
+    /// Screenshot only: signing in, with the code to enter shown.
+    func showYouTubeCodeForSnapshot() {
+        youtubeHub.hasKey = true
+        youtubeSigningIn = true
+        youtubeHub.code = KnobShiftGoogleAuth.DeviceCode(deviceCode: "", userCode: "WQXK-HTRB", verificationURL: URL(string: "https://www.google.com/device")!,
+                                                         interval: 5, expiresIn: 1800)
+        spotifyStatus = "Enter the code on Google's page. It is copied, so you can paste it."
+    }
+
+    /// Screenshot only: signed in, the dashboard still loading.
+    func showYouTubeLoadingForSnapshot() {
+        youtubeSigningIn = false
+        youtubeHub.code = nil
+        youtubeSignedIn = true
+        youtubeHub.loading = true
+        youtubeHub.loadedAt = Date()
+        spotifyStatus = "Signed in to YouTube. Your music is loading."
+    }
+
+    /// Screenshot only: signed in, with the dashboard's rows and a YouTube playlist downloading.
     func showYouTubePreviewForSnapshot() {
         youtubeSignedIn = true
+        youtubeHub.loading = false
+        youtubeHub.loadedAt = Date()
+        func videos(_ titles: [String], channel: String) -> [KnobShiftYouTubeAPIParsing.Video] {
+            titles.enumerated().map { index, title in
+                .init(id: String(format: "snapshot%03d", index), title: title, channel: channel, categoryId: "10", duration: 200,
+                      thumbnail: nil, published: nil)
+            }
+        }
+        youtubeHub.shelves[.liked] = videos(["Kya Baat Aa", "Sardaari", "Bodyguard", "Lalkaara"], channel: "Karan Aujla")
+        youtubeHub.shelves[.new] = videos(["Ghaint", "Why So", "No Luck"], channel: "Diljit Dosanjh")
+        youtubeHub.shelves[.popular] = videos(["Shaukeen", "Jee Karuga", "Lover", "Born To Shine"], channel: "Punjabi Hits")
+        youtubeHub.playlists = [.init(id: "PLroad", title: "Road trip", count: 42, thumbnail: nil),
+                                .init(id: "PLgym", title: "Gym", count: 18, thumbnail: nil),
+                                .init(id: "PLlate", title: "Late night", count: 27, thumbnail: nil)]
         let id = KnobShiftPlaylists.youtubePrefix + "PLroad"
         playlists = [KnobShiftPlaylist(id: id, name: "Punjabi Hits 2026", link: "", kind: .playlist,
                                        folderName: "Punjabi Hits 2026", spotifyOrder: [], addedAt: Date())]

@@ -34,8 +34,8 @@ extension KnobShiftModel {
         playlists = index.playlists
         removedPlaylists = index.removed
         spotifyLoggedIn = KnobShiftSpotDL.isLoggedIn
-        youtubeSignedIn = KnobShiftYouTube.isSignedIn
-        KnobShiftYouTube.removeLeftovers()
+        youtubeSignedIn = KnobShiftGoogleAuth.isSignedIn
+        KnobShiftYouTube.removeOldBrowserSignIn()
     }
 
     func savePlaylists() {
@@ -84,6 +84,7 @@ extension KnobShiftModel {
 
     func updatePlaylist(_ playlist: KnobShiftPlaylist) async {
         if playlist.source == .youtube {
+            if await updateYouTubeFromGoogle(playlist) { return }
             guard let link = KnobShiftYouTubeParsing.parseLink(playlist.link) else { return }
             await readYouTube(link)
             return
@@ -189,6 +190,7 @@ extension KnobShiftModel {
         // The read may be Spotify's or YouTube's; stopping an id the other never ran does nothing.
         KnobShiftSpotDL.shared.cancel(job)
         KnobShiftYouTube.shared.cancel(job)
+        youtubeHub.cancelRead?()
         spotifyStatus = "Stopped reading the list."
         log("SPOTIFY", "Reading cancelled.")
     }

@@ -174,12 +174,10 @@ final class KnobShiftModel: ObservableObject {
     @Published internal(set) var playlists: [KnobShiftPlaylist] = []
     @Published internal(set) var removedPlaylists: [KnobShiftRemovedPlaylist] = []
     @Published internal(set) var spotifyLoggedIn = false
-    /// Signed in to YouTube with the sign in copied from the user's browser, and copying it now.
+    /// Signed in to YouTube with Google, and signing in now; the dashboard's rows are in youtubeHub.
     @Published internal(set) var youtubeSignedIn = false
     @Published internal(set) var youtubeSigningIn = false
-    var youtubeSignInJob: UUID?
-    /// macOS locked the browser's sign in; the sheet offers OPEN SETTINGS.
-    @Published internal(set) var youtubeNeedsDiskAccess = false
+    let youtubeHub = KnobShiftYouTubeHub()
     /// One plain sentence about the latest Spotify step, shown in the Spotify sheet.
     @Published internal(set) var spotifyStatus: String?
     @Published internal(set) var spotifyBusy = false

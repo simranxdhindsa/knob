@@ -11,7 +11,8 @@ and mix into each other like every other song.
 ### New features
 
 - Add music from YouTube: paste a video, playlist or YouTube Music album link from ADD MUSIC, tick the songs you want, and they download in the background and mix like every other song
-- Sign in to YouTube with the browser you already use to add your Liked videos and private playlists; Knob keeps only your YouTube sign in, and Sign out deletes it
+- Sign in with Google to see your own YouTube in KnobShift: your liked music, your playlists, new music from channels you follow and what is popular in your country, with thumbnails
+- Music only is on by default, so vlogs, Shorts and long mixes stay out of your lists; turn it off to see every video
 - A YouTube video that is gone, private or blocked in your country is replaced by the closest match found by its name
 
 ## 2.0

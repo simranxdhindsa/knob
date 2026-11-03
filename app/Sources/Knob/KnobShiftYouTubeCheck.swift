@@ -2,7 +2,8 @@ import AppKit
 import Foundation
 
 /// `--knobshift-youtube-check selftest` checks KnobShift's YouTube import without the network
-/// (KnobShiftYouTubeTests).
+/// (KnobShiftYouTubeTests); `uat` goes through the YouTube dashboard against a fake Google
+/// (KnobShiftYouTubeUAT, development builds).
 /// `--knobshift-youtube-check LINK` reads a real link through the bundled yt-dlp (no download)
 /// and prints its songs in order; `LINK --download` also downloads the first song into a
 /// temporary folder and prints the file. KNOB_YTDLP and KNOB_FFMPEG point at the helpers when
@@ -16,6 +17,9 @@ enum KnobShiftYouTubeCheck {
             if arguments.first == "selftest" {
                 KnobShiftYouTubeTests.run()
                 exit(KnobShiftYouTubeTests.failures == 0 ? 0 : 1)
+            } else if arguments.first == "uat" {
+                await uat()
+                exit(KnobShiftYouTubeTests.failures == 0 ? 0 : 1)
             } else if let text = arguments.first {
                 await check(text, download: arguments.contains("--download"))
             }
@@ -27,7 +31,7 @@ enum KnobShiftYouTubeCheck {
     private static func check(_ text: String, download: Bool) async {
         guard KnobShiftYouTube.isAvailable else { print(KnobShiftYouTubeParsing.Failure.missingHelper.message); exit(1) }
         guard let link = KnobShiftYouTubeParsing.parseLink(text) else { print("Not a YouTube link."); exit(1) }
-        print("\(link.kind) \(link.id), signed in: \(KnobShiftYouTube.isSignedIn)")
+        print("\(link.kind) \(link.id), signed in with Google: \(KnobShiftGoogleAuth.isSignedIn)")
         let started = Date()
         let read: KnobShiftYouTubeParsing.Read
         do {

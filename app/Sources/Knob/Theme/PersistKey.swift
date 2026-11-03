@@ -20,4 +20,6 @@ enum PersistKey: String {
     case knobShiftWindowOpen = "knob.shift.windowOpen"
     case knobShiftSpotifyNoticeAccepted = "knob.shift.spotify.noticeAccepted"
     case knobShiftYouTubeNoticeAccepted = "knob.shift.youtube.noticeAccepted"
+    /// The YouTube dashboard shows only music (category 10); on by default.
+    case knobShiftYouTubeMusicOnly = "knob.shift.youtube.musicOnly"
 }

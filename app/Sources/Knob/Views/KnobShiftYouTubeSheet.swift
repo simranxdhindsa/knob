@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Adding music from YouTube: paste a video, playlist or YouTube Music album link, or sign in
-/// with a browser and add Liked videos. Every list opens in the song picker first
+/// with Google and pick from your own YouTube (KnobShiftYouTubeDashboard). Every list opens in
+/// the song picker first
 /// (KnobShiftSpotifyPicker, shared with Spotify), and running downloads show their progress here
 /// with Cancel. Built like Add from Spotify, with the same link box, downloads and status line.
 struct KnobShiftYouTubeSheet: View {
@@ -11,8 +12,6 @@ struct KnobShiftYouTubeSheet: View {
     @State private var link = ""
     /// Snapshots show the form or the notice regardless of what was accepted.
     var showsForm: Bool? = nil
-
-    private static let likedVideos = "https://www.youtube.com/playlist?list=LL"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -70,7 +69,12 @@ struct KnobShiftYouTubeSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             LinkField(placeholder: "Paste a YouTube video, playlist or album link", text: $link, enabled: idle,
                       pasteHelp: "Paste the link you copied on YouTube", addHelp: "Add these songs", onPaste: paste, onAdd: add)
-            account
+            // Signed in, the rows make the sheet tall, so they scroll inside it.
+            if model.youtubeSignedIn {
+                ScrollView(.vertical, showsIndicators: false) { account }.frame(height: 470)
+            } else {
+                account
+            }
             KnobShiftDownloadsCard(model: model)
             KnobShiftImportStatus(model: model)
         }
@@ -104,62 +108,11 @@ struct KnobShiftYouTubeSheet: View {
         }
     }
 
-    /// Signing in with a browser the person already uses YouTube in, Sign out, and Liked videos.
+    /// The Google key, signing in, and the person's YouTube.
     private var account: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Circle().fill(model.youtubeSignedIn ? Palette.accent : Screen.textTertiary).frame(width: 7, height: 7)
-                Text(model.youtubeSignedIn ? "Signed in to YouTube" : "Sign in for Liked videos, private playlists and fewer pauses")
-                    .font(.system(size: 11, weight: .medium)).foregroundStyle(Screen.textSecondary)
-                    .lineLimit(1)
-                Spacer()
-                if model.youtubeSignedIn {
-                    Button("SIGN OUT") { model.signOutOfYouTube() }
-                        .buttonStyle(.plain).font(.system(size: 9, weight: .bold)).tracking(0.7)
-                        .foregroundStyle(Palette.accent)
-                        .disabled(!idle)
-                }
-            }
-            if model.youtubeSignedIn {
-                Button { Task { await model.addFromYouTube(Self.likedVideos) } } label: {
-                    Label("ADD LIKED VIDEOS", systemImage: "heart.fill").font(.system(size: 10, weight: .bold)).tracking(0.7)
-                        .foregroundStyle(Palette.accent)
-                        .padding(.horizontal, 14).frame(height: 28)
-                        .background(Capsule().strokeBorder(Palette.accent.opacity(0.45), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .disabled(!idle)
-            } else {
-                // One button: the Mac's default browser, where YouTube is most likely signed in.
-                let browser = KnobShiftYouTube.defaultBrowser
-                Button { Task { await model.signInToYouTube(with: browser) } } label: {
-                    Label("SIGN IN WITH \(browser.name.uppercased())", systemImage: "person.crop.circle")
-                        .font(.system(size: 10, weight: .bold)).tracking(0.7)
-                        .foregroundStyle(idle ? Palette.accent : Screen.textTertiary)
-                        .padding(.horizontal, 14).frame(height: 28)
-                        .background(Capsule().strokeBorder(Palette.accent.opacity(idle ? 0.45 : 0.15), lineWidth: 1))
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .disabled(!idle)
-                .accessibilityLabel("Sign in to YouTube with \(browser.name)")
-                if model.youtubeNeedsDiskAccess {
-                    Button {
-                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
-                    } label: {
-                        Label("OPEN SETTINGS", systemImage: "lock.open").font(.system(size: 10, weight: .bold)).tracking(0.7)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 14).frame(height: 28)
-                            .background(Capsule().fill(Palette.accent))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Opens Full Disk Access in System Settings")
-                }
-                Text("Uses your default browser, \(browser.name). Sign in to YouTube there first. Knob copies only your YouTube sign in, and Sign out deletes it.")
-                    .font(.system(size: 9.5)).foregroundStyle(Screen.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        VStack(alignment: .leading, spacing: 12) {
+            if !model.youtubeSignedIn { KnobShiftGoogleKey(model: model) }
+            KnobShiftYouTubeDashboard(model: model, idle: idle)
         }
-        .screenCard(radius: 14, padding: 12)
     }
 }

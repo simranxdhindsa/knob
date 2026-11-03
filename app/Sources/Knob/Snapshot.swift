@@ -68,6 +68,15 @@ enum Snapshot {
                 render(KnobShiftYouTubeSheet(model: youtube, showsForm: form).environment(\.colorScheme, .dark), scheme: .dark,
                        to: folder.appendingPathComponent("knobshift-youtube-\(name).png"))
             }
+            render(KnobShiftGoogleKey(model: youtube, startsOpen: true).padding(22).frame(width: 460)
+                    .background(Screen.bottom).environment(\.colorScheme, .dark), scheme: .dark,
+                   to: folder.appendingPathComponent("knobshift-youtube-key.png"))
+            youtube.showYouTubeCodeForSnapshot()
+            render(KnobShiftYouTubeSheet(model: youtube, showsForm: true).environment(\.colorScheme, .dark), scheme: .dark,
+                   to: folder.appendingPathComponent("knobshift-youtube-code.png"))
+            youtube.showYouTubeLoadingForSnapshot()
+            render(KnobShiftYouTubeSheet(model: youtube, showsForm: true).environment(\.colorScheme, .dark), scheme: .dark,
+                   to: folder.appendingPathComponent("knobshift-youtube-loading.png"))
             youtube.showYouTubePreviewForSnapshot()
             render(KnobShiftYouTubeSheet(model: youtube, showsForm: true).environment(\.colorScheme, .dark), scheme: .dark,
                    to: folder.appendingPathComponent("knobshift-youtube-signedin.png"))

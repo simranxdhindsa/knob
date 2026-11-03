@@ -21,7 +21,7 @@ enum KnobShiftYouTubeTests {
         playlists()
         arguments()
         problems()
-        signIn()
+        KnobShiftYouTubeAPITests.run(expect)
         print(failures == 0 ? "KnobShift YouTube self test passed" : "KnobShift YouTube self test: \(failures) failure(s)")
     }
 
@@ -156,23 +156,20 @@ enum KnobShiftYouTubeTests {
         let song = KnobShiftSpotDL.Song(name: "Song", artists: ["Artist"], artist: "Artist", album_name: nil, duration: 1,
                                         song_id: "fOT0BUpITw8", url: "https://www.youtube.com/watch?v=fOT0BUpITw8", list_name: nil, list_position: 1)
         let folder = URL(fileURLWithPath: "/tmp/knob")
-        let download = KnobShiftYouTubeParsing.downloadArguments(for: song, into: folder, ffmpeg: "/x/ffmpeg", cookies: nil)
+        let download = KnobShiftYouTubeParsing.downloadArguments(for: song, into: folder, ffmpeg: "/x/ffmpeg")
         expect(download.suffix(2) == ["--", "https://www.youtube.com/watch?v=fOT0BUpITw8"], "the link comes last, after --, so it is never read as an option")
-        expect(!download.contains("--cookies"), "no sign in, no cookies")
-        let signedIn = KnobShiftYouTubeParsing.downloadArguments(for: song, into: folder, ffmpeg: "/x/ffmpeg", cookies: URL(fileURLWithPath: "/c.txt"))
-        expect(signedIn.contains("--cookies") && signedIn.contains("/c.txt"), "signed in uses Knob's own cookie file")
-        let search = KnobShiftYouTubeParsing.searchArguments(for: song, into: folder, ffmpeg: "/x/ffmpeg", cookies: nil)
+        expect(!download.contains("--cookies") && !download.contains("--cookies-from-browser"), "downloads never use any browser's sign in")
+        let search = KnobShiftYouTubeParsing.searchArguments(for: song, into: folder, ffmpeg: "/x/ffmpeg")
         expect(search.last == "ytsearch1:Artist Song", "a missing video is searched by artist and name")
-        let list = KnobShiftYouTubeParsing.listArguments("https://www.youtube.com/playlist?list=PLx", cookies: nil)
+        let list = KnobShiftYouTubeParsing.listArguments("https://www.youtube.com/playlist?list=PLx")
         expect(list.contains("--flat-playlist") && list.suffix(2) == ["--", "https://www.youtube.com/playlist?list=PLx"], "listing reads quickly and safely")
-        for (name, run) in [("list", list), ("download", download), ("search", search),
-                            ("sign in", KnobShiftYouTubeParsing.signInArguments(browser: "chrome", into: folder))] {
+        for (name, run) in [("list", list), ("download", download), ("search", search)] {
             expect(run.starts(with: ["--ignore-config", "--no-plugin-dirs"]), "\(name) loads no config and no plugins")
         }
         var stored = song
         stored = KnobShiftSpotDL.Song(name: "x", artists: ["y"], artist: "y", album_name: nil, duration: 1, song_id: "fOT0BUpITw8",
                                       url: "https://evil.example/x", list_name: nil, list_position: 1)
-        expect(KnobShiftYouTubeParsing.downloadArguments(for: stored, into: folder, ffmpeg: "/f", cookies: nil).last
+        expect(KnobShiftYouTubeParsing.downloadArguments(for: stored, into: folder, ffmpeg: "/f").last
                == "https://www.youtube.com/watch?v=fOT0BUpITw8", "the link is rebuilt from the id, never a saved link")
     }
 
@@ -189,33 +186,6 @@ enum KnobShiftYouTubeTests {
         expect(classify(["<urlopen error [Errno 8] nodename nor servname provided, or not known>"]) == .offline, "offline")
         expect(classify(["ERROR: Postprocessing: [Errno 28] No space left on device"]) == .noSpace, "disk full")
         expect(classify(["[download] 100% of 3.5MiB"]) == nil, "a normal run is no failure")
-        expect(classify(["WARNING: [youtube] The provided YouTube account cookies are no longer valid."]) == .signInExpired, "sign in ran out")
         expect(!KnobShiftYouTubeParsing.Failure.botCheck.message.contains("-"), "messages have no dashes")
-    }
-
-    private static func signIn() {
-        print("Signing in with a browser")
-        let jar = """
-        # Netscape HTTP Cookie File
-        .youtube.com\tTRUE\t/\tTRUE\t1893456000\tSAPISID\tabc
-        .youtube.com\tTRUE\t/\tTRUE\t1893456000\tPREF\tf6=40000000
-        .google.com\tTRUE\t/\tTRUE\t1893456000\tSID\tsecret
-        .bank.example\tTRUE\t/\tTRUE\t1893456000\tsession\tprivate
-        music.youtube.com\tFALSE\t/\tTRUE\t1893456000\tVISITOR_INFO1_LIVE\tx
-        """
-        let kept = KnobShiftYouTubeParsing.youtubeCookies(from: jar)
-        expect(kept.signedIn, "a YouTube account cookie means signed in")
-        expect(kept.text.contains("SAPISID") && kept.text.contains("VISITOR_INFO1_LIVE"), "YouTube's cookies kept")
-        expect(!kept.text.contains("bank.example") && !kept.text.contains("google.com"), "every other site's cookies dropped")
-        expect(kept.text.hasPrefix("# Netscape HTTP Cookie File"), "still a cookie file yt-dlp reads")
-        expect(!KnobShiftYouTubeParsing.youtubeCookies(from: ".youtube.com\tTRUE\t/\tTRUE\t1\tPREF\tx").signedIn, "visitor cookies alone are not a sign in")
-        let problem = KnobShiftYouTubeParsing.signInProblem
-        expect(problem(["ERROR: could not find chrome cookies database in \"/Users/x/Library/Application Support/Google/Chrome\""]) == .browserMissing, "browser never used")
-        expect(problem(["ERROR: [Errno 1] Operation not permitted: '/Users/x/Library/Containers/com.apple.Safari/Data/Library/Cookies/Cookies.binarycookies'"]) == .fullDiskAccess, "Safari needs Full Disk Access")
-        expect(problem(["WARNING: cannot decrypt v10 cookies: no key found"]) == .keychainDenied, "keychain access refused")
-        expect(!KnobShiftYouTubeParsing.SignInProblem.fullDiskAccess.message("Chrome").contains("-"), "the Full Disk Access message has no dashes")
-        expect(problem(["<urlopen error [Errno 8] nodename nor servname provided, or not known>"]) == .offline, "offline while signing in")
-        expect(KnobShiftYouTubeParsing.signInArguments(browser: "chrome", into: URL(fileURLWithPath: "/t/c.txt")).suffix(2)
-               == ["--", "https://www.youtube.com/playlist?list=LL"], "signing in reads Liked videos to check it worked")
     }
 }
