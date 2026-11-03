@@ -1,11 +1,12 @@
 import Foundation
 
-/// A Spotify playlist, album, song or the user's Liked Songs brought into KnobShift. Its songs
-/// live in one folder under ~/Music/KnobShift/Spotify, each file named with its Spotify id so it
-/// always maps back to the right song.
+/// A Spotify or YouTube playlist, album, song or the user's liked songs brought into KnobShift.
+/// Its songs live in one folder under ~/Music/KnobShift/Spotify or ~/Music/KnobShift/YouTube,
+/// each file named with its song id so it always maps back to the right song.
 struct KnobShiftPlaylist: Codable, Identifiable, Equatable {
     enum Kind: String, Codable { case playlist, album, song, liked }
-    /// Spotify's id for the list ("liked" for Liked Songs).
+    enum Source { case spotify, youtube }
+    /// Spotify's id for the list ("liked" for Liked Songs), or "yt:" and YouTube's id for it.
     let id: String
     var name: String
     /// What spotDL is asked for: the Spotify link, or "saved" for Liked Songs.
@@ -17,6 +18,9 @@ struct KnobShiftPlaylist: Codable, Identifiable, Equatable {
     let addedAt: Date
     /// Songs the user left unticked, so Update playlist does not tick them again.
     var skipped: [String]? = nil
+
+    /// Read from the id, so playlists saved before YouTube import existed load unchanged.
+    var source: Source { id.hasPrefix(KnobShiftPlaylists.youtubePrefix) ? .youtube : .spotify }
 }
 
 /// A removed playlist, kept for 30 days so it can be restored with its files.
@@ -35,18 +39,37 @@ enum KnobShiftPlaylists {
     }
 
     static let keepRemovedFor: TimeInterval = 30 * 24 * 60 * 60
+    /// Starts the id of every YouTube playlist.
+    static let youtubePrefix = "yt:"
 
-    /// ~/Music/KnobShift/Spotify; KNOB_SPOTIFY_ROOT moves it for the command line checks.
+    /// ~/Music/KnobShift/Spotify, which also keeps the index of every playlist;
+    /// KNOB_SPOTIFY_ROOT moves it for the command line checks.
     static var root: URL {
         if let path = ProcessInfo.processInfo.environment["KNOB_SPOTIFY_ROOT"] { return URL(fileURLWithPath: path, isDirectory: true) }
         return FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Music/KnobShift/Spotify", isDirectory: true)
     }
-    static var removedRoot: URL { root.appendingPathComponent(".Removed", isDirectory: true) }
+    /// ~/Music/KnobShift/YouTube; KNOB_YOUTUBE_ROOT moves it for the command line checks.
+    static var youtubeRoot: URL {
+        if let path = ProcessInfo.processInfo.environment["KNOB_YOUTUBE_ROOT"] { return URL(fileURLWithPath: path, isDirectory: true) }
+        return FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Music/KnobShift/YouTube", isDirectory: true)
+    }
+    static func folderRoot(for source: KnobShiftPlaylist.Source) -> URL { source == .youtube ? youtubeRoot : root }
+    static var removedRoot: URL { removedFolderRoot(for: .spotify) }
+    static func removedFolderRoot(for source: KnobShiftPlaylist.Source) -> URL {
+        folderRoot(for: source).appendingPathComponent(".Removed", isDirectory: true)
+    }
     private static var indexURL: URL { root.appendingPathComponent("playlists.json") }
 
     static func folder(for playlist: KnobShiftPlaylist) -> URL {
-        root.appendingPathComponent(playlist.folderName, isDirectory: true)
+        folderRoot(for: playlist.source).appendingPathComponent(playlist.folderName, isDirectory: true)
+    }
+
+    /// True for a file inside any KnobShift playlist folder (a download, not the user's own file).
+    static func isDownload(_ url: URL) -> Bool {
+        let path = url.standardizedFileURL.path
+        return [root, youtubeRoot].contains { path.hasPrefix($0.standardizedFileURL.path + "/") }
     }
 
     // MARK: Index
@@ -70,23 +93,22 @@ enum KnobShiftPlaylists {
     /// Deletes removed playlists older than 30 days for good.
     static func purgeExpired(_ index: inout Index, now: Date = Date()) {
         let expired = index.removed.filter { now.timeIntervalSince($0.removedAt) > keepRemovedFor }
-        for entry in expired {
-            try? FileManager.default.removeItem(at: removedRoot.appendingPathComponent(entry.folderName))
-        }
+        for entry in expired { deleteForGood(entry) }
         index.removed.removeAll { expired.contains($0) }
     }
 
     // MARK: Folders
 
     /// A folder name Finder accepts and no other playlist uses.
-    static func folderName(for name: String, taken: Set<String>) -> String {
+    static func folderName(for name: String, taken: Set<String>, source: KnobShiftPlaylist.Source = .spotify) -> String {
         let cleaned = name.components(separatedBy: CharacterSet(charactersIn: "/:\\\0"))
             .joined(separator: " ")
             .trimmingCharacters(in: CharacterSet.whitespaces.union(CharacterSet(charactersIn: ".")))
-        let base = cleaned.isEmpty ? "Spotify songs" : String(cleaned.prefix(80))
+        let base = cleaned.isEmpty ? (source == .youtube ? "YouTube songs" : "Spotify songs") : String(cleaned.prefix(80))
+        let parent = folderRoot(for: source)
         var candidate = base
         var number = 2
-        while taken.contains(candidate) || FileManager.default.fileExists(atPath: root.appendingPathComponent(candidate).path) {
+        while taken.contains(candidate) || FileManager.default.fileExists(atPath: parent.appendingPathComponent(candidate).path) {
             candidate = "\(base) \(number)"
             number += 1
         }
@@ -99,10 +121,11 @@ enum KnobShiftPlaylists {
         stamp.locale = Locale(identifier: "en_US_POSIX")
         stamp.dateFormat = "yyyyMMdd HHmmss"
         let name = "\(playlist.folderName) \(stamp.string(from: date))"
-        try FileManager.default.createDirectory(at: removedRoot, withIntermediateDirectories: true)
+        let removed = removedFolderRoot(for: playlist.source)
+        try FileManager.default.createDirectory(at: removed, withIntermediateDirectories: true)
         let source = folder(for: playlist)
         if FileManager.default.fileExists(atPath: source.path) {
-            try FileManager.default.moveItem(at: source, to: removedRoot.appendingPathComponent(name))
+            try FileManager.default.moveItem(at: source, to: removed.appendingPathComponent(name))
         }
         return KnobShiftRemovedPlaylist(playlist: playlist, removedAt: date, folderName: name)
     }
@@ -110,8 +133,8 @@ enum KnobShiftPlaylists {
     /// Moves a removed playlist's folder back, under a free name.
     static func restore(_ removed: KnobShiftRemovedPlaylist, taken: Set<String>) throws -> KnobShiftPlaylist {
         var playlist = removed.playlist
-        playlist.folderName = folderName(for: playlist.folderName, taken: taken)
-        let source = removedRoot.appendingPathComponent(removed.folderName)
+        playlist.folderName = folderName(for: playlist.folderName, taken: taken, source: playlist.source)
+        let source = removedFolderRoot(for: playlist.source).appendingPathComponent(removed.folderName)
         if FileManager.default.fileExists(atPath: source.path) {
             try FileManager.default.moveItem(at: source, to: folder(for: playlist))
         } else {
@@ -121,34 +144,41 @@ enum KnobShiftPlaylists {
     }
 
     static func deleteForGood(_ removed: KnobShiftRemovedPlaylist) {
-        try? FileManager.default.removeItem(at: removedRoot.appendingPathComponent(removed.folderName))
+        try? FileManager.default.removeItem(at: removedFolderRoot(for: removed.playlist.source).appendingPathComponent(removed.folderName))
     }
 
     // MARK: Songs and names
 
-    /// Audio files in a playlist folder by Spotify id, read from the "[id]" in each file name.
+    /// Audio files in a playlist folder by song id, read from the "[id]" in each file name.
     static func files(in folder: URL) -> [String: URL] {
         let names = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
         var found: [String: URL] = [:]
         for file in names where ["m4a", "mp3", "opus", "ogg", "flac", "wav"].contains(file.pathExtension.lowercased()) {
-            if let id = spotifyId(inFileName: file.deletingPathExtension().lastPathComponent) { found[id] = file }
+            if let id = songId(inFileName: file.deletingPathExtension().lastPathComponent) { found[id] = file }
         }
         return found
     }
 
-    /// The Spotify id at the end of a file name written as "… [id]".
-    static func spotifyId(inFileName name: String) -> String? {
+    /// The song id at the end of a file name: "… [id]" with a 22 character Spotify id, or
+    /// "… [yt-id]" with an 11 character YouTube id. The "yt-" keeps ordinary brackets apart.
+    static func songId(inFileName name: String) -> String? {
         guard name.hasSuffix("]"), let open = name.range(of: " [", options: .backwards) else { return nil }
         let id = String(name[open.upperBound..<name.index(before: name.endIndex)])
+        if id.hasPrefix("yt-") {
+            let video = String(id.dropFirst(3))
+            return KnobShiftYouTubeParsing.isVideoId(video) ? video : nil
+        }
         return id.count == 22 && id.allSatisfy({ $0.isLetter || $0.isNumber }) ? id : nil
     }
 
-    /// Which playlist and Spotify song a file belongs to, when it sits in a playlist folder.
+    /// Which playlist and song a file belongs to, when it sits in a playlist folder.
     /// `playlists` saves reading the index from disk once per song.
     static func origin(of url: URL, in playlists: [KnobShiftPlaylist]? = nil) -> (playlistId: String?, spotifyId: String)? {
-        guard let id = spotifyId(inFileName: url.deletingPathExtension().lastPathComponent) else { return nil }
-        let folder = url.deletingLastPathComponent().lastPathComponent
-        let playlist = (playlists ?? load().playlists).first { $0.folderName == folder }
+        guard let id = songId(inFileName: url.deletingPathExtension().lastPathComponent) else { return nil }
+        let folder = url.deletingLastPathComponent()
+        let playlist = (playlists ?? load().playlists).first {
+            $0.folderName == folder.lastPathComponent && Self.folder(for: $0).standardizedFileURL == folder.standardizedFileURL
+        }
         return (playlist?.id, id)
     }
 
@@ -158,10 +188,11 @@ enum KnobShiftPlaylists {
         folder(for: playlist).appendingPathComponent("knobshift-songs.spotdl")
     }
 
-    /// "07 Title - Artists [id]" (how Spotify songs are saved) without the position and the id.
+    /// "07 Title - Artists [id]" (how Spotify and YouTube songs are saved) without the position
+    /// and the id.
     static func plainTitle(_ title: String) -> String {
         var text = title
-        if spotifyId(inFileName: text) != nil, let open = text.range(of: " [", options: .backwards) {
+        if songId(inFileName: text) != nil, let open = text.range(of: " [", options: .backwards) {
             text = String(text[..<open.lowerBound])
             if let space = text.firstIndex(of: " "), text[..<space].allSatisfy(\.isNumber) {
                 text = String(text[text.index(after: space)...])

@@ -94,6 +94,12 @@ enum KnobShiftImport {
             guard names[id] != nil, !missing.contains(id) else { return }
             landed.insert(id)
         }
+
+        /// For YouTube, which reports each song by id rather than in spotDL's messages.
+        mutating func markMissing(_ id: String) {
+            guard names[id] != nil, !landed.contains(id) else { return }
+            missing.insert(id)
+        }
     }
 
     /// Which songs start ticked when a list is read: everything not ticked off before. Songs

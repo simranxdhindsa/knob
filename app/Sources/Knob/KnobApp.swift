@@ -47,6 +47,10 @@ struct KnobLauncher {
             KnobShiftSpotifyCheck.run(Array(arguments[(index + 1)...]))
             return
         }
+        if let index = arguments.firstIndex(of: "--knobshift-youtube-check"), index + 1 < arguments.count {
+            KnobShiftYouTubeCheck.run(Array(arguments[(index + 1)...]))
+            return
+        }
         if let index = arguments.firstIndex(of: "--knobshift-stems-check"), index + 4 < arguments.count {
             KnobShiftAnalysisCheck.runStems(file: URL(fileURLWithPath: arguments[index + 1]),
                                             start: Double(arguments[index + 2]) ?? 0, length: Double(arguments[index + 3]) ?? 20,

@@ -354,8 +354,8 @@ final class KnobShiftModel: ObservableObject {
                 if let failed = pending.firstIndex(where: { $0.id == song.id }) {
                     pending[failed].isActive = false
                     pending[failed].failure = "Could not read this file"
-                    // A Spotify download that broke off: delete it, so Retry downloads it again.
-                    if song.spotifyId != nil, song.url.standardizedFileURL.path.hasPrefix(KnobShiftPlaylists.root.standardizedFileURL.path) {
+                    // A Spotify or YouTube download that broke off: delete it, so Retry downloads it again.
+                    if song.spotifyId != nil, KnobShiftPlaylists.isDownload(song.url) {
                         try? FileManager.default.removeItem(at: song.url)
                         pending[failed].waitingForDownload = true
                         pending[failed].failure = "Download broke"
