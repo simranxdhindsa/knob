@@ -158,6 +158,15 @@ enum KnobShiftYouTubeTests {
         expect(search.last == "ytsearch1:Artist Song", "a missing video is searched by artist and name")
         let list = KnobShiftYouTubeParsing.listArguments("https://www.youtube.com/playlist?list=PLx", cookies: nil)
         expect(list.contains("--flat-playlist") && list.suffix(2) == ["--", "https://www.youtube.com/playlist?list=PLx"], "listing reads quickly and safely")
+        for (name, run) in [("list", list), ("download", download), ("search", search),
+                            ("sign in", KnobShiftYouTubeParsing.signInArguments(browser: "chrome", into: folder))] {
+            expect(run.starts(with: ["--ignore-config", "--no-plugin-dirs"]), "\(name) loads no config and no plugins")
+        }
+        var stored = song
+        stored = KnobShiftSpotDL.Song(name: "x", artists: ["y"], artist: "y", album_name: nil, duration: 1, song_id: "fOT0BUpITw8",
+                                      url: "https://evil.example/x", list_name: nil, list_position: 1)
+        expect(KnobShiftYouTubeParsing.downloadArguments(for: stored, into: folder, ffmpeg: "/f", cookies: nil).last
+               == "https://www.youtube.com/watch?v=fOT0BUpITw8", "the link is rebuilt from the id, never a saved link")
     }
 
     private static func problems() {

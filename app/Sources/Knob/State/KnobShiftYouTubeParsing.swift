@@ -271,6 +271,10 @@ enum KnobShiftYouTubeParsing {
     /// Printed by yt-dlp once a song's file is finished.
     static let doneMarker = "KNOB_DONE"
 
+    /// Every run: no config files and no plugins (a plugin dropped in a folder yt-dlp searches
+    /// would run inside it, next to the sign in), and no colour codes.
+    static let baseArguments = ["--ignore-config", "--no-plugin-dirs", "--no-color"]
+
     private static func cookieArguments(_ cookies: URL?) -> [String] {
         cookies.map { ["--cookies", $0.path] } ?? []
     }
@@ -278,14 +282,15 @@ enum KnobShiftYouTubeParsing {
     /// Reads a list quickly (`--flat-playlist`), without downloading anything. The link always
     /// comes last, after "--", so nothing in it is ever read as an option.
     static func listArguments(_ url: String, cookies: URL?) -> [String] {
-        ["--ignore-config", "--no-color", "--flat-playlist", "--dump-single-json"] + cookieArguments(cookies) + ["--", url]
+        baseArguments + ["--flat-playlist", "--dump-single-json"] + cookieArguments(cookies) + ["--", url]
     }
 
     /// Downloads one song's audio as m4a with its cover, named by `fileName(for:)`. Songs whose
-    /// file is already there are not downloaded again.
+    /// file is already there are not downloaded again. The link is rebuilt from the video id
+    /// alone (callers check it is one), never taken from saved data.
     static func downloadArguments(for song: KnobShiftSpotDL.Song, into folder: URL, ffmpeg: String, cookies: URL?) -> [String] {
-        let url = isVideoId(song.song_id) ? "https://www.youtube.com/watch?v=\(song.song_id)" : song.url
-        return audioArguments(for: song, into: folder, ffmpeg: ffmpeg, cookies: cookies) + ["--no-playlist", "--", url]
+        audioArguments(for: song, into: folder, ffmpeg: ffmpeg, cookies: cookies)
+            + ["--no-playlist", "--", "https://www.youtube.com/watch?v=\(song.song_id)"]
     }
 
     /// For a video that is gone or blocked: the closest match found by searching YouTube for the
@@ -297,7 +302,7 @@ enum KnobShiftYouTubeParsing {
 
     private static func audioArguments(for song: KnobShiftSpotDL.Song, into folder: URL, ffmpeg: String, cookies: URL?) -> [String] {
         let output = folder.path.replacingOccurrences(of: "%", with: "%%") + "/" + outputTemplate(for: song)
-        return ["--ignore-config", "--no-color", "--newline",
+        return baseArguments + ["--newline",
                 "--format", "bestaudio[ext=m4a]/bestaudio/best", "--extract-audio", "--audio-format", "m4a", "--audio-quality", "0",
                 "--ffmpeg-location", ffmpeg, "--embed-thumbnail", "--convert-thumbnails", "jpg",
                 "--retries", "3", "--sleep-requests", "1", "--no-mtime",
@@ -378,7 +383,7 @@ extension KnobShiftYouTubeParsing {
     /// Copies the browser's cookies into `file` while reading the first of Liked videos, which
     /// only works for a signed in person, so the same step checks the sign in.
     static func signInArguments(browser: String, into file: URL) -> [String] {
-        ["--ignore-config", "--no-color", "--cookies-from-browser", browser, "--cookies", file.path,
+        baseArguments + ["--cookies-from-browser", browser, "--cookies", file.path,
          "--flat-playlist", "--playlist-items", "1", "--dump-single-json", "--", "https://www.youtube.com/playlist?list=LL"]
     }
 }

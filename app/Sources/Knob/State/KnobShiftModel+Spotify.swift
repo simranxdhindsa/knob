@@ -35,6 +35,7 @@ extension KnobShiftModel {
         removedPlaylists = index.removed
         spotifyLoggedIn = KnobShiftSpotDL.isLoggedIn
         youtubeSignedIn = KnobShiftYouTube.isSignedIn
+        KnobShiftYouTube.removeLeftovers()
     }
 
     func savePlaylists() {

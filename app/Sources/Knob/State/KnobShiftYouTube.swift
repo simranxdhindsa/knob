@@ -14,12 +14,14 @@ final class KnobShiftYouTube: @unchecked Sendable {
     // MARK: Where things are
 
     /// The bundled yt-dlp; Apple silicon only, like FFmpeg and Deno, so Intel Macs hide the
-    /// feature. KNOB_YTDLP points at another copy, for development.
+    /// feature. KNOB_YTDLP points at another copy, in development builds only.
     static var helper: URL? {
         #if arch(arm64)
+        #if DEBUG
         if let path = ProcessInfo.processInfo.environment["KNOB_YTDLP"], FileManager.default.isExecutableFile(atPath: path) {
             return URL(fileURLWithPath: path)
         }
+        #endif
         let bundled = Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/yt-dlp/yt-dlp_macos")
         return FileManager.default.isExecutableFile(atPath: bundled.path) ? bundled : nil
         #else
@@ -63,7 +65,7 @@ final class KnobShiftYouTube: @unchecked Sendable {
     /// artist and name. Each line of yt-dlp's output goes to `onLine` as it arrives.
     func download(_ song: KnobShiftSpotDL.Song, into folder: URL, search: Bool, id: UUID,
                   onLine: @escaping @Sendable (String) -> Void) async -> KnobShiftHelperProcess.Result {
-        guard let ffmpeg = KnobShiftSpotDL.ffmpeg else {
+        guard let ffmpeg = KnobShiftSpotDL.ffmpeg, KnobShiftYouTubeParsing.isVideoId(song.song_id) else {
             return KnobShiftHelperProcess.Result(status: -1, lines: [], cancelled: false, stalled: false)
         }
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -81,20 +83,33 @@ final class KnobShiftYouTube: @unchecked Sendable {
 
     // MARK: Running
 
+    /// Knob's yt-dlp folder, made readable by this Mac user only: it holds the sign in.
+    static func makeHome() {
+        try? FileManager.default.createDirectory(at: home, withIntermediateDirectories: true,
+                                                 attributes: [.posixPermissions: 0o700])
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: home.path)
+    }
+
     /// Runs yt-dlp with its own home, so its cache and sign in stay inside Knob, and with
-    /// Helpers first on its PATH, where it finds Deno (needed to read YouTube's pages).
-    func run(_ arguments: [String], id: UUID, idleLimit: TimeInterval?,
+    /// Helpers first on its PATH, where it finds Deno (needed to read YouTube's pages). It gets
+    /// only the settings it needs, never the rest of Knob's environment (a proxy setting there
+    /// would route the sign in through someone else). Signing in uses the real home folder,
+    /// where the browsers keep their sign ins.
+    func run(_ arguments: [String], id: UUID, idleLimit: TimeInterval?, realHome: Bool = false,
              onLine: @escaping @Sendable (String) -> Void) async -> KnobShiftHelperProcess.Result {
         guard let helper = Self.helper, let ffmpeg = KnobShiftSpotDL.ffmpeg else {
             return KnobShiftHelperProcess.Result(status: -1, lines: [], cancelled: false, stalled: false)
         }
-        try? FileManager.default.createDirectory(at: Self.home, withIntermediateDirectories: true)
-        var environment = ProcessInfo.processInfo.environment
-        environment["HOME"] = Self.home.path
-        environment["XDG_CACHE_HOME"] = Self.home.appendingPathComponent("cache").path
-        environment["PATH"] = "\(ffmpeg.deletingLastPathComponent().path):/usr/bin:/bin"
-        environment["PYTHONUNBUFFERED"] = "1"
-        environment["TERM"] = "dumb"
+        Self.makeHome()
+        let inherited = ProcessInfo.processInfo.environment
+        var environment: [String: String] = [
+            "HOME": realHome ? FileManager.default.homeDirectoryForCurrentUser.path : Self.home.path,
+            "XDG_CACHE_HOME": Self.home.appendingPathComponent("cache").path,
+            "PATH": "\(ffmpeg.deletingLastPathComponent().path):/usr/bin:/bin",
+            "PYTHONUNBUFFERED": "1", "PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1",
+            "TERM": "dumb",
+        ]
+        for key in ["TMPDIR", "LANG", "LC_ALL", "USER", "LOGNAME"] { environment[key] = inherited[key] }
         return await processes.run(helper, arguments: arguments, environment: environment, id: id, idleLimit: idleLimit, onLine: onLine)
     }
 }

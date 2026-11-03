@@ -36,19 +36,39 @@ extension KnobShiftYouTube {
     /// Reads the browser's sign in and keeps YouTube's part of it. Chrome style browsers make
     /// macOS ask once whether yt-dlp may read their keychain entry.
     func signIn(with browser: Browser, id: UUID) async throws {
-        try FileManager.default.createDirectory(at: Self.home, withIntermediateDirectories: true)
+        Self.makeHome()
+        Self.removeLeftovers()
         // yt-dlp writes the browser's whole cookie file here; it is cut down and deleted at once.
+        // Made first, owner only, so yt-dlp writes into a file nobody else can read.
         let whole = Self.home.appendingPathComponent("browser-cookies-\(id.uuidString).txt")
+        guard FileManager.default.createFile(atPath: whole.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
+            throw KnobShiftYouTubeParsing.SignInProblem.failed
+        }
         defer { try? FileManager.default.removeItem(at: whole) }
-        let result = await run(KnobShiftYouTubeParsing.signInArguments(browser: browser.id, into: whole), id: id, idleLimit: 120) { _ in }
+        let result = await run(KnobShiftYouTubeParsing.signInArguments(browser: browser.id, into: whole), id: id, idleLimit: 120,
+                               realHome: true) { _ in }
         if result.cancelled { throw CancellationError() }
-        guard let jar = try? String(contentsOf: whole, encoding: .utf8) else {
+        guard let jar = try? String(contentsOf: whole, encoding: .utf8), !jar.isEmpty else {
             throw KnobShiftYouTubeParsing.signInProblem(result.lines)
         }
         let youtube = KnobShiftYouTubeParsing.youtubeCookies(from: jar)
         guard youtube.signedIn else { throw KnobShiftYouTubeParsing.SignInProblem.notSignedIn }
-        try Data(youtube.text.utf8).write(to: Self.cookiesFile, options: .atomic)
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: Self.cookiesFile.path)
+        // Owner only from the first byte: written beside, then moved into place.
+        let fresh = Self.home.appendingPathComponent("youtube-cookies-\(id.uuidString).txt")
+        guard FileManager.default.createFile(atPath: fresh.path, contents: Data(youtube.text.utf8),
+                                             attributes: [.posixPermissions: 0o600]) else {
+            throw KnobShiftYouTubeParsing.SignInProblem.failed
+        }
+        _ = try? FileManager.default.removeItem(at: Self.cookiesFile)
+        try FileManager.default.moveItem(at: fresh, to: Self.cookiesFile)
+    }
+
+    /// A browser's full cookie copy left behind if Knob stopped halfway through signing in.
+    static func removeLeftovers() {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: home.path)) ?? []
+        for name in names where name.hasPrefix("browser-cookies-") || (name.hasPrefix("youtube-cookies-") && name != cookiesFile.lastPathComponent) {
+            try? FileManager.default.removeItem(at: home.appendingPathComponent(name))
+        }
     }
 
     static func signOut() {
