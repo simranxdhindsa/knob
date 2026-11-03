@@ -440,6 +440,24 @@ final class KnobShiftModel: ObservableObject {
         mixState = tracks.isEmpty ? .idle : .ready
     }
 
+    /// The level of everything KnobShift plays, 0...1: what the iPhone app's volume knob turns.
+    var outputVolume: Float {
+        get { audioEngine.mainMixerNode.outputVolume }
+        set { audioEngine.mainMixerNode.outputVolume = min(max(newValue, 0), 1) }
+    }
+
+    /// Puts an effect between KnobShift's mix and the speakers: Knob's own sound in the iPhone
+    /// app, which has no system wide engine to play through.
+    func insertOutputEffect(_ effect: AVAudioNode) {
+        let output = audioEngine.outputNode
+        let format = output.inputFormat(forBus: 0)
+        audioEngine.attach(effect)
+        audioEngine.disconnectNodeOutput(audioEngine.mainMixerNode)
+        audioEngine.connect(audioEngine.mainMixerNode, to: effect, format: format)
+        audioEngine.connect(effect, to: output, format: format)
+        log("SESSION", "Knob's sound added after the mix, at \(Int(format.sampleRate)) Hz.")
+    }
+
     /// Used only by Knob's command-line smoke check. The audio graph still runs, but its output
     /// is muted so automated checks never make sound or change the system output.
     func playForCheck(volume: Float = 0, bySelecting track: Track? = nil) {

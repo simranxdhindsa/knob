@@ -8,11 +8,13 @@ struct PanelView: View {
     @State private var showingAbout = false
 
     static let width: CGFloat = 384
+    /// The menu bar panel's width on the Mac; the iPhone passes its screen's width.
+    var width: CGFloat = PanelView.width
 
     var body: some View {
         Group {
             if showingAbout {
-                AboutView(width: Self.width, onBack: { withAnimation(Motion.gentle) { showingAbout = false } })
+                AboutView(width: width, onBack: { withAnimation(Motion.gentle) { showingAbout = false } })
                     .transition(.opacity)
             } else {
                 controls.transition(.opacity)
@@ -33,7 +35,7 @@ struct PanelView: View {
         .padding(.horizontal, 16)
         .padding(.top, 14)
         .padding(.bottom, 18)
-        .frame(width: Self.width)
+        .frame(width: width)
         .background {
             ZStack {
                 LinearGradient(colors: [p.panelTop, p.panelBottom], startPoint: .top, endPoint: .bottom)

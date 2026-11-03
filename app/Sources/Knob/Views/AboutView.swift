@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import SwiftUI
 
 /// Knob's About window, built like the panel: grained faceplate, engraved labels, recessed pills.
@@ -91,6 +93,7 @@ struct AboutView: View {
     }
 }
 
+#if os(macOS)
 /// Opens the About window (one at a time), in front of other apps.
 @MainActor
 enum AboutWindow {
@@ -113,3 +116,4 @@ enum AboutWindow {
         window?.makeKeyAndOrderFront(nil)
     }
 }
+#endif

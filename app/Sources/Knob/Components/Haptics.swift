@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// Trackpad haptics for the hardware controls, felt like a stepped studio pot: a light tick every
 /// 2.5% while turning, a firmer click on each of the eleven printed marks (0 to 10), and the
@@ -15,6 +19,13 @@ enum Haptics {
     static func tick() { perform(.alignment, spaced: true) }
     static func mark() { perform(.generic, spaced: false) }
     static func detent() { perform(.levelChange, spaced: false) }
+
+    #if os(macOS)
+    typealias Pattern = NSHapticFeedbackManager.FeedbackPattern
+    #else
+    /// The iPhone's Taptic Engine, with the same three strengths as the trackpad.
+    enum Pattern { case alignment, generic, levelChange }
+    #endif
 
     /// Plays the right feedback for a control moving from `old` to `new` (both 0...1): the
     /// firmest click on reaching either end, a firmer one on crossing a printed mark, a light tick
@@ -39,10 +50,20 @@ enum Haptics {
         Int((value * Double(count) + 1e-9).rounded(.down))
     }
 
-    private static func perform(_ pattern: NSHapticFeedbackManager.FeedbackPattern, spaced: Bool) {
+    private static func perform(_ pattern: Pattern, spaced: Bool) {
         let now = Date()
         if spaced, now.timeIntervalSince(lastTick) < 0.012 { return }
         lastTick = now
+        #if os(macOS)
         NSHapticFeedbackManager.defaultPerformer.perform(pattern, performanceTime: .now)
+        #else
+        DispatchQueue.main.async {
+            switch pattern {
+            case .alignment: UISelectionFeedbackGenerator().selectionChanged()
+            case .generic: UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            case .levelChange: UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            }
+        }
+        #endif
     }
 }

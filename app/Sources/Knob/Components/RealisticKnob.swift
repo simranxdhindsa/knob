@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// A hardware-style rotary knob: recessed well, shadowed skirt, lit cap, pointer and a glowing
@@ -176,7 +175,7 @@ struct RealisticKnob: View {
                     rotary = RotaryDrag(sweep: Self.sweep, size: size, value: value)
                     onEditingChanged(true)
                 }
-                if let next = rotary?.move(to: g.location, precision: NSEvent.modifierFlags.contains(.shift)) {
+                if let next = rotary?.move(to: g.location, precision: Platform.fineAdjust) {
                     set(next, animated: false)
                 }
             }

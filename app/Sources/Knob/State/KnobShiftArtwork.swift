@@ -1,11 +1,3 @@
-#if os(macOS)
-import AppKit
-/// A picture as each platform draws it: NSImage on the Mac, UIImage on the iPhone.
-typealias PlatformImage = NSImage
-#else
-import UIKit
-typealias PlatformImage = UIImage
-#endif
 import AVFoundation
 
 /// Cover art embedded in a local song file (the picture most MP3 and M4A files carry), read once

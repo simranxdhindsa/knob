@@ -6,6 +6,16 @@ protocol SoundEngine: AnyObject {
     func send(_ command: String, _ arguments: [String: Any]) async throws -> Any?
 }
 
+/// The volume the panel's knob turns: the Mac's own output volume (SystemVolume), the same one
+/// the volume keys change, or the iPhone app's playback volume.
+protocol VolumeControl: AnyObject {
+    /// Called on the main thread with (volume 0...1, muted, can be controlled).
+    var onChange: ((Double, Bool, Bool) -> Void)? { get set }
+    func start()
+    func setVolume(_ volume: Double)
+    func setMuted(_ muted: Bool)
+}
+
 struct EngineError: LocalizedError {
     let message: String
     var errorDescription: String? { message }
