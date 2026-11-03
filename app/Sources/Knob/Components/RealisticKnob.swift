@@ -16,6 +16,9 @@ struct RealisticKnob: View {
     var accessibilityLabel: String
     var accessibilityValue: String
     var onEditingChanged: (Bool) -> Void = { _ in }
+    /// Outside changes (the volume keys) ease in with a spring. Off for a turn that is already
+    /// moved frame by frame, such as the iPhone app's opening, where a spring would lag behind.
+    var springsToChanges = true
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.isEnabled) private var isEnabled
@@ -50,7 +53,7 @@ struct RealisticKnob: View {
             .contentShape(Circle())
             .gesture(drag)
             .onTapGesture(count: 2) { if let d = defaultValue { set(d, animated: true) } }
-            .animation(dragStart == nil ? Motion.knob : nil, value: value)
+            .animation(dragStart == nil && springsToChanges ? Motion.knob : nil, value: value)
             .opacity(isEnabled ? 1 : 0.45)
 
             if showsMinMax {

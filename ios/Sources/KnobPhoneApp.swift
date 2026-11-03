@@ -84,10 +84,21 @@ final class PhoneApp: ObservableObject {
 struct PhoneRoot: View {
     @ObservedObject var model: KnobModel
     @ObservedObject private var sheets = PhoneSheets.shared
+    /// The opening animation runs once per launch, over the player (PhoneLaunch).
+    @State private var launching = true
+    @State private var revealed = false
 
     var body: some View {
-        KnobShiftPlayerView(model: model.knobShift, onSound: { sheets.sound = true }, prepareImports: PhoneLibrary.keep)
-            .sheet(isPresented: $sheets.sound) {
+        ZStack {
+            KnobShiftPlayerView(model: model.knobShift, onSound: { sheets.sound = true }, prepareImports: PhoneLibrary.keep)
+                .scaleEffect(revealed ? 1 : 1.06)
+                .opacity(revealed ? 1 : 0)
+            if launching {
+                PhoneLaunch(onReveal: { withAnimation(Motion.gentle) { revealed = true } },
+                            onFinished: { launching = false })
+            }
+        }
+        .sheet(isPresented: $sheets.sound) {
                 PhoneSoundSheet(model: model)
                     .presentationDetents([.height(460), .large])
                     .presentationDragIndicator(.visible)

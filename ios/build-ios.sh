@@ -88,8 +88,8 @@ echo "Built $bundle"
 
 if [ "${2:-}" = run ] && [ "$kind" = device ]; then
   # The first connected iPhone (not a simulator).
-  phone="$(xcrun devicectl list devices 2>/dev/null | grep -E 'connected .* physical' | grep -oE '[0-9A-F]{8}-[0-9A-F]{16}' | head -1)"
-  [ -n "$phone" ] || { echo "Connect your iPhone with a cable and unlock it." >&2; exit 1; }
+  phone="$(xcrun devicectl list devices 2>/dev/null | grep -E '(connected|available \(paired\)) .* physical' | grep -oE '[0-9A-F]{8}-[0-9A-F]{16}' | head -1)"
+  [ -n "$phone" ] || { echo "Connect your iPhone with a cable, or keep it on the same Wi-Fi, and unlock it." >&2; exit 1; }
   xcrun devicectl device install app --device "$phone" "$bundle"
   xcrun devicectl device process launch --device "$phone" io.github.simranxdhindsa.knob.phone
 fi
