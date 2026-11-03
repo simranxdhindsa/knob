@@ -94,6 +94,8 @@ struct KnobApp: App {
         Updater.shared.start()
         // Offers the KnobShift playlists to Knob on the iPhone, over the home Wi-Fi.
         KnobShiftLinkServer.shared.start(model: model.knobShift)
+        // Now Playing in Control Center and the keyboard's play keys.
+        KnobShiftNowPlayingCenter.shared.start(model: model.knobShift)
         DispatchQueue.main.async {
             DevWindow.showIfRequested(model: model)
             KnobShiftWindow.restoreIfNeeded(model: model.knobShift)

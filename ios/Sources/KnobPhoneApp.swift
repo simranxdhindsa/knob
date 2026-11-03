@@ -30,6 +30,8 @@ final class PhoneApp: ObservableObject {
         Task {
             // After the first frame, so the opening shows at once.
             Self.playInBackground()
+            // The lock screen, Control Center and headphone buttons.
+            KnobShiftNowPlayingCenter.shared.start(model: model.knobShift)
             do {
                 model.knobShift.insertOutputEffect(try await PhoneEffectUnit.make(for: engine))
             } catch {
