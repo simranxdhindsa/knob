@@ -115,6 +115,19 @@ if [ -x "$spotdl_dir/spotdl" ] && [ -x "$spotdl_dir/ffmpeg" ]; then
 else
     echo "Note: Spotify helpers not fetched (bash packaging/fetch-spotdl.sh); KnobShift hides Spotify import." >&2
 fi
+# KnobShift's YouTube import: yt-dlp's folder edition, fetched by the same script. In Resources,
+# not Helpers, because its folder holds data beside the code; every program and library in it
+# is signed on its own. It uses the FFmpeg and Deno in Helpers.
+ytdlp_dir="$repo_dir/build/spotdl-helpers/yt-dlp"
+if [ -x "$ytdlp_dir/yt-dlp_macos" ] && [ -x "$spotdl_dir/ffmpeg" ]; then
+    rm -rf "$bundle/Contents/Resources/yt-dlp"
+    ditto "$ytdlp_dir" "$bundle/Contents/Resources/yt-dlp"
+    find "$bundle/Contents/Resources/yt-dlp" -type f \( -name '*.so' -o -name '*.dylib' -o -path '*/Python.framework/Versions/*/Python' -o -path '*/_internal/Python' \) -print0 |
+        while IFS= read -r -d '' library; do sign "$library"; done
+    sign --entitlements "$repo_dir/packaging/spotdl.entitlements" "$bundle/Contents/Resources/yt-dlp/yt-dlp_macos"
+else
+    echo "Note: YouTube helper not fetched (bash packaging/fetch-spotdl.sh); KnobShift hides YouTube import." >&2
+fi
 # The audio device rides inside the app, which installs it on first use (one password prompt).
 if [ -d "$engine_dir/driver/Knob.driver" ]; then
     ditto "$engine_dir/driver/Knob.driver" "$bundle/Contents/Resources/Knob.driver"
