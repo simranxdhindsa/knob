@@ -20,7 +20,11 @@ struct KnobShiftYouTubeSheet: View {
                 notice
             } else if let review = model.spotifyReview, review.source == .youtube {
                 KnobShiftSpotifyPicker(review: review,
-                                       onAdd: { model.confirmSpotifyReview(selected: $0) },
+                                       onAdd: {
+                                           // The songs join the queue and download in the background, so the sheet closes.
+                                           model.confirmSpotifyReview(selected: $0)
+                                           dismiss()
+                                       },
                                        onCancel: { model.dismissSpotifyReview() })
             } else {
                 form
