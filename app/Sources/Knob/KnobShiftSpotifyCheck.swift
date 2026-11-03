@@ -15,6 +15,8 @@ enum KnobShiftSpotifyCheck {
             if arguments.first == "selftest" {
                 await unitTests()
                 await selfTest(files: Array(arguments.dropFirst()))
+            } else if arguments.first == "embed", let link = arguments.dropFirst().first {
+                await readEmbed(link)
             } else if arguments.first == "uat" {
                 await uat(count: Int(arguments.dropFirst().first ?? "") ?? 40)
             } else if let link = arguments.first {
@@ -23,6 +25,22 @@ enum KnobShiftSpotifyCheck {
             exit(0)
         }
         app.run()
+    }
+
+    /// `embed LINK`: reads a list through Spotify's public player, with no key, and prints it.
+    private static func readEmbed(_ text: String) async {
+        guard let link = KnobShiftPlaylists.parseLink(text) else { print("Not a Spotify link."); exit(1) }
+        do {
+            let result = try await KnobShiftSpotifyEmbed.read(kind: link.kind, id: link.id)
+            print("\(result.name ?? "?"): \(result.listing.songs.count) song(s)\(result.truncated ? ", the first 100 only" : "")")
+            for song in result.listing.songs.prefix(5) {
+                print("  \(song.list_position ?? 0). \(song.name) by \(song.artists.joined(separator: ", ")), \(Int(song.duration ?? 0))s, \(song.song_id)")
+            }
+            print("raw entries: \(result.listing.raw.count)")
+        } catch {
+            print("KnobShift embed check failed: \(error)")
+            exit(1)
+        }
     }
 
     private static func selfTest(files: [String]) async {

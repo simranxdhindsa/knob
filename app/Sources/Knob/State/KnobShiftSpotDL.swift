@@ -160,14 +160,12 @@ final class KnobShiftSpotDL: @unchecked Sendable {
     func download(saveFile: URL, into folder: URL, userAuth: Bool, id: UUID,
                   onLine: @escaping @Sendable (String) -> Void) async -> RunResult {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        // spotDL would sit silently through Spotify's whole day long wait, so check first.
-        if await KnobShiftSpotifyAccount.pausedUntil(userAuth: userAuth) != nil {
-            return RunResult(status: 1, lines: ["Knob: Spotify quota_exceeded"], cancelled: false, stalled: false)
-        }
+        // A save file carries everything spotDL needs, so downloading asks Spotify nothing: no
+        // login, and Spotify pausing its key never stops a download (checked with a broken key).
         let arguments = ["download", saveFile.path,
                          "--format", "m4a", "--bitrate", "disable",
                          "--output", folder.appendingPathComponent("{list-position} {title} - {artists} [{track-id}].{output-ext}").path,
-                         "--threads", "\(KnobShiftImport.Progress.threads)", "--print-errors"] + (userAuth ? ["--user-auth"] : [])
+                         "--threads", "\(KnobShiftImport.Progress.threads)", "--print-errors"]
         return await run(arguments, id: id, onLine: onLine)
     }
 

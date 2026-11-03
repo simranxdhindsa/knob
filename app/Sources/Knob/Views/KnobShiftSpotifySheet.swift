@@ -83,7 +83,7 @@ struct KnobShiftSpotifySheet: View {
     private var linkField: some View {
         HStack(spacing: 8) {
             Image(systemName: "link").font(.system(size: 11, weight: .semibold)).foregroundStyle(Screen.textTertiary)
-            TextField("Paste a Spotify playlist, album or song link", text: $link)
+            TextField("Paste any Spotify playlist, album or song link. No login needed", text: $link)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .foregroundStyle(Screen.text)
