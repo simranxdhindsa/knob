@@ -27,21 +27,6 @@ extension KnobShiftModel {
 
     var spotifyAvailable: Bool { KnobShiftSpotDL.isAvailable }
 
-    func loadPlaylists() {
-        var index = KnobShiftPlaylists.load()
-        KnobShiftPlaylists.purgeExpired(&index)
-        KnobShiftPlaylists.save(index)
-        playlists = index.playlists
-        removedPlaylists = index.removed
-        spotifyLoggedIn = KnobShiftSpotDL.isLoggedIn
-        youtubeSignedIn = KnobShiftGoogleAuth.isSignedIn
-        KnobShiftYouTube.removeOldBrowserSignIn()
-    }
-
-    func savePlaylists() {
-        KnobShiftPlaylists.save(KnobShiftPlaylists.Index(playlists: playlists, removed: removedPlaylists))
-    }
-
     /// Songs of a playlist in the queue, ready or on their way.
     func songCount(in playlist: KnobShiftPlaylist) -> (ready: Int, total: Int) {
         let ready = tracks.reduce(0) { $0 + ($1.playlistId == playlist.id ? 1 : 0) }

@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import AVFoundation
 import Foundation
 
@@ -173,6 +177,8 @@ final class KnobShiftModel: ObservableObject {
     /// (KnobShiftModel+Spotify.swift).
     @Published internal(set) var playlists: [KnobShiftPlaylist] = []
     @Published internal(set) var removedPlaylists: [KnobShiftRemovedPlaylist] = []
+    var persistScheduled = false
+    #if os(macOS)
     @Published internal(set) var spotifyLoggedIn = false
     /// Signed in to YouTube with Google, and signing in now; the dashboard's rows are in youtubeHub.
     @Published internal(set) var youtubeSignedIn = false
@@ -201,12 +207,12 @@ final class KnobShiftModel: ObservableObject {
     /// Each playlist's songs exactly as spotDL describes them, to download without asking
     /// Spotify again.
     var spotifyRaw: [String: [String: Data]] = [:]
-    var persistScheduled = false
     /// Songs waiting for their playlist's next spotDL run, by playlist id.
     var queuedDownloads: [String: [KnobShiftSpotDL.Song]] = [:]
     /// The logged in Spotify account's name and playlists, for the Spotify sheet.
     @Published internal(set) var spotifyAccount: KnobShiftSpotifyAccount.Account?
     @Published internal(set) var spotifyAccountLoading = false
+    #endif
 
     private let analyser = KnobShiftAnalyser()
     private let audioEngine = AVAudioEngine()
@@ -271,7 +277,13 @@ final class KnobShiftModel: ObservableObject {
         if restoresQueue {
             Task { [weak self] in await self?.restoreQueue() }
         }
-        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
+        #if os(macOS)
+        let leaving = NSApplication.willTerminateNotification
+        #else
+        // An iPhone app is usually stopped in the background, never told it is quitting.
+        let leaving = UIApplication.didEnterBackgroundNotification
+        #endif
+        NotificationCenter.default.addObserver(forName: leaving, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.persistQueueNow() }
         }
     }
@@ -299,10 +311,12 @@ final class KnobShiftModel: ObservableObject {
 
     func retry(_ song: PendingSong) {
         guard let index = pending.firstIndex(where: { $0.id == song.id }) else { return }
+        #if os(macOS)
         if song.waitingForDownload {
             retryDownload(song)
             return
         }
+        #endif
         pending[index].failure = nil
         pending[index].progress = 0
         log("IMPORT", "Retrying \(song.title).")
@@ -624,6 +638,7 @@ final class KnobShiftModel: ObservableObject {
         pending = [PendingSong(url: URL(fileURLWithPath: "/nonexistent/Nagni - TEJAY.mp3"), progress: 0.6, isActive: true),
                    PendingSong(url: URL(fileURLWithPath: "/nonexistent/18 Lakh - Rehal.mp3")),
                    PendingSong(url: URL(fileURLWithPath: "/nonexistent/Broken File.mp3"), failure: "Could not read this file")]
+        #if os(macOS)
         // Spotify playlists: one downloading, one finished, one removed, with their songs.
         let road = KnobShiftPlaylist(id: "demoroad", name: "Punjabi Road Trip", link: "", kind: .playlist,
                                      folderName: "Punjabi Road Trip", spotifyOrder: [], addedAt: Date())
@@ -653,8 +668,10 @@ final class KnobShiftModel: ObservableObject {
         missing.failure = "Not found"
         missing.playlistId = liked.id
         pending.insert(contentsOf: [downloading, missing], at: 0)
+        #endif
     }
 
+    #if os(macOS)
     /// Songs for screenshots, as spotDL would describe them.
     static func previewSongs(_ names: [String]) -> [KnobShiftSpotDL.Song] {
         names.enumerated().compactMap { index, name in
@@ -662,6 +679,7 @@ final class KnobShiftModel: ObservableObject {
             return try? JSONDecoder().decode(KnobShiftSpotDL.Song.self, from: Data(json.utf8))
         }
     }
+    #endif
 
     func logSection(_ title: String) {
         log("SECTION", title)

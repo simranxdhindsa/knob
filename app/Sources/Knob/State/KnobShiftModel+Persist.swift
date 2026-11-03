@@ -16,8 +16,10 @@ extension KnobShiftModel {
             log("RESTORE", "Skipped \(paths.count - found.count) song(s) whose files are no longer there.")
         }
         enqueueFiles(found)
+        #if os(macOS)
         // Spotify songs that were still downloading come back and continue.
         resumeDownloads()
+        #endif
         await processPending()
     }
 
@@ -40,5 +42,23 @@ extension KnobShiftModel {
         let paths = (isShuffled ? unshuffled : tracks).map { $0.url.path }
             + pending.filter { !$0.waitingForDownload }.map { $0.url.path }
         UserDefaults.standard.set(paths, forKey: PersistKey.knobShiftQueue.rawValue)
+    }
+
+    /// Spotify and YouTube playlists in the queue and ones removed lately, shared by both apps.
+    func loadPlaylists() {
+        var index = KnobShiftPlaylists.load()
+        KnobShiftPlaylists.purgeExpired(&index)
+        KnobShiftPlaylists.save(index)
+        playlists = index.playlists
+        removedPlaylists = index.removed
+        #if os(macOS)
+        spotifyLoggedIn = KnobShiftSpotDL.isLoggedIn
+        youtubeSignedIn = KnobShiftGoogleAuth.isSignedIn
+        KnobShiftYouTube.removeOldBrowserSignIn()
+        #endif
+    }
+
+    func savePlaylists() {
+        KnobShiftPlaylists.save(KnobShiftPlaylists.Index(playlists: playlists, removed: removedPlaylists))
     }
 }
