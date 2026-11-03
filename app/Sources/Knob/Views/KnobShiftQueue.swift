@@ -33,10 +33,15 @@ struct KnobShiftUpNext: View {
 
 /// The queue: every song with its cover and length, the playing one highlighted. Songs can be
 /// dragged into a new order, and shuffle shows the shuffled order so what plays next is visible.
+/// Songs are selected like in Music: click, Shift click for a range, Command click to add one,
+/// Command A for all; double click plays. Delete, REMOVE or the right click menu removes the
+/// selection, and the bin removes every song after a confirmation.
 struct KnobShiftQueue: View {
     @ObservedObject var model: KnobShiftModel
     var onAdd: () -> Void
     var onSpotify: () -> Void = {}
+    @State private var selection: Set<UUID> = []
+    @State private var confirmingRemoveAll = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -59,20 +64,63 @@ struct KnobShiftQueue: View {
                 .help(model.isShuffled ? "Shuffle is on. Click to go back to your order." : "Shuffle the queue")
                 .accessibilityLabel(model.isShuffled ? "Shuffle on" : "Shuffle off")
                 .padding(.trailing, 8)
+                if !selection.isEmpty {
+                    Button { removeSelection() } label: {
+                        Text("REMOVE \(selection.count)").font(.system(size: 9, weight: .bold)).tracking(0.6)
+                            .foregroundStyle(Palette.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Take the selected songs out of the queue. Delete does the same.")
+                    .padding(.trailing, 10)
+                } else if !model.tracks.isEmpty || !model.pending.isEmpty {
+                    Button { confirmingRemoveAll = true } label: {
+                        Image(systemName: "trash").font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Screen.textTertiary).frame(width: 22, height: 20)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Remove every song from the queue")
+                    .accessibilityLabel("Remove all songs")
+                    .padding(.trailing, 6)
+                }
                 addMusic
+            }
+            .confirmationDialog("Remove all \(model.tracks.count + model.pending.count) songs from the queue?",
+                                isPresented: $confirmingRemoveAll) {
+                Button("Remove all", role: .destructive) { selection = []; model.removeAll() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("The music files stay on your Mac, so you can add them again later.")
             }
             KnobShiftPlaylistRows(model: model)
             if model.tracks.isEmpty && model.pending.isEmpty {
                 empty
             } else {
                 // A List gives native drag to reorder, in your order and in shuffle alike.
-                List {
+                List(selection: $selection) {
                     ForEach(model.tracks) { track in queueRow(row(track)) }
                         .onMove { model.move(fromOffsets: $0, toOffset: $1) }
                     ForEach(model.pending) { song in queueRow(pendingRow(song)) }
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
+                .tint(Palette.accent)
+                .onDeleteCommand(perform: removeSelection)
+                .contextMenu(forSelectionType: UUID.self) { ids in
+                    if !ids.isEmpty {
+                        Button(ids.count == 1 ? "Remove from Queue" : "Remove \(ids.count) Songs from Queue") {
+                            selection.subtract(ids)
+                            model.remove(ids: ids)
+                        }
+                    }
+                } primaryAction: { ids in
+                    if ids.count == 1, let id = ids.first, let track = model.tracks.first(where: { $0.id == id }) { model.select(track) }
+                }
+                // Songs that left the queue (removed, or finished preparing under a new id) drop
+                // out of the selection.
+                .onChange(of: model.tracks.count + model.pending.count) {
+                    let present = Set(model.tracks.map(\.id)).union(model.pending.map(\.id))
+                    selection.formIntersection(present)
+                }
                 // Shuffle animates; mapping every song's id on each change was slow with
                 // thousands of songs.
                 .animation(Motion.gentle, value: model.isShuffled)
@@ -120,7 +168,12 @@ struct KnobShiftQueue: View {
         .padding(.vertical, 6)
         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(playing ? Palette.accent.opacity(0.10) : .clear))
         .contentShape(Rectangle())
-        .onTapGesture { model.select(track) }
+    }
+
+    private func removeSelection() {
+        let ids = selection
+        selection = []
+        model.remove(ids: ids)
     }
 
     /// A song still being prepared: its ring fills as the analysis moves on; a failed song
