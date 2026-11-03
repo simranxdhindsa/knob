@@ -54,6 +54,19 @@ struct KnobShiftPlan {
         return min(max(length, shortestMix), longestMusic)
     }
 
+    /// Where to cut a song that sings to its end: within its last minute and at least four
+    /// bars before the end, its last music break, else its last sung line ending, else the
+    /// start of its fade.
+    static func cutPoint(_ analysis: KnobShiftModel.Analysis, audibleEnd: TimeInterval, bar: TimeInterval,
+                         after lastLine: TimeInterval) -> (at: TimeInterval, kind: String)? {
+        let window = (audibleEnd - 60)...(audibleEnd - 4 * bar)
+        guard window.lowerBound <= window.upperBound else { return nil }
+        if let found = analysis.musicBreaks.last(where: { window.contains($0) && $0 > lastLine }) { return (found, "last break") }
+        if let found = analysis.vocalLineEnds?.last(where: { window.contains($0) }) { return (found, "last line ending") }
+        if let fade = analysis.fadeOutCue, window.contains(fade) { return (fade, "fade") }
+        return nil
+    }
+
     /// `handoffAt` is a handoff the listener asked for with KnobMix Now: the voices hand over
     /// there instead of where the old song's singing ends.
     static func make(from current: KnobShiftModel.Track, to next: KnobShiftModel.Track,
@@ -80,12 +93,13 @@ struct KnobShiftPlan {
                 reasoning.append("\(current.title): its last vocal line runs \(clock(lastLine)) to \(clock(handoff)).")
             }
             // Singing that runs right up to the end leaves no room to mix, so the voice is cut
-            // at the last break in the music (where the bass drops out) at least four bars from
-            // the end, as a DJ leaves a song before its final section.
+            // in the last minute, at least four bars from the end, as a DJ leaves a song before
+            // its final section: at its last break (where the bass drops out), else where a sung
+            // line ends, else where the song starts fading out under the voice.
             if handoffAt == nil, audibleEnd - handoff < bar,
-               let lastBreak = outgoing.musicBreaks.last(where: { $0 <= audibleEnd - 4 * bar && $0 >= audibleEnd - 60 && $0 > lastLine }) {
-                reasoning.append("Its singing runs to the end, so it is cut at its last break, \(clock(lastBreak)), instead.")
-                handoff = lastBreak
+               let point = Self.cutPoint(outgoing, audibleEnd: audibleEnd, bar: bar, after: lastLine) {
+                reasoning.append("Its singing runs to the end, so it is cut at its \(point.kind), \(clock(point.at)), instead.")
+                handoff = point.at
                 cut = true
             }
             let length = Self.length(bar: bar)

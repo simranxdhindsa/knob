@@ -158,6 +158,7 @@ extension KnobShiftModel {
             let effectsFrom = max(quiet, voiceDone - 1 / max(duration, 0.1))
             let peak = sync.isOn ? min(max(voiceDone + 0.6 * (1 - voiceDone), effectsFrom + 0.05), 0.95) : 0.25
             let keyframes = (start: effectsFrom, peak: peak, end: 1.0)
+            exitSeconds = duration * (1 - voiceDone)
             log("EFFECT", String(format: "Keyframes: effects start %.1fs into the mix, on the old voice's last word, rise for %.1fs to full as the old song leaves, then fall for %.1fs as it is gone.",
                                  duration * keyframes.start, duration * (peak - keyframes.start), duration * (keyframes.end - peak)))
             mixState = .mixing

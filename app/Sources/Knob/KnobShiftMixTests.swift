@@ -26,6 +26,8 @@ enum KnobShiftMixTests {
         tempoClash()
         cutWithLockedBeats()
         glide()
+        singsThroughItsFade()
+        windDown()
         voices()
         print(failures == 0 ? "KnobMix check passed" : "KnobMix check: \(failures) failure(s)")
     }
@@ -156,6 +158,27 @@ enum KnobShiftMixTests {
             let partner = song("H\(Int(new))", tempo: new, duration: 220, voice: 16...200, main: 17)
             checkVoices(KnobShiftPlan.make(from: current, to: partner), voiceEnd: 150, next: partner, "\(Int(old)) into \(Int(new)) BPM", from: current)
         }
+    }
+
+    private static func singsThroughItsFade() {
+        print("A song that sings through its fade, with no late break (Why So)")
+        var current = song("Fades", tempo: 90, duration: 233.27, voice: 4.5...232.5, lastLine: 126.75, fade: 220.78, breaks: [23.1, 137.7, 231.7])
+        let plan = KnobShiftPlan.make(from: current, to: next)
+        expect(abs(plan.handoff - 220.78) < 0.01, "it is cut where it starts fading (\(KnobShiftPlan.clock(plan.handoff)))")
+        expect(plan.start < 233.27 - 8, "the mix starts well before its last seconds (\(KnobShiftPlan.clock(plan.start)))")
+        current = song("Lines", tempo: 90, duration: 233.27, voice: 4.5...232.5, lastLine: 126.75, fade: 220.78, breaks: [137.7])
+        var analysis = current.analysis
+        analysis.vocalLineEnds = [180.2, 214.4, 232.5]
+        current = KnobShiftModel.Track(url: current.url, title: current.title, duration: current.duration, tailSilence: 0, analysis: analysis)
+        expect(abs(KnobShiftPlan.make(from: current, to: next).handoff - 214.4) < 0.01, "a sung line ending is used before the fade")
+    }
+
+    private static func windDown() {
+        print("The tape slowdown winds down at the very end")
+        let wind = KnobShiftExitStyle.windDown
+        expect(wind(0, 6) == 0 && wind(0.74, 6) == 0, "6s exit: no slowdown while the beats are locked")
+        expect(wind(1, 6) == 1 && wind(0.9, 6) > 0.5, "6s exit: the full slowdown over its last 1.5s")
+        expect(wind(0.49, 2) == 0 && wind(0.8, 2) > 0.5 && wind(1, 2) == 1, "2s exit: a wind down over its last second, long enough to hear")
     }
 
     private static func voices() {
