@@ -23,8 +23,9 @@ enum KnobShiftSmokeCheck {
             let recordTo = ProcessInfo.processInfo.environment["KNOB_RECORD"].map { URL(fileURLWithPath: $0) }
             let recorder = KnobShiftDemoRecorder()
             if recordTo != nil {
-                model.primaryDeck.recordOutput(into: recorder)
-                model.secondaryDeck.recordOutput(into: recorder)
+                model.primaryDeck.recordOutput(into: recorder, part: "old")
+                model.secondaryDeck.recordOutput(into: recorder, part: "new")
+                model.secondaryDeck.recordVoice(into: recorder, part: "new voice")
             }
             #endif
             // Jump to a few seconds before the planned transition, so long real songs are quick
@@ -71,6 +72,12 @@ enum KnobShiftSmokeCheck {
                 try? await Task.sleep(for: .seconds(6))
                 do {
                     print(String(format: "Recorded %.1fs of the mix to %@", try recorder.write(to: recordTo), recordTo.path))
+                    if ProcessInfo.processInfo.environment["KNOB_RECORD_PARTS"] != nil {
+                        let base = recordTo.deletingPathExtension().path
+                        for part in ["old", "new", "new voice"] {
+                            _ = try recorder.write(to: URL(fileURLWithPath: "\(base) (\(part)).m4a"), parts: [part])
+                        }
+                    }
                 } catch {
                     fail("could not write the recording: \(error.localizedDescription)")
                 }
