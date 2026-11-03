@@ -205,7 +205,9 @@ extension KnobShiftModel {
             : "Reading your YouTube sign in from \(browser.name). If macOS asks, choose Allow."
         log("YOUTUBE", "Signing in with \(browser.name).")
         do {
-            try await KnobShiftYouTube.shared.signIn(with: browser, id: job)
+            try await KnobShiftYouTube.shared.signIn(with: browser, id: job) { [weak self] line in
+                Task { @MainActor in self?.log("YOUTUBE", line) }
+            }
             youtubeSignedIn = true
             spotifyStatus = "Signed in to YouTube with \(browser.name). Liked videos and private playlists can be added now."
             log("YOUTUBE", "Signed in to YouTube with \(browser.name).")

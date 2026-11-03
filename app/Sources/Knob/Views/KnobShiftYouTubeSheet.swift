@@ -130,22 +130,20 @@ struct KnobShiftYouTubeSheet: View {
                 .buttonStyle(.plain)
                 .disabled(!idle)
             } else {
-                Text("SIGN IN WITH").font(.system(size: 9, weight: .bold)).tracking(0.8).foregroundStyle(Screen.textTertiary)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 6)], alignment: .leading, spacing: 6) {
-                    ForEach(KnobShiftYouTube.installedBrowsers) { browser in
-                        Button { Task { await model.signInToYouTube(with: browser) } } label: {
-                            Text(browser.name.uppercased()).font(.system(size: 9.5, weight: .bold)).tracking(0.6)
-                                .foregroundStyle(idle ? Palette.accent : Screen.textTertiary)
-                                .frame(maxWidth: .infinity).frame(height: 26)
-                                .background(Capsule().strokeBorder(Palette.accent.opacity(idle ? 0.45 : 0.15), lineWidth: 1))
-                                .contentShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(!idle)
-                        .accessibilityLabel("Sign in to YouTube with \(browser.name)")
-                    }
+                // One button: the Mac's default browser, where YouTube is most likely signed in.
+                let browser = KnobShiftYouTube.defaultBrowser
+                Button { Task { await model.signInToYouTube(with: browser) } } label: {
+                    Label("SIGN IN WITH \(browser.name.uppercased())", systemImage: "person.crop.circle")
+                        .font(.system(size: 10, weight: .bold)).tracking(0.7)
+                        .foregroundStyle(idle ? Palette.accent : Screen.textTertiary)
+                        .padding(.horizontal, 14).frame(height: 28)
+                        .background(Capsule().strokeBorder(Palette.accent.opacity(idle ? 0.45 : 0.15), lineWidth: 1))
+                        .contentShape(Capsule())
                 }
-                Text("Pick the browser you use YouTube in. Knob copies only your YouTube sign in, and Sign out deletes it.")
+                .buttonStyle(.plain)
+                .disabled(!idle)
+                .accessibilityLabel("Sign in to YouTube with \(browser.name)")
+                Text("Uses your default browser, \(browser.name). Sign in to YouTube there first. Knob copies only your YouTube sign in, and Sign out deletes it.")
                     .font(.system(size: 9.5)).foregroundStyle(Screen.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }

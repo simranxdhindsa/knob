@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 
 /// Signing in to YouTube without a web page inside Knob (Google refuses sign ins from those):
 /// the person picks the browser they already use YouTube in, yt-dlp reads its sign in once, and
@@ -23,6 +23,24 @@ extension KnobShiftYouTube {
         Browser(id: "safari", name: "Safari", apps: ["Safari.app"]),
     ]
 
+    /// yt-dlp's name for each browser, by the app's bundle id.
+    private static let bundleIds: [String: String] = [
+        "com.google.Chrome": "chrome", "com.brave.Browser": "brave", "com.microsoft.edgemac": "edge",
+        "org.mozilla.firefox": "firefox", "com.operasoftware.Opera": "opera", "com.vivaldi.Vivaldi": "vivaldi",
+        "com.apple.Safari": "safari",
+    ]
+
+    /// The Mac's default browser, where the person most likely uses YouTube. One yt-dlp cannot
+    /// read (Arc, for example) falls back to the first one installed.
+    static var defaultBrowser: Browser {
+        if let app = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "https://www.youtube.com")!),
+           let bundle = Bundle(url: app)?.bundleIdentifier, let name = bundleIds[bundle],
+           let browser = browsers.first(where: { $0.id == name }) {
+            return browser
+        }
+        return installedBrowsers.first ?? browsers[browsers.count - 1]
+    }
+
     /// The browsers on this Mac, in the order above; Safari is always there.
     static var installedBrowsers: [Browser] {
         let folders = ["/Applications", FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications").path]
@@ -35,20 +53,25 @@ extension KnobShiftYouTube {
 
     /// Reads the browser's sign in and keeps YouTube's part of it. Chrome style browsers make
     /// macOS ask once whether yt-dlp may read their keychain entry.
-    func signIn(with browser: Browser, id: UUID) async throws {
+    func signIn(with browser: Browser, id: UUID, onLine: @escaping @Sendable (String) -> Void = { _ in }) async throws {
         Self.makeHome()
         Self.removeLeftovers(runCopies: false)
         // yt-dlp writes the browser's whole cookie file here; it is cut down and deleted at once.
-        // Made first, owner only, so yt-dlp writes into a file nobody else can read.
+        // Made first, owner only, so yt-dlp writes into a file nobody else can read. It starts
+        // with the cookie file's header line, because yt-dlp refuses an empty one.
         let whole = Self.home.appendingPathComponent("browser-cookies-\(id.uuidString).txt")
-        guard FileManager.default.createFile(atPath: whole.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
+        guard FileManager.default.createFile(atPath: whole.path, contents: Data("# Netscape HTTP Cookie File\n".utf8),
+                                             attributes: [.posixPermissions: 0o600]) else {
             throw KnobShiftYouTubeParsing.SignInProblem.failed
         }
         defer { try? FileManager.default.removeItem(at: whole) }
         let result = await run(KnobShiftYouTubeParsing.signInArguments(browser: browser.id, into: whole), id: id, idleLimit: 120,
-                               realHome: true) { _ in }
+                               realHome: true) { line in
+            // Only yt-dlp's own errors and warnings; it never prints cookie values in them.
+            if line.hasPrefix("ERROR") || line.hasPrefix("WARNING") { onLine(line) }
+        }
         if result.cancelled { throw CancellationError() }
-        guard let jar = try? String(contentsOf: whole, encoding: .utf8), !jar.isEmpty else {
+        guard let jar = try? String(contentsOf: whole, encoding: .utf8), jar.contains("\t") else {
             throw KnobShiftYouTubeParsing.signInProblem(result.lines)
         }
         let youtube = KnobShiftYouTubeParsing.youtubeCookies(from: jar)
