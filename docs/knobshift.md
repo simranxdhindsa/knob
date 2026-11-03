@@ -76,42 +76,61 @@ Naggnee into Sardaari, aligned against both files:
 | Speed | both exactly normal speed, though 25% apart in tempo | none (sync only within 8%) |
 | Old song's exit | treble goes first, the middle lingers | low pass closing to 1 kHz, bass swapped |
 
-So the plan now: the old song keeps its voice and outro and leaves at its own
-fade (at most eight bars after its voice); the new song's verse lands as it
-leaves, so two singers never overlap; the new intro plays quietly underneath
-first (up to 24 seconds, often from its very start); three bars before the old
-song is gone the new one opens up fully. A song that sings to the end, and
-KnobMix Now, still leave two bars after the handoff. The steps below describe
-the earlier design where they differ.
+Apple's long overlap let the old voice run on over the new song for 4 to 12
+seconds, which sounded wrong, so since 2026-11-03 KnobMix follows DJ practice
+instead: two voices are never heard together, and a mix is short.
 
-The vocal handoff, counted in bars of the outgoing song's own tempo:
+The rules (`KnobShiftPlan`, checked by `--knobshift-mix-check`):
 
-1. The handoff point is where the outgoing song's last vocal line ends. When
-   the singing runs right to the end (under a bar of music after it), the
-   handoff moves to the last music break at least four bars before the end
-   and within the last minute. Example: Putt Jam Te Lau sings to 3:42, so it
-   hands over at its 3:30 break instead of mixing in its last 4 seconds.
-2. The incoming song's main verse is the first steady line at that song's
-   normal singing level; quieter intro ad-libs do not count, and neither does
-   any voice before the beat comes in (a tag or shout over the intro). The
-   verse is then placed on the four bar phrase grid counted from the beat
-   entry, because the classifier hears a line up to a bar late.
-   Example: Sardaari has a loud tag at 0:02 to 0:05 and drums from 0:06, so
-   its verse lands at 0:17.6, not 0:01.5.
-3. Two bars before the handoff the incoming song comes in, started two bars
-   before its own main verse rather than from its beginning, so only its beats
-   play under the old voice and its verse lands on the handoff. With a shorter
-   run-up it starts after its leading silence, but always at least one bar early.
-4. Until the handoff the outgoing voice stays up front (dipping to 85%) while
-   the incoming beats rise to 70%: their bass and melody range (a 12 dB dip
-   around 1.5 kHz) are held back, so only the beats mix.
-5. At the handoff the incoming song opens up fully, the basslines swap, and the
-   outgoing song fades out over two bars, thinning upward through a rising
-   filter, then stops. It does not play its whole outro, so leftover shouts or
-   ad-libs after its last line are never heard over the new verse.
-6. Songs without vocals use their measured fade. With no voice and no fade,
-   the songs meet cleanly at the audible end: `PRESERVING ENDING`.
-7. Seeking past the planned start still blends over whatever music is left.
+1. **Length.** About 8 seconds, in whole bars of the old song's beat, never more
+   than 10 (`length(bar:)` keeps it to 6 to 9.5 so a tempo glide stays under 10).
+   A long outro is skipped, never filled.
+2. **Old voice first.** The new song's beats come in at most 2 seconds before the
+   old voice ends (one bar on fast songs), quietly and beats only. The new song
+   opens up fully only once the old voice has ended.
+3. **Old song leaves.** After its voice the old song plays out with its exit
+   effects for the rest of the mix, then is gone.
+4. **New voice last.** The new song's main verse lands as the old song is gone.
+   Its separated voice is held silent until the mix's last 2 seconds; the old
+   separated voice clears within half a second of its end (`voiceLevels`).
+5. **Singing to the end.** When the singing runs right to the end (under a bar
+   of music after it), the voice is cut at the last music break at least four
+   bars before the end and within the last minute, and the old song is gone
+   within 2 seconds, in whole beats. KnobMix Now cuts the same way.
+6. **Tempos that cannot lock** (more than 8% apart): no new beats play under the
+   old song. The new song starts on the downbeat as the old voice ends, and the
+   old song echoes out: its own sound drops within the first 40% of a 2 second
+   exit while its echo or reverb, at full strength, rings on after it (the deck
+   volume sits before those effects).
+7. **Exit effects.** Beat locked mixes always use the tape slowdown into a hall:
+   it starts on the old voice's last word, deepens to about 11% slower and holds
+   as the old song leaves, with the hall rising to 35% on the beat pulse. Mixes
+   that cannot lock use the echo out or the reverb wash. A closing low pass and
+   the bass swap apply to every exit. No flanger, by choice.
+8. Songs without vocals mix over the last 6 to 9.5 seconds of their fade. With
+   no voice and no fade, the songs meet cleanly at the audible end.
+
+Measured on real songs with the real planner (`--knobshift-sync-check`) and the
+muted engine (`--knobshift-check`):
+
+| Pair | Mix | Beats |
+| --- | --- | --- |
+| Low Fade into Bodyguard (female first verse) | 8.0s, old voice gone at 2.4s, new voice from 6.5s | locked |
+| Bodyguard into Kaali Hoodie | 8.3s | locked |
+| Jee Karuga into Why So | 7.7s | locked |
+| Sardaari into Bodyguard | 3.3s, cut at its 3:36.9 break | locked |
+| Putt Jam Te Lau into Sardaari | 4.0s, cut at its 3:30.6 break | locked |
+| Kaali Hoodie into Jee Karuga | 1.7s echo out, old sound gone at 0.7s | 172 and 186 BPM, not locked |
+| Why So into Sardaari | 0.8s, Why So sings to its last second with no break | 90 and 82.5 BPM, not locked |
+
+**Main verse.** The incoming song's main verse is the first steady line at that
+song's normal singing level; quieter intro ad-libs do not count, and neither does
+any voice before the beat comes in (a tag or shout over the intro). The verse is
+placed on the four bar phrase grid counted from the beat entry, because the
+classifier hears a line up to a bar late. Example: Sardaari has a loud tag at
+0:02 to 0:05 and drums from 0:06, so its verse lands at 0:17.6, not 0:01.5.
+Before the handoff the incoming bass and melody range are held back, so only its
+beats mix under the old voice.
 
 The log gives the exact clock time of every planned mix, for example "the mix
 starts at 12:23:36 AM, in 6s", and the time the voices hand over.
