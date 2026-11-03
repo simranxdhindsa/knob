@@ -25,6 +25,14 @@ enum Haptics {
         if step(old, notches) != step(new, notches) { tick() }
     }
 
+    /// For knobs with indicator marks: one click each time a mark switches on or off (`lit` is how
+    /// many are lit at a value), and the firmest click on reaching either end. Nothing in between,
+    /// so the clicks you feel are the marks you see.
+    static func indicatorMoved(from old: Double, to new: Double, lit: (Double) -> Int) {
+        if (old > 0 && new == 0) || (old < 1 && new == 1) { detent(); return }
+        if lit(old) != lit(new) { mark() }
+    }
+
     /// Which step a value is in; a value exactly on a step line counts as that step, so landing
     /// on a mark clicks once, whichever way it is reached.
     private static func step(_ value: Double, _ count: Int) -> Int {

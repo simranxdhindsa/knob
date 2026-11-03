@@ -20,6 +20,10 @@ cmake_dir=$repo_dir/build
 bundle=$repo_dir/build/dev/Knob.app
 bundle_id=io.github.simranxdhindsa.knob.dev
 product=${KNOB_PRODUCT:-Knob}
+# A fixed "Knob Dev" certificate (scripts/dev-signing-setup.sh) lets macOS remember the audio
+# permission across rebuilds. Without it, ad-hoc signing changes every build and macOS asks again.
+sign_identity=-
+if security find-identity -p codesigning -v 2>/dev/null | grep -q '"Knob Dev"'; then sign_identity="Knob Dev"; fi
 stamp=$repo_dir/build/dev/.last-build
 poll_seconds=1
 once=no
@@ -98,12 +102,12 @@ PLIST
     for helper in knob-engine knob-supervisor; do
         if [ -x "$cmake_dir/$helper" ]; then
             cp "$cmake_dir/$helper" "$bundle/Contents/Helpers/$helper"
-            codesign --force --sign - --options runtime --timestamp=none \
+            codesign --force --sign "$sign_identity" --options runtime --timestamp=none \
                 --entitlements "$repo_dir/packaging/audio-input.entitlements" \
                 "$bundle/Contents/Helpers/$helper" 2>/dev/null
         fi
     done
-    codesign --force --sign - --options runtime --timestamp=none \
+    codesign --force --sign "$sign_identity" --options runtime --timestamp=none \
         --entitlements "$repo_dir/packaging/app.entitlements" "$bundle" 2>/dev/null
 }
 

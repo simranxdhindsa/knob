@@ -15,8 +15,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// menu bar.
     @MainActor func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         NSApp.activate(ignoringOtherApps: true)
+        // Pick real windows by their style, not `canBecomeMain`: a minimised window reports
+        // false for that, so it was never found and the Dock click left it in the Dock.
         let windows = NSApp.windows.filter {
-            $0.canBecomeMain && !$0.className.contains("StatusBar") && ($0.isVisible || $0.isMiniaturized)
+            $0.styleMask.contains(.titled) && !($0 is NSPanel) && ($0.isVisible || $0.isMiniaturized)
         }
         if !windows.isEmpty {
             for window in windows where window.isMiniaturized { window.deminiaturize(nil) }

@@ -3,9 +3,17 @@
 What's new in each version of Knob, written for people who use it: new features first, then
 fixes. Knob updates itself, so installed copies get every version below on their own.
 
-## Coming next
+## 3.0
 
-- Add music straight from YouTube videos and YouTube Music, mixed like every other song
+Knob 3.0 brings YouTube to KnobShift: videos, playlists and YouTube Music albums join the queue
+and mix into each other like every other song.
+
+### New features
+
+- Add music from YouTube: paste a video, playlist or YouTube Music album link from ADD MUSIC, tick the songs you want, and they download in the background and mix like every other song
+- Sign in with Google to see your own YouTube in KnobShift: your liked music, your playlists, new music from channels you follow and what is popular in your country, with thumbnails
+- Music only is on by default, so vlogs, Shorts and long mixes stay out of your lists; turn it off to see every video
+- A YouTube video that is gone, private or blocked in your country is replaced by the closest match found by its name
 
 ## 2.0
 

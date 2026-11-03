@@ -372,3 +372,53 @@ spotDL runs with `COLUMNS=1000`, because its display otherwise wraps at 80 colum
   - `KNOB_SPOTDL`, `KNOB_FFMPEG`: the helper paths.
   - `KNOB_SPOTDL_IDLE`: the silence limit, in seconds.
   - `KNOB_SONG_MB`: the space estimate per song.
+
+## YouTube
+
+yt-dlp (bundled in `Contents/Resources/yt-dlp`, fetched and pinned by `packaging/fetch-spotdl.sh`, Apple silicon only) reads a YouTube video, playlist, YouTube Music album or Liked videos and downloads each song into `~/Music/KnobShift/YouTube/<playlist>/`. Everything after reading the list is the Spotify code: the picker, queue rows, progress, Cancel, Retry, Update, remove and restore, and resume after a relaunch.
+
+### How it fits the Spotify code
+
+- **Ids.** A YouTube playlist's id is `yt:` plus YouTube's id, so `KnobShiftPlaylist.source` is read from the id and playlists saved before 3.0 load unchanged. Songs keep the video id in `spotifyId`.
+- **Files.** Songs are saved as `07 Song - Artist [yt-VIDEOID].m4a`. The `yt-` keeps the id apart from Spotify's 22 character ids and from ordinary brackets (`KnobShiftPlaylists.songId(inFileName:)`), and the name shows through `Track.split`, so no tags are needed.
+- **Song list.** yt-dlp's list is turned into spotDL's save file shape (`KnobShiftYouTubeParsing.listing`) and kept in `knobshift-songs.spotdl`, so resume and retry need no second read.
+- **Branch points.** Only three places check the source: reading a list (`readYouTube`), downloading (`runDownload` hands YouTube playlists to `runYouTubeDownload`), and single song retries.
+- **One lane.** YouTube downloads share the Spotify download lane, because spotDL downloads from YouTube too and the two must not hit YouTube at once.
+- **Runner.** spotDL and yt-dlp both run through `State/KnobShiftHelperProcess.swift`: line output, cancel with every child, an idle limit, and stop on quit.
+
+### Being gentle with YouTube
+
+- **One at a time.** yt-dlp runs once per song, with a pause of 2 to 4 seconds between songs.
+- **Stops early.** A bot check, no internet twice in a row or a full disk stops the rest of the playlist; the remaining rows say why, with Retry.
+- **Name search.** A video that is gone, private, blocked in this country or age restricted is searched as `ytsearch1:<artist> <name>` (under 15 minutes) and saved under the original id, so it lands in the same row.
+- **Safe arguments.** Pasted links are rebuilt from validated ids (`parseLink`). The link always comes after `--`, so nothing in it is read as an option.
+
+### Signing in and the dashboard
+
+Knob signs in the way TV apps do, with Google's device flow (`State/KnobShiftGoogleAuth.swift`). Nothing is read from any browser.
+
+1. **Google key.** The person adds their own Google key in the YouTube sheet: an OAuth client of the type "TVs and Limited Input devices", with YouTube Data API v3 turned on and their account added as a test user. A key made for a TV launcher works as it is. Saving it asks Google for a code first, so a wrong key or key type is refused straight away.
+2. **Code.** SIGN IN WITH GOOGLE shows a short code, copies it and opens google.com/device. Knob asks Google every few seconds until the code is entered. The scope is `youtube.readonly`.
+3. **Storage.** The key and the refresh token live in `google-youtube.json` (owner only) in Knob's Application Support folder, beside yt-dlp's folder rather than inside it. The access token stays in memory. Sign out asks Google to forget the sign in; REMOVE deletes the key too. While Google keeps the app in test mode, a sign in lasts 7 days, then Knob signs out with a message.
+4. **Old sign in.** Cookie files from the earlier browser sign in are deleted at launch.
+
+The dashboard (`KnobShiftYouTubeAPI.swift`, `KnobShiftYouTubeHub.swift`, `KnobShiftModel+YouTubeDashboard.swift`, `Views/KnobShiftYouTubeDashboard.swift`):
+
+| Row | Where it comes from | Daily allowance used |
+|---|---|---|
+| Liked music | `videos?myRating=like`, up to 200 | 1 per 50 |
+| Your playlists | `playlists?mine=true`; a card opens `playlistItems` | 1 per 50 |
+| New music from subscriptions | the 30 most relevant subscriptions (read once a day), each channel's public feed for the last 30 days, then categories and lengths | feeds are free, 1 per 50 videos |
+| Popular music in the Mac's country | `chart=mostPopular&videoCategoryId=10` | 1 |
+
+- **Music only** (on by default, `PersistKey.knobShiftYouTubeMusicOnly`) keeps category 10 between 1 and 15 minutes. The person's own playlists are never filtered.
+- Rows are read at most every 2 hours. A row opens in the same song picker, under the ids `yt:LL`, `yt:KNOBNEW` and `yt:KNOBPOPULAR`; Update reads them again through Google (`updateYouTubeFromGoogle`).
+- A pasted link to a private playlist of the person's own is read through Google instead of yt-dlp.
+- Downloads never sign in. Private and signed in only videos are searched by name instead.
+
+### Checks
+
+- **Self test, offline:** `--knobshift-youtube-check selftest`. It covers links, title cleanup, list reading, file ids, sources and folders, yt-dlp arguments, error reading, Google's sign in answers, the YouTube Data API's answers, channel feeds and the music filter.
+- **Dashboard UAT:** `--knobshift-youtube-check uat` (development builds). It goes through the dashboard with the same calls the buttons make, against a fake Google inside the app and in temporary folders: key, sign in and cancel, rows, Music only, picker into the queue, Update, cancel a read, a Google hiccup, a sign in running out, sign out and REMOVE.
+- **Real list:** `--knobshift-youtube-check LINK`; add `--download` to download the first song into a temporary folder.
+- **Test overrides:** `KNOB_YTDLP` and `KNOB_FFMPEG` (helper paths), `KNOB_YOUTUBE_ROOT` (the music folder).

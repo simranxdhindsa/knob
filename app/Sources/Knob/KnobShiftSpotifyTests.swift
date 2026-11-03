@@ -67,15 +67,15 @@ extension KnobShiftSpotifyCheck {
 
         print("Line collector")
         let heard = Box<[String]>([])
-        let collector = KnobShiftSpotDL.LineCollector { line in heard.update { $0.append(line) } }
+        let collector = KnobShiftHelperProcess.LineCollector { line in heard.update { $0.append(line) } }
         collector.append(Data("\u{1B}[32mDownloaded \"A - B\": u\u{1B}[0m\nhalf ".utf8))
         collector.append(Data("line\rnext\n".utf8))
         collector.append(Data("unfinished".utf8))
         collector.flush()
         expect(heard.value == ["Downloaded \"A - B\": u", "half line", "next", "unfinished"], "colours removed, lines split on CR and LF, last line flushed (got \(heard.value))")
-        let many = KnobShiftSpotDL.LineCollector { _ in }
+        let many = KnobShiftHelperProcess.LineCollector { _ in }
         many.append(Data((0..<5_000).map { "line \($0)" }.joined(separator: "\n").appending("\n").utf8))
-        expect(many.lines.count == KnobShiftSpotDL.LineCollector.keep && many.lines.last == "line 4999", "only the last lines kept in memory")
+        expect(many.lines.count == KnobShiftHelperProcess.LineCollector.keep && many.lines.last == "line 4999", "only the last lines kept in memory")
 
         print("Reading failures")
         expect(KnobShiftSpotDL.classify(["HTTP Error 429: Too Many Requests"]) == .rateLimited, "rate limited")
@@ -117,9 +117,9 @@ extension KnobShiftSpotifyCheck {
         process.arguments = ["-c", "/bin/sleep 60 & /bin/sh -c '/bin/sleep 60; true' & wait"]
         try? process.run()
         try? await Task.sleep(for: .milliseconds(300))
-        let tree = KnobShiftSpotDL.descendants(of: process.processIdentifier)
+        let tree = KnobShiftHelperProcess.descendants(of: process.processIdentifier)
         expect(tree.count >= 3, "children and grandchildren found (\(tree.count))")
-        KnobShiftSpotDL.stopTree(process.processIdentifier, grace: 0.5, wait: true)
+        KnobShiftHelperProcess.stopTree(process.processIdentifier, grace: 0.5, wait: true)
         try? await Task.sleep(for: .milliseconds(200))
         let alive = (tree + [process.processIdentifier]).filter { kill($0, 0) == 0 }
         expect(alive.isEmpty, "the whole tree is gone (still alive: \(alive))")

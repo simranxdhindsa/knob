@@ -18,6 +18,11 @@ extension KnobShiftModel {
         /// What starts ticked: everything except songs unticked last time.
         let initial: Set<String>
         let isUpdate: Bool
+
+        /// The same picker shows YouTube lists; their ids start with "yt:".
+        var source: KnobShiftPlaylist.Source {
+            playlistId.hasPrefix(KnobShiftPlaylists.youtubePrefix) ? .youtube : .spotify
+        }
     }
 
     var spotifyAvailable: Bool { KnobShiftSpotDL.isAvailable }
@@ -29,6 +34,8 @@ extension KnobShiftModel {
         playlists = index.playlists
         removedPlaylists = index.removed
         spotifyLoggedIn = KnobShiftSpotDL.isLoggedIn
+        youtubeSignedIn = KnobShiftGoogleAuth.isSignedIn
+        KnobShiftYouTube.removeOldBrowserSignIn()
     }
 
     func savePlaylists() {
@@ -76,6 +83,12 @@ extension KnobShiftModel {
     }
 
     func updatePlaylist(_ playlist: KnobShiftPlaylist) async {
+        if playlist.source == .youtube {
+            if await updateYouTubeFromGoogle(playlist) { return }
+            guard let link = KnobShiftYouTubeParsing.parseLink(playlist.link) else { return }
+            await readYouTube(link)
+            return
+        }
         await readList(query: playlist.link, id: playlist.id, kind: playlist.kind)
     }
 
@@ -174,8 +187,11 @@ extension KnobShiftModel {
         guard let job = spotifyReadJob else { return }
         spotifyReadJob = nil
         spotifyBusy = false
+        // The read may be Spotify's or YouTube's; stopping an id the other never ran does nothing.
         KnobShiftSpotDL.shared.cancel(job)
-        spotifyStatus = "Stopped reading from Spotify."
+        KnobShiftYouTube.shared.cancel(job)
+        youtubeHub.cancelRead?()
+        spotifyStatus = "Stopped reading the list."
         log("SPOTIFY", "Reading cancelled.")
     }
 
@@ -197,7 +213,8 @@ extension KnobShiftModel {
             playlist = playlists[index]
         } else {
             playlist = KnobShiftPlaylist(id: review.playlistId, name: review.name, link: review.query, kind: review.kind,
-                                         folderName: KnobShiftPlaylists.folderName(for: review.name, taken: Set(playlists.map(\.folderName))),
+                                         folderName: KnobShiftPlaylists.folderName(for: review.name, taken: Set(playlists.map(\.folderName)),
+                                                                                   source: review.playlistId.hasPrefix(KnobShiftPlaylists.youtubePrefix) ? .youtube : .spotify),
                                          spotifyOrder: review.songs.map(\.song_id), addedAt: Date(), skipped: skipped)
             playlists.append(playlist)
         }

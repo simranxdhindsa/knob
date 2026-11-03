@@ -3,15 +3,12 @@ import SwiftUI
 /// Adding music from Spotify: paste a playlist, album or song link, or log in and pick from your
 /// own playlists and Liked Songs. Every list opens in the song picker first
 /// (KnobShiftSpotifyPicker), and running downloads show their progress here with Cancel. The
-/// link field follows the 21st.dev Url Input by ruixen.ui (an icon inside the field, the action
-/// at its end), rebuilt in SwiftUI on Knob's dark screen. The status line always keeps its
-/// height, so nothing in the sheet moves while it works.
+/// link box (LinkField), downloads and status line are shared with Add from YouTube.
 struct KnobShiftSpotifySheet: View {
     @ObservedObject var model: KnobShiftModel
     @Environment(\.dismiss) private var dismiss
     @AppStorage(PersistKey.knobShiftSpotifyNoticeAccepted.rawValue) private var noticeAccepted = false
     @State private var link = ""
-    @State private var pulse = false
     /// Snapshots show the form or the notice regardless of what was accepted.
     var showsForm: Bool? = nil
 
@@ -20,9 +17,13 @@ struct KnobShiftSpotifySheet: View {
             header
             if !(showsForm ?? noticeAccepted) {
                 notice
-            } else if let review = model.spotifyReview {
+            } else if let review = model.spotifyReview, review.source == .spotify {
                 KnobShiftSpotifyPicker(review: review,
-                                       onAdd: { model.confirmSpotifyReview(selected: $0) },
+                                       onAdd: {
+                                           // The songs join the queue and download in the background, so the sheet closes.
+                                           model.confirmSpotifyReview(selected: $0)
+                                           dismiss()
+                                       },
                                        onCancel: { model.dismissSpotifyReview() })
             } else {
                 form
@@ -72,8 +73,8 @@ struct KnobShiftSpotifySheet: View {
             linkField
             account
             KnobShiftSpotifyKey(model: model)
-            downloads
-            status
+            KnobShiftDownloadsCard(model: model)
+            KnobShiftImportStatus(model: model)
         }
         .task {
             if model.spotifyLoggedIn, model.spotifyAccount == nil { await model.loadSpotifyAccount() }
@@ -81,35 +82,13 @@ struct KnobShiftSpotifySheet: View {
     }
 
     private var linkField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "link").font(.system(size: 11, weight: .semibold)).foregroundStyle(Screen.textTertiary)
-            TextField("Paste any Spotify playlist, album or song link. No login needed", text: $link)
-                .textFieldStyle(.plain)
-                .font(.system(size: 12))
-                .foregroundStyle(Screen.text)
-                .onSubmit(add)
-            // Empty, the button pastes the link copied from Spotify; with a link in, it adds it.
-            Button(action: linkIsEmpty ? paste : add) {
-                Label(linkIsEmpty ? "PASTE" : "ADD", systemImage: linkIsEmpty ? "doc.on.clipboard" : "plus")
-                    .font(.system(size: 10, weight: .bold)).tracking(0.7).foregroundStyle(.white)
-                    .padding(.horizontal, 14).frame(height: 26)
-                    .background(Capsule().fill(idle ? Palette.accent : Screen.textTertiary.opacity(0.4)))
-                    .contentTransition(.opacity)
-                    .animation(Motion.snappy, value: linkIsEmpty)
-            }
-            .buttonStyle(.plain)
-            .disabled(!idle)
-            .help(linkIsEmpty ? "Paste the link you copied in Spotify" : "Add this list")
-        }
-        .padding(.leading, 12).padding(.trailing, 4)
-        .frame(height: 34)
-        .background(Capsule().fill(Screen.tabTrack))
-        .overlay(Capsule().strokeBorder(Screen.highlight, lineWidth: 1))
+        // Empty, the button pastes the link copied from Spotify; with a link in, it adds it.
+        LinkField(placeholder: "Paste any Spotify playlist, album or song link. No login needed", text: $link, enabled: idle,
+                  pasteHelp: "Paste the link you copied in Spotify", addHelp: "Add this list", onPaste: paste, onAdd: add)
     }
 
     private var idle: Bool { model.spotifyReadJob == nil && model.spotifyLoginJob == nil }
     private var canAdd: Bool { idle && !link.trimmingCharacters(in: .whitespaces).isEmpty }
-    private var linkIsEmpty: Bool { link.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     /// Puts the copied text in the field, where the person sees it and presses ADD (the button
     /// turns into ADD as soon as there is a link). Says so when nothing, or no Spotify link, was
@@ -229,50 +208,5 @@ struct KnobShiftSpotifySheet: View {
         .redacted(reason: .placeholder)
         .padding(.horizontal, 8)
         .frame(height: 34)
-    }
-
-    /// Downloads on their way, each with its progress and Cancel.
-    @ViewBuilder private var downloads: some View {
-        let active = model.playlists.filter { model.spotifyProgress[$0.id] != nil }
-        if !active.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("DOWNLOADING").font(.system(size: 9, weight: .bold)).tracking(0.8).foregroundStyle(Screen.textTertiary)
-                ForEach(active) { playlist in
-                    HStack(alignment: .center, spacing: 10) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(playlist.name).font(.system(size: 11, weight: .semibold)).foregroundStyle(Screen.text).lineLimit(1)
-                            if let progress = model.spotifyProgress[playlist.id] { KnobShiftImportBar(progress: progress) }
-                        }
-                        Button("CANCEL") { model.cancelDownload(playlist) }
-                            .buttonStyle(.plain).font(.system(size: 9, weight: .bold)).tracking(0.6)
-                            .foregroundStyle(Screen.textSecondary)
-                            .accessibilityLabel("Cancel downloading \(playlist.name)")
-                    }
-                }
-            }
-            .screenCard(radius: 14, padding: 12)
-        }
-    }
-
-    /// Always present at the same height, empty or not, so the sheet never jumps.
-    private var status: some View {
-        HStack(spacing: 8) {
-            Circle().fill(Palette.accent).frame(width: 6, height: 6)
-                .shadow(color: Palette.accentGlow, radius: pulse ? 5 : 1)
-                .opacity(!idle ? (pulse ? 1 : 0.4) : 0)
-                // The breathing belongs to the dot alone, so nothing else in the sheet moves.
-                .animation(Motion.pulse, value: pulse)
-            Text(model.spotifyStatus ?? " ")
-                .font(.system(size: 11)).foregroundStyle(Screen.textSecondary)
-                .lineLimit(2)
-            Spacer(minLength: 0)
-            if model.spotifyReadJob != nil {
-                Button("CANCEL") { model.cancelSpotifyRead() }
-                    .buttonStyle(.plain).font(.system(size: 9, weight: .bold)).tracking(0.6)
-                    .foregroundStyle(Palette.accent)
-            }
-        }
-        .frame(height: 32, alignment: .leading)
-        .onAppear { DispatchQueue.main.async { pulse = true } }
     }
 }
