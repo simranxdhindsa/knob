@@ -28,6 +28,9 @@ struct KnobShiftPlan {
     let incomingOffset: TimeInterval
     /// How long only the incoming beats play before its vocals; nil when it has no vocals.
     let beatsBeforeVoice: TimeInterval?
+    /// The old voice is cut (it sings to the end, or KnobMix Now) or the beats cannot lock: its
+    /// music drops out at once and its separated voice alone slows into a hall (a vocal throw).
+    var voiceThrow = false
     let description: String
     let reasoning: [String]
 
@@ -40,6 +43,9 @@ struct KnobShiftPlan {
     /// The most the new song's beats play under the old voice, and the most the old song may
     /// still be heard once the new voice sings.
     static let overlap: TimeInterval = 2
+    /// How long a vocal throw lasts after the cut: the old music fades in time with the new
+    /// beats while the old voice slows into a hall.
+    static let throwLength: TimeInterval = 5
 
     /// The longest mix in the old song's music: the old song may slow by up to 8% to meet the
     /// new tempo, which stretches the mix, so this keeps it within 10 seconds of real time.
@@ -106,7 +112,10 @@ struct KnobShiftPlan {
             // Tempos too far apart to lock would clash, so then no new beats play under the old
             // song: the new one starts on the downbeat as the old voice ends, and the old one
             // leaves within 2 seconds under its echo or reverb, as a DJ echoes out.
-            let beatsLock = KnobShiftSync.make(outgoing: outgoing, incoming: incoming, beatsBeforeVoice: nil).isOn
+            // Judged with the same run of new beats the mix will have, so the deck agrees.
+            let sync = KnobShiftSync.make(outgoing: outgoing, incoming: incoming,
+                                          beatsBeforeVoice: mainVerse == nil ? nil : min(Self.overlap, bar, handoff))
+            let beatsLock = sync.isOn
             // The new beats come in under the old voice's last words, at most 2 seconds before
             // it ends; the new song opens up as it ends.
             let underVoice = beatsLock ? min(Self.overlap, bar, handoff) : 0
@@ -114,16 +123,20 @@ struct KnobShiftPlan {
             // After the voice the old song leaves with its exit effects: the rest of the mix,
             // or within 2 seconds (in whole beats) when its voice was cut, since it would keep
             // singing, or when the beats cannot lock.
+            // A cut voice, or tempos far apart, leave as a vocal throw of about 5 seconds (in
+            // whole beats): the old music fades in time with the new beats while its voice alone
+            // slows into a hall, over the new song's intro.
             let beat = bar / 4
-            let quickExit = max(beat, (Self.overlap / beat + 0.001).rounded(.down) * beat)
-            let afterVoice = cut || !beatsLock ? quickExit : length - underVoice
+            let throwExit = max(beat, (Self.throwLength / beat + 0.001).rounded(.down) * beat)
+            let throwing = cut || !beatsLock || sync.wide
+            let afterVoice = throwing ? throwExit : length - underVoice
             if !beatsLock {
                 reasoning.append("The tempos are too far apart to lock, so no new beats play under \(current.title); it echoes out as \(next.title) starts.")
             }
             let exit = min(audibleEnd, handoff + afterVoice)
             let open = handoff
-            reasoning.append(cut
-                ? "It leaves within \(seconds(exit - handoff)) of the cut, so its voice is never heard over the new song."
+            reasoning.append(throwing
+                ? "Vocal throw from \(clock(handoff)): for \(seconds(exit - handoff)) its music fades \(beatsLock ? "in time with the new beats" : "quickly, since the beats cannot lock") while its voice alone slows into a hall, gone before the new voice."
                 : "After its voice it plays out for \(seconds(exit - handoff)) with its exit effects and is gone at \(clock(exit)).")
             let underneath = exit - start
             let incomingOffset = mainVerse.map { max(leadIn, $0 - underneath) } ?? leadIn
@@ -151,6 +164,7 @@ struct KnobShiftPlan {
             return KnobShiftPlan(start: start, duration: duration, handoff: open, voiceEnd: handoff,
                                  incomingOffset: incomingOffset,
                                  beatsBeforeVoice: mainVerse == nil ? nil : open - start,
+                                 voiceThrow: throwing,
                                  description: "READY • mix at \(clock(start)) for \(Int(duration.rounded()))s, opens up at \(clock(open))",
                                  reasoning: reasoning)
         }

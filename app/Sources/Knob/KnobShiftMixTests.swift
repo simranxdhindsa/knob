@@ -28,6 +28,8 @@ enum KnobShiftMixTests {
         glide()
         singsThroughItsFade()
         windDown()
+        wideGap()
+        throwVoices()
         voices()
         print(failures == 0 ? "KnobMix check passed" : "KnobMix check: \(failures) failure(s)")
     }
@@ -72,6 +74,19 @@ enum KnobShiftMixTests {
         }
     }
 
+    /// A vocal throw: about 5s after the cut, the old music fading slowly when the beats lock
+    /// and within about half a second when they cannot, the new voice only after the old one.
+    private static func throwChecks(_ plan: KnobShiftPlan, cut: TimeInterval, _ name: String) {
+        let tail = plan.start + plan.duration - cut
+        expect(plan.voiceThrow, "\(name): a vocal throw")
+        expect(tail <= KnobShiftPlan.throwLength + 0.01 && tail >= 4, "\(name): the old song slows and fades for \(String(format: "%.1f", tail))s")
+        let gone = { (locked: Bool) in
+            (stride(from: 0.0, through: 1, by: 0.005).first { KnobShiftModel.throwLevels(share: $0, locked: locked).music <= 0.001 } ?? 1) * tail
+        }
+        expect(gone(true) >= 3.5, "\(name): beats locked, the old music fades slowly (\(String(format: "%.1f", gone(true)))s)")
+        expect(gone(false) <= 0.8, "\(name): beats apart, the old music is gone in \(String(format: "%.1f", gone(false)))s")
+    }
+
     // MARK: Cases
 
     private static func longOutro() {
@@ -89,8 +104,7 @@ enum KnobShiftMixTests {
         let plan = KnobShiftPlan.make(from: current, to: next)
         expect(abs(plan.handoff - 210.64) < 0.01, "the voice is cut at the last break")
         checkVoices(plan, voiceEnd: 210.64, next: next, "sings to the end")
-        expect(plan.start + plan.duration - 210.64 <= 2.01, "the old song is gone within 2s of its voice being cut")
-        expect(plan.start + plan.duration - 210.64 >= 2 - 60.0 / 86 - 0.01, "but not abruptly: the full 2s, in whole beats")
+        throwChecks(plan, cut: 210.64, "sings to the end")
     }
 
     private static func voiceNearTheEnd() {
@@ -128,7 +142,7 @@ enum KnobShiftMixTests {
         let current = song("Now", duration: 200, voice: 12...150, breaks: [80])
         let plan = KnobShiftPlan.make(from: current, to: next, handoffAt: 80)
         checkVoices(plan, voiceEnd: 80, next: next, "KnobMix Now")
-        expect(plan.start + plan.duration - 80 <= 2.01, "the old song is gone within 2s of the cut")
+        throwChecks(plan, cut: 80, "KnobMix Now")
     }
 
     private static func tempoClash() {
@@ -138,7 +152,7 @@ enum KnobShiftMixTests {
         let plan = KnobShiftPlan.make(from: current, to: fast)
         checkVoices(plan, voiceEnd: 150, next: fast, "90 into 128 BPM")
         expect(plan.start >= 150 - 0.01, "no new beats under the old song when they would clash")
-        expect(plan.start + plan.duration - 150 <= 2.01, "the old song echoes out within 2s")
+        throwChecks(plan, cut: 150, "tempos apart")
     }
 
     private static func cutWithLockedBeats() {
@@ -148,7 +162,7 @@ enum KnobShiftMixTests {
         let plan = KnobShiftPlan.make(from: current, to: partner)
         checkVoices(plan, voiceEnd: 210.64, next: partner, "cut, beats locked", from: current)
         expect(plan.start < 210.64 - 0.5, "the new beats come in under the old voice's last words")
-        expect(plan.start + plan.duration - 210.64 <= 2.01, "and the old song is gone within 2s of the cut")
+        throwChecks(plan, cut: 210.64, "cut, beats locked")
     }
 
     private static func glide() {
@@ -179,6 +193,30 @@ enum KnobShiftMixTests {
         expect(wind(0, 6) == 0 && wind(0.74, 6) == 0, "6s exit: no slowdown while the beats are locked")
         expect(wind(1, 6) == 1 && wind(0.9, 6) > 0.5, "6s exit: the full slowdown over its last 1.5s")
         expect(wind(0.49, 2) == 0 && wind(0.8, 2) > 0.5 && wind(1, 2) == 1, "2s exit: a wind down over its last second, long enough to hear")
+    }
+
+    private static func wideGap() {
+        print("Tempos 16% apart still lock, as a vocal throw (Kaali Hoodie into Ghostface Killah)")
+        let current = song("Kaali", tempo: 172, duration: 164.86, voice: 3...163.5, lastLine: 120, breaks: [139.93])
+        let partner = song("Ghost", tempo: 100, duration: 137, voice: 9...118, main: 9.25)
+        let plan = KnobShiftPlan.make(from: current, to: partner)
+        let sync = KnobShiftSync.make(outgoing: current.analysis, incoming: partner.analysis, beatsBeforeVoice: plan.beatsBeforeVoice)
+        expect(sync.isOn && sync.wide, "the beats lock, meeting in the middle")
+        expect(plan.start < plan.handoff, "the new beats come in under the old voice's last words")
+        throwChecks(plan, cut: 139.93, "16% apart")
+    }
+
+    private static func throwVoices() {
+        print("The voices in a vocal throw")
+        var together = false, tapeEnd = 0.0, reverbEnd = 0.0
+        for step in 0...400 {
+            let levels = KnobShiftModel.throwLevels(share: Double(step) / 400)
+            if levels.voice > 0.01, levels.newVoice > 0.01 { together = true }
+            tapeEnd = levels.tape
+            reverbEnd = levels.reverb
+        }
+        expect(!together, "the old voice is gone before the new voice comes in")
+        expect(tapeEnd >= 0.99 && reverbEnd >= 0.59, "the old voice slows fully into a hall")
     }
 
     private static func voices() {

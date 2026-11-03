@@ -23,6 +23,11 @@ struct KnobShiftSync {
     /// Largest speed change for the outgoing song. Apple Music leaves songs further apart at
     /// their own speed (measured: 25% apart, no change at all), and so does KnobShift.
     static let outgoingStretch = 0.08
+    /// Tempos further apart than `outgoingStretch` still lock in a vocal throw, meeting in the
+    /// middle: the new beats run up to `incomingStretch` off their own speed while only they
+    /// play, and the old song covers the rest, up to `throwOutgoing`, as its music drops out.
+    static let throwStretch = 0.20
+    static let throwOutgoing = 0.12
     /// Both songs need a beat grid at least this trustworthy before beats are lined up.
     static let minimumConfidence = 0.6
 
@@ -33,6 +38,9 @@ struct KnobShiftSync {
     /// The shared tempo when the incoming song comes in.
     let meetingTempo: Double
     let notes: [String]
+    /// The tempos are further apart than the old song may ease in a normal mix, so they lock
+    /// only as a vocal throw (its music drops out quickly).
+    var wide = false
 
     /// True when the outgoing song first eases to the meeting tempo on its own.
     var easesBeforeBlend: Bool { isOn && abs(meetingTempo / outgoingTempo - 1) > Self.sameTempo }
@@ -58,15 +66,16 @@ struct KnobShiftSync {
         let matched = [b, b * 2, b / 2].min { abs(log($0 / a)) < abs(log($1 / a)) } ?? b
         let octave = matched == b ? "" : (matched > b ? " (counted at double time)" : " (counted at half time)")
         let gap = abs(matched / a - 1)
-        guard gap <= outgoingStretch else {
-            return KnobShiftSync(isOn: false, outgoingTempo: a, incomingTempo: matched, meetingTempo: a, notes: [String(
-                format: "Tempo sync off: %.1f to %.1f BPM%@ is %.0f%% apart, more than the %.0f%% the old song can ease without sounding dragged.",
-                a, matched, octave, gap * 100, outgoingStretch * 100)])
-        }
         // The incoming beats may be stretched only if at least a bar of them plays before its
         // vocals; otherwise the old song makes the whole change before the blend.
         let bar = 4 * 60 / matched
         let incomingBeatsOnly = (beatsBeforeVoice ?? .infinity) >= bar
+        let wide = gap > outgoingStretch
+        guard !wide || (incomingBeatsOnly && gap <= throwStretch) else {
+            return KnobShiftSync(isOn: false, outgoingTempo: a, incomingTempo: matched, meetingTempo: a, notes: [String(
+                format: "Tempo sync off: %.1f to %.1f BPM%@ is %.0f%% apart, more than the %.0f%% two songs can meet without sounding broken.",
+                a, matched, octave, gap * 100, (incomingBeatsOnly ? throwStretch : outgoingStretch) * 100)])
+        }
         var meeting = matched
         if gap <= sameTempo {
             meeting = a
@@ -91,7 +100,8 @@ struct KnobShiftSync {
         }
         note += gap <= sameTempo ? "Same tempo, no speed change needed."
             : String(format: "The old song %@ by %.0f%% in all, pitch stays natural.", direction, gap * 100)
-        return KnobShiftSync(isOn: true, outgoingTempo: a, incomingTempo: matched, meetingTempo: meeting, notes: [note])
+        if wide { note += " Too far apart for a long mix, so it is a vocal throw: the old music drops out quickly." }
+        return KnobShiftSync(isOn: true, outgoingTempo: a, incomingTempo: matched, meetingTempo: meeting, notes: [note], wide: wide)
     }
 
     /// The shared tempo `progress` (0...1) of the way through the blend. It moves from the

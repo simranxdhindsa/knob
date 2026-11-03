@@ -234,6 +234,9 @@ final class KnobShiftModel: ObservableObject {
     var tapeDepth = 1.0
     /// How long the leaving song's exit after its voice lasts, for the slowdown's wind down.
     var exitSeconds: TimeInterval = 0
+    /// The leaving song's separated voice is slowing alone (a vocal throw), so the whole deck
+    /// is not slowed too.
+    var throwingVoice = false
     /// The exit effects' strength at their peak for the current mix, at most half.
     var exitStrength = 0.5
     var transitionTask: Task<Void, Never>?

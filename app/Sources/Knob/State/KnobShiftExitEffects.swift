@@ -135,7 +135,7 @@ extension KnobShiftModel {
             // and the song is already fading, so the old beats stay locked to the new ones until
             // then.
             let curve = min(max(envelope / max(exitStrength, 0.01), exit), 1)
-            deck.tape = tapeDepth * KnobShiftExitStyle.windDown(exit: exit, seconds: exitSeconds)
+            deck.tape = throwingVoice ? 0 : tapeDepth * KnobShiftExitStyle.windDown(exit: exit, seconds: exitSeconds)
             deck.reverbMix = 0.35 * curve
         case .echoOut:
             deck.echoMix = 0.6 * envelope
@@ -147,7 +147,7 @@ extension KnobShiftModel {
         // arrives through a reverb that clears as it takes over. The old voice is never slowed
         // on its own: it would drift behind its music (about 0.3s by the end) and the faint
         // trace of it left in the music would sing its last word twice.
-        if outgoingOnStems { deck.voiceReverb = 0.25 * envelope * Double(deck.voiceLevel) }
+        if outgoingOnStems, !throwingVoice { deck.voiceReverb = 0.25 * envelope * Double(deck.voiceLevel) }
         if blendHasStems { secondaryDeck.voiceReverb = 0.35 * envelope }
         announce("old voice", when: outgoingOnStems && envelope > 0.01, "Old voice gets a hall that peaks where it ends; it stays in time with its music and is gone before the new voice comes in.")
         announce("new voice", when: blendHasStems && envelope > 0.01, "New voice comes in through a reverb that clears as it takes over.")
