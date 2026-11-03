@@ -47,8 +47,8 @@ struct KnobShiftImportStatus: View {
                 .font(.system(size: 11)).foregroundStyle(Screen.textSecondary)
                 .lineLimit(2)
             Spacer(minLength: 0)
-            if model.spotifyReadJob != nil {
-                Button("CANCEL") { model.cancelSpotifyRead() }
+            if model.spotifyReadJob != nil || model.youtubeSigningIn {
+                Button("CANCEL") { if model.youtubeSigningIn { model.cancelYouTubeSignIn() } else { model.cancelSpotifyRead() } }
                     .buttonStyle(.plain).font(.system(size: 9, weight: .bold)).tracking(0.6)
                     .foregroundStyle(Palette.accent)
             }

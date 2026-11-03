@@ -71,7 +71,7 @@ extension KnobShiftModel {
         spotifyReview = SpotifyReview(playlistId: link.id, name: name, kind: link.kind, query: link.url, songs: songs,
                                       queued: queued, initial: initial, isUpdate: existing != nil)
         spotifyStatus = read.skipped == 0 ? nil
-            : "\(read.skipped) video\(read.skipped == 1 ? " was" : "s were") left out because \(read.skipped == 1 ? "it is" : "they are") private, deleted or for members only."
+            : "\(read.skipped) video\(read.skipped == 1 ? " was" : "s were") left out because YouTube does not offer \(read.skipped == 1 ? "it" : "them") here (private, deleted or for members only)."
         log("YOUTUBE", "\(name): \(songs.count) song(s) read, \(read.skipped) left out, \(queued.count) already in the queue.")
     }
 
@@ -87,6 +87,8 @@ extension KnobShiftModel {
         log("YOUTUBE", "Downloading \(fetch.count) song(s) of \(playlist.name) into \(folder.path)\(youtubeSignedIn ? ", signed in" : "").")
         var stoppedBy: YouTubeFailure?
         var missing = 0
+        // One slow answer is not the internet being gone: offline stops the rest only twice running.
+        var offlineInARow = 0
         for (index, song) in fetch.enumerated() {
             guard spotifyJobs[playlist.id] == job else { return }
             // Songs taken out of the queue meanwhile are not downloaded.
@@ -98,11 +100,13 @@ extension KnobShiftModel {
                 downloadProgress[playlist.id]?.markMissing(song.song_id)
                 markRows(of: playlist.id, ids: [song.song_id], failure: problem.rowText)
                 missing += 1
-                if [.botCheck, .offline, .noSpace, .signInExpired].contains(problem) {
+                offlineInARow = problem == .offline ? offlineInARow + 1 : 0
+                if [.botCheck, .noSpace, .signInExpired].contains(problem) || offlineInARow >= 2 {
                     stoppedBy = problem
                     break
                 }
             } else {
+                offlineInARow = 0
                 downloadProgress[playlist.id]?.markLanded(song.song_id)
                 collectSoon(playlist.id)
             }
@@ -134,9 +138,22 @@ extension KnobShiftModel {
             markRows(of: playlist.id, ids: [songId], failure: YouTubeFailure.unavailable.rowText)
             return
         }
-        let problem = await downloadYouTubeSong(song, into: KnobShiftPlaylists.folder(for: playlist), playlist: playlist, job: UUID())
+        // Known by the playlist, so Cancel and remove stop it too (cancelDownload).
+        let job = UUID()
+        let key = Self.retryKey(playlist.id)
+        spotifyJobs[key] = job
+        let problem = await downloadYouTubeSong(song, into: KnobShiftPlaylists.folder(for: playlist), playlist: playlist, job: job)
+        guard spotifyJobs[key] == job else { return }
+        spotifyJobs[key] = nil
         await collectDownloads(playlist.id, finishedOnly: false)
         if let problem { markRows(of: playlist.id, ids: [songId], failure: problem.rowText) }
+    }
+
+    nonisolated static func retryKey(_ playlistId: String) -> String { "\(playlistId)/retry" }
+
+    /// Stops a YouTube retry of the playlist, if one runs.
+    func cancelYouTubeRetry(_ playlist: KnobShiftPlaylist) {
+        if let job = spotifyJobs.removeValue(forKey: Self.retryKey(playlist.id)) { KnobShiftYouTube.shared.cancel(job) }
     }
 
     /// Downloads one song; nil when its file is there. A video YouTube will not give (gone,
@@ -154,7 +171,8 @@ extension KnobShiftModel {
         if result.cancelled { return .stalled }
         if KnobShiftPlaylists.files(in: folder)[song.song_id] != nil { return nil }
         var problem = result.stalled ? .stalled : KnobShiftYouTubeParsing.classify(result.lines) ?? .failed
-        guard [.unavailable, .privateVideo, .ageRestricted, .failed].contains(problem) else { return problem }
+        // Only for a video YouTube will not give; any other failure is reported as it is.
+        guard [.unavailable, .privateVideo, .ageRestricted].contains(problem) else { return problem }
         log("YOUTUBE", "\(song.name) is not available (\(problem)); searching YouTube for \(song.artist) \(song.name).")
         setStage("Finding", for: playlist.id, ids: [song.song_id])
         result = await KnobShiftYouTube.shared.download(song, into: folder, search: true, id: job, onLine: onLine)
@@ -173,14 +191,21 @@ extension KnobShiftModel {
     /// reading a list.
     func signInToYouTube(with browser: KnobShiftYouTube.Browser) async {
         guard youtubeAvailable, !youtubeSigningIn, spotifyReadJob == nil else { return }
+        let job = UUID()
         youtubeSigningIn = true
-        defer { youtubeSigningIn = false }
+        youtubeSignInJob = job
+        defer {
+            if youtubeSignInJob == job {
+                youtubeSigningIn = false
+                youtubeSignInJob = nil
+            }
+        }
         spotifyStatus = browser.id == "safari"
             ? "Reading your YouTube sign in from Safari."
             : "Reading your YouTube sign in from \(browser.name). If macOS asks, choose Allow."
         log("YOUTUBE", "Signing in with \(browser.name).")
         do {
-            try await KnobShiftYouTube.shared.signIn(with: browser, id: UUID())
+            try await KnobShiftYouTube.shared.signIn(with: browser, id: job)
             youtubeSignedIn = true
             spotifyStatus = "Signed in to YouTube with \(browser.name). Liked videos and private playlists can be added now."
             log("YOUTUBE", "Signed in to YouTube with \(browser.name).")
@@ -193,6 +218,15 @@ extension KnobShiftModel {
             spotifyStatus = KnobShiftYouTubeParsing.SignInProblem.failed.message(browser.name)
             log("YOUTUBE", "Signing in with \(browser.name) did not work: \(error.localizedDescription)")
         }
+    }
+
+    func cancelYouTubeSignIn() {
+        guard let job = youtubeSignInJob else { return }
+        youtubeSignInJob = nil
+        youtubeSigningIn = false
+        KnobShiftYouTube.shared.cancel(job)
+        spotifyStatus = "Stopped signing in to YouTube."
+        log("YOUTUBE", "Signing in cancelled.")
     }
 
     func signOutOfYouTube(expired: Bool = false) {
@@ -228,9 +262,9 @@ extension KnobShiftModel {
 
     /// yt-dlp's own temporary files ("….part", "….ytdl", a cover not yet embedded) left by a
     /// download that was stopped halfway.
-    nonisolated static func removeYouTubeLeftovers(in folder: URL) {
+    nonisolated static func removeYouTubeLeftovers(in folder: URL, ids: Set<String>) {
         let names = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
-        for file in names where file.lastPathComponent.contains("[yt-") {
+        for file in names where ids.contains(where: { file.lastPathComponent.contains("[yt-\($0)]") }) {
             let name = file.lastPathComponent
             if ["part", "ytdl", "jpg", "webp", "webm"].contains(file.pathExtension.lowercased()) || name.contains(".temp.") || name.contains(".part-") {
                 try? FileManager.default.removeItem(at: file)

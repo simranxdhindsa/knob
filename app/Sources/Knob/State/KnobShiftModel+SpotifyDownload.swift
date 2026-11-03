@@ -186,6 +186,7 @@ extension KnobShiftModel {
     /// waiting leave the queue, and Update playlist offers them again.
     func cancelDownload(_ playlist: KnobShiftPlaylist, quietly: Bool = false) {
         spotifyLane.removeWaiting(playlist.id)
+        if playlist.source == .youtube { cancelYouTubeRetry(playlist) }
         queuedDownloads[playlist.id] = nil
         let progress = downloadProgress.removeValue(forKey: playlist.id)
         if let job = spotifyJobs.removeValue(forKey: playlist.id) {
@@ -197,7 +198,7 @@ extension KnobShiftModel {
             Task.detached(priority: .utility) {
                 try? await Task.sleep(for: .seconds(4))
                 Self.removeRecentFiles(in: folder, ids: unfinished)
-                if youtube { Self.removeYouTubeLeftovers(in: folder) }
+                if youtube { Self.removeYouTubeLeftovers(in: folder, ids: unfinished) }
             }
         }
         let landed = progress?.landed ?? []

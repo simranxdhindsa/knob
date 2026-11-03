@@ -91,14 +91,16 @@ enum KnobShiftYouTubeParsing {
             return Link(url: "https://www.youtube.com/watch?v=\(id)", id: KnobShiftPlaylists.youtubePrefix + id, kind: .song)
         }
 
-        if host.hasSuffix("youtu.be") { return video(path.first) }
-        let page = path.first ?? ""
-        if page == "watch" || page == "playlist", let list = query["list"], isListId(list), !list.hasPrefix("RD") {
+        let page = host.hasSuffix("youtu.be") ? "watch" : path.first ?? ""
+        let videoId = host.hasSuffix("youtu.be") ? path.first : query["v"]
+        // A video opened from Liked videos means that video, not the whole list.
+        let inLiked = query["list"] == "LL" && videoId != nil
+        if page == "watch" || page == "playlist", let list = query["list"], isListId(list), !list.hasPrefix("RD"), !inLiked {
             let kind: KnobShiftPlaylist.Kind = list == "LL" ? .liked : list.hasPrefix("OLAK5uy_") ? .album : .playlist
             return Link(url: "https://www.youtube.com/playlist?list=\(list)", id: KnobShiftPlaylists.youtubePrefix + list, kind: kind)
         }
         switch page {
-        case "watch": return video(query["v"])
+        case "watch": return video(videoId)
         case "shorts", "live", "embed": return video(path.count > 1 ? path[1] : nil)
         case "browse":
             guard path.count > 1, path[1].hasPrefix("MPREb_"), isListId(path[1]) else { return nil }
@@ -209,8 +211,8 @@ enum KnobShiftYouTubeParsing {
         var raw: [String: Data] = [:]
         var skipped = 0
         for entry in entries {
-            guard let id = entry["id"] as? String, isVideoId(id), let title = entry["title"] as? String, isPlayable(entry, title: title),
-                  raw[id] == nil else {
+            guard let id = entry["id"] as? String, isVideoId(id), raw[id] == nil else { continue }
+            guard let title = entry["title"] as? String, isPlayable(entry, title: title) else {
                 skipped += 1
                 continue
             }
@@ -246,7 +248,8 @@ enum KnobShiftYouTubeParsing {
     private static func isPlayable(_ entry: [String: Any], title: String) -> Bool {
         if ["[Private video]", "[Deleted video]", "[Unavailable video]"].contains(title) { return false }
         let availability = entry["availability"] as? String ?? ""
-        return !["private", "premium_only", "subscriber_only", "needs_auth"].contains(availability)
+        // "needs_auth" stays: age restricted videos are marked so, and a sign in downloads them.
+        return !["private", "premium_only", "subscriber_only"].contains(availability)
     }
 
     // MARK: Files
@@ -255,7 +258,14 @@ enum KnobShiftYouTubeParsing {
     /// artists (Track.split), and finds the song again by the id at the end.
     static func fileName(for song: KnobShiftSpotDL.Song) -> String {
         let artists = song.artists.isEmpty ? song.artist : song.artists.joined(separator: ", ")
-        let text = "\(song.name.prefix(120)) - \(artists.prefix(80))"
+        // macOS allows 255 bytes, and Gurmukhi or Japanese take three a letter: name and artists
+        // are shortened until the whole name, with its extension, stays well under that.
+        var name = String(song.name.prefix(120))
+        var artist = String(artists.prefix(80))
+        while (name + artist).utf8.count > 170 {
+            if artist.utf8.count > 40 { artist.removeLast() } else { name.removeLast() }
+        }
+        let text = "\(name) - \(artist)"
             .components(separatedBy: CharacterSet(charactersIn: "/:\\\0\n\r")).joined(separator: " ")
         let position = song.list_position.map { String(format: "%02d ", $0) } ?? ""
         return "\(position)\(text) [yt-\(song.song_id)]"

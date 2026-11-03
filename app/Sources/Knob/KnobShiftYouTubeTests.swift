@@ -47,6 +47,8 @@ enum KnobShiftYouTubeTests {
         expect(parse("https://www.youtube.com/watch?v=short") == nil, "a broken video id is refused")
         expect(parse("https://open.spotify.com/track/37i9dQZF1E8UXBoz02kGID") == nil, "Spotify is not YouTube")
         expect(parse("--exec rm") == nil, "plain text is refused")
+        expect(parse("https://youtu.be/\(video)?list=\(list)")?.kind == .playlist, "short link in a playlist means the playlist too")
+        expect(parse("https://www.youtube.com/watch?v=\(video)&list=LL&index=3")?.kind == .song, "a video opened from Liked videos is just that video")
     }
 
     private static func titles() {
@@ -80,6 +82,8 @@ enum KnobShiftYouTubeTests {
       {"id": "AAAAAAAAAAA", "title": "[Private video]", "duration": null, "channel": null},
       {"id": "BBBBBBBBBBB", "title": "[Deleted video]", "duration": null, "channel": null},
       {"id": "CCCCCCCCCCC", "title": "Members only", "availability": "subscriber_only", "channel": "X"},
+      {"id": "fOT0BUpITw8", "title": "BELLAKEO again", "duration": 235, "channel": "Peso Pluma"},
+      {"id": "DDDDDDDDDDD", "title": "Age restricted song - Artist", "availability": "needs_auth", "duration": 200, "channel": "Artist"},
       {"id": "NFvDHYMzj9U", "title": "Arcángel - FN8 ( Video Lyric )", "duration": 650.0, "channel": "Arcangel"},
       {"id": "8c7KOGxeY3w", "track": "Por El Contrario", "artists": ["Becky G", "Ángela Aguilar"], "album": "Esquinas",
        "title": "ignored when YouTube Music names it", "duration": 235, "channel": "Becky G"}
@@ -93,13 +97,13 @@ enum KnobShiftYouTubeTests {
             return
         }
         expect(list.name == "Road Trip", "list name")
-        expect(list.listing.songs.map(\.song_id) == ["fOT0BUpITw8", "NFvDHYMzj9U", "8c7KOGxeY3w"], "private, deleted and members only videos left out, order kept")
-        expect(list.listing.songs.map(\.list_position) == [1, 2, 3], "positions count the songs kept")
-        expect(list.skipped == 3, "how many were left out")
+        expect(list.listing.songs.map(\.song_id) == ["fOT0BUpITw8", "DDDDDDDDDDD", "NFvDHYMzj9U", "8c7KOGxeY3w"], "private, deleted and members only videos left out, order kept")
+        expect(list.listing.songs.map(\.list_position) == [1, 2, 3, 4], "positions count the songs kept")
+        expect(list.skipped == 3, "how many were left out; a video listed twice is not one of them")
         let first = list.listing.songs[0]
         expect(first.name == "BELLAKEO" && first.artist == "Peso Pluma" && first.duration == 235, "names and length")
         expect(first.url == "https://www.youtube.com/watch?v=fOT0BUpITw8", "song link")
-        let music = list.listing.songs[2]
+        let music = list.listing.songs[3]
         expect(music.name == "Por El Contrario" && music.artists == ["Becky G", "Ángela Aguilar"] && music.album_name == "Esquinas", "YouTube Music's own names win")
         // The raw entries are a save file the Spotify code already reads back (resume, retry).
         let joined = "[" + list.listing.songs.compactMap { list.listing.raw[$0.song_id].map { String(decoding: $0, as: UTF8.self) } }.joined(separator: ",") + "]"
@@ -121,6 +125,9 @@ enum KnobShiftYouTubeTests {
         let song = KnobShiftSpotDL.Song(name: "AC/DC: Live 100%", artists: ["Band"], artist: "Band", album_name: nil, duration: 1,
                                         song_id: "fOT0BUpITw8", url: "", list_name: nil, list_position: 3)
         expect(KnobShiftYouTubeParsing.fileName(for: song) == "03 AC DC  Live 100% - Band [yt-fOT0BUpITw8]", "file name safe for Finder")
+        let long = KnobShiftSpotDL.Song(name: String(repeating: "ਖੀਰ ਤੇ ਵੈਰ ", count: 12), artists: [String(repeating: "ਸਿੱਧੂ ", count: 15)], artist: "x",
+                                        album_name: nil, duration: 1, song_id: "fOT0BUpITw8", url: "", list_name: nil, list_position: 12)
+        expect(KnobShiftYouTubeParsing.fileName(for: long).utf8.count + 5 < 255, "long Gurmukhi names fit in a file name")
         expect(KnobShiftYouTubeParsing.outputTemplate(for: song).hasSuffix("100%% - Band [yt-fOT0BUpITw8].%(ext)s"), "percent signs escaped for yt-dlp")
     }
 

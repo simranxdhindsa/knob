@@ -99,7 +99,8 @@ struct KnobShiftYouTubeSheet: View {
         let text = link
         Task {
             await model.addFromYouTube(text)
-            if model.spotifyStatus?.hasPrefix("Paste") != true { link = "" }
+            // Cleared once the list opened; after a problem the link stays for another try.
+            if model.spotifyReview != nil { link = "" }
         }
     }
 

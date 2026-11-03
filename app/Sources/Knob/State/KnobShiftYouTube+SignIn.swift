@@ -37,7 +37,7 @@ extension KnobShiftYouTube {
     /// macOS ask once whether yt-dlp may read their keychain entry.
     func signIn(with browser: Browser, id: UUID) async throws {
         Self.makeHome()
-        Self.removeLeftovers()
+        Self.removeLeftovers(runCopies: false)
         // yt-dlp writes the browser's whole cookie file here; it is cut down and deleted at once.
         // Made first, owner only, so yt-dlp writes into a file nobody else can read.
         let whole = Self.home.appendingPathComponent("browser-cookies-\(id.uuidString).txt")
@@ -64,9 +64,12 @@ extension KnobShiftYouTube {
     }
 
     /// A browser's full cookie copy left behind if Knob stopped halfway through signing in.
-    static func removeLeftovers() {
+    /// `runCopies` also clears the per run copies, which only a crash leaves behind: done when
+    /// KnobShift opens, never while a download may still be using one.
+    static func removeLeftovers(runCopies: Bool = true) {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: home.path)) ?? []
-        for name in names where name.hasPrefix("browser-cookies-") || (name.hasPrefix("youtube-cookies-") && name != cookiesFile.lastPathComponent) {
+        for name in names where name.hasPrefix("browser-cookies-")
+            || (runCopies && name.hasPrefix("youtube-cookies-") && name != cookiesFile.lastPathComponent) {
             try? FileManager.default.removeItem(at: home.appendingPathComponent(name))
         }
     }

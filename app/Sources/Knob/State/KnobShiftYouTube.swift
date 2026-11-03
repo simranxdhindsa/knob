@@ -43,13 +43,22 @@ final class KnobShiftYouTube: @unchecked Sendable {
 
     static var isSignedIn: Bool { FileManager.default.fileExists(atPath: cookiesFile.path) }
 
-    private static var cookies: URL? { isSignedIn ? cookiesFile : nil }
+    /// A copy of the sign in for one run, deleted afterwards. yt-dlp writes its cookies back
+    /// when it ends, so with the real file a run still going could bring back a sign in the
+    /// person just signed out of.
+    private static func runCookies(_ id: UUID) -> URL? {
+        guard isSignedIn, let data = try? Data(contentsOf: cookiesFile) else { return nil }
+        let copy = home.appendingPathComponent("youtube-cookies-run-\(id.uuidString)-\(UUID().uuidString).txt")
+        return FileManager.default.createFile(atPath: copy.path, contents: data, attributes: [.posixPermissions: 0o600]) ? copy : nil
+    }
 
     // MARK: Commands
 
     /// Reads a link's songs without downloading anything.
     func list(_ link: KnobShiftYouTubeParsing.Link, id: UUID) async throws -> KnobShiftYouTubeParsing.Read {
-        let result = await run(KnobShiftYouTubeParsing.listArguments(link.url, cookies: Self.cookies), id: id, idleLimit: 180) { _ in }
+        let cookies = Self.runCookies(id)
+        defer { cookies.map { try? FileManager.default.removeItem(at: $0) } }
+        let result = await run(KnobShiftYouTubeParsing.listArguments(link.url, cookies: cookies), id: id, idleLimit: 180) { _ in }
         if result.cancelled { throw CancellationError() }
         if result.stalled { throw KnobShiftYouTubeParsing.Failure.stalled }
         // The list is the one line of JSON yt-dlp prints; everything else is a warning or an error.
@@ -69,9 +78,11 @@ final class KnobShiftYouTube: @unchecked Sendable {
             return KnobShiftHelperProcess.Result(status: -1, lines: [], cancelled: false, stalled: false)
         }
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let cookies = Self.runCookies(id)
+        defer { cookies.map { try? FileManager.default.removeItem(at: $0) } }
         let arguments = search
-            ? KnobShiftYouTubeParsing.searchArguments(for: song, into: folder, ffmpeg: ffmpeg.path, cookies: Self.cookies)
-            : KnobShiftYouTubeParsing.downloadArguments(for: song, into: folder, ffmpeg: ffmpeg.path, cookies: Self.cookies)
+            ? KnobShiftYouTubeParsing.searchArguments(for: song, into: folder, ffmpeg: ffmpeg.path, cookies: cookies)
+            : KnobShiftYouTubeParsing.downloadArguments(for: song, into: folder, ffmpeg: ffmpeg.path, cookies: cookies)
         return await run(arguments, id: id, idleLimit: 300, onLine: onLine)
     }
 
