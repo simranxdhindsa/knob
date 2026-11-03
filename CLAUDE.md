@@ -118,6 +118,8 @@ When the user reports a bug with evidence (screenshot, log line, a description o
 
 ## Workflow Rule
 
+**No new branch per task.** Keep working on the current branch for every new feature, enhancement or fix. Create a new branch only when the user explicitly asks for one.
+
 After every task, output a short commit message (don't run git commit). One-liner prefixed with the change type:
 
 `FEATURE:` new screen, section or capability
