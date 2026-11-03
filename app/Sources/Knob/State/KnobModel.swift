@@ -249,6 +249,13 @@ final class KnobModel: ObservableObject {
 
         // Two tries: a fresh engine every time, because a first start that can't get audio flowing
         // (right after installing or updating) works on the second.
+        // An older audio device than this app carries: update it first (one password prompt).
+        if DriverInstaller.installedIsOutdated {
+            canInstallDevice = true
+            notice = "Knob's audio device has an update that matches your Mac's volume steps. Install it to continue."
+            wantsOn = false
+            return
+        }
         for attempt in 1...2 {
             do {
                 try await launcher.start(preset: session ?? currentPreset?.url)

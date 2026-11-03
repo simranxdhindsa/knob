@@ -66,7 +66,8 @@ extension KnobShiftModel {
         exitStrength = KnobShiftExitStyle.strength(current, next)
         effectsLogged = []
         // Slow, laid back songs take a deeper tape slowdown; fast, energetic ones only a touch.
-        tapeDepth = min(max((130 - beatsPerMinute) / 60, 0.1), 0.6)
+        // Slow, laid back songs slow a little more (12%), fast ones a little less (8%).
+        tapeDepth = 0.8 + 0.4 * min(max((130 - beatsPerMinute) / 60, 0), 1)
         primaryDeck.armTransitionEffects(echoEvery: beat / 2, hall: choice.style == .reverbWash ? .largeHall : .mediumHall)
         log("EFFECT", "\(choice.style.name) on \(current.title): \(choice.reason). Peak strength \(Int((exitStrength * 100).rounded()))%.")
         log("EFFECT", String(format: "Beat pulse at %.1f BPM: the effects build between kicks and drop on every beat, to 0%% on the first beat of each bar, 50%% on the second and fourth, 10%% on the third.", 60 / beat))
@@ -120,7 +121,9 @@ extension KnobShiftModel {
             deck.lofiMix = 0.18 * envelope
             deck.reverbMix = 0.08 * envelope
         case .tapeSlowdown:
-            deck.tape = tapeDepth * envelope
+            // The full curve, 0 up to this song's slowdown at the peak and back, not capped by
+            // the other effects' strength: about 10% slower where the old voice ends.
+            deck.tape = tapeDepth * min(envelope / max(exitStrength, 0.01), 1)
             deck.reverbMix = 0.1 * envelope
         case .echoOut:
             deck.echoMix = 0.4 * envelope
@@ -139,8 +142,8 @@ extension KnobShiftModel {
         announce("reverb", when: deck.reverbMix > 0.01, style == .reverbWash
                  ? "Reverb wash: large hall rising to 50%." : "Reverb tail: hall rising to \(Int((style == .underwater ? 0.12 : style == .lofiDip ? 0.08 : 0.1) * 100))%.")
         announce("lofi", when: deck.lofiMix > 0.01, "Lo-fi colour: vintage crunch rising to 18%.")
-        announce("tape", when: deck.tape > 0.01, String(format: "Tape slowdown at %.0f%% depth for this song: it slows to %.0f%% speed, its pitch dropping with it.",
-                                                        tapeDepth * 100, (1 - 0.15 * tapeDepth * exitStrength) * 100))
+        announce("tape", when: deck.tape > 0.01, String(format: "Slowdown for this song: it eases to %.0f%% speed where the old voice ends, keeping its natural pitch, then back.",
+                                                        (1 - 0.10 * tapeDepth) * 100))
         announce("echo", when: deck.echoMix > 0.01, "Echo out: repeats every half beat, 45% feedback, rising to 40%.")
     }
 

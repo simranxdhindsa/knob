@@ -72,7 +72,13 @@ int main(int argc, char** argv) {
     assert((*driver)->SetPropertyData(driver, volume, 0, &scalar, 0, nullptr, 4, &gain) == noErr);
     info.mOutputTime.mSampleTime = 256; info.mInputTime.mSampleTime = 768;
     assert(io(true, 256, samples.data()) == noErr && io(false, 256, read.data()) == noErr);
-    for (size_t i = 0; i < samples.size(); ++i) assert(read[i] == samples[i] * 0.5f);
+    // 50% follows macOS's volume curve: halfway from -63.5 dB to 0 dB, -31.75 dB, as the Mac's
+    // speakers do, not half the amplitude.
+    const float expected = std::pow(10.0f, -31.75f / 20.0f);
+    for (size_t i = 0; i < samples.size(); ++i) assert(std::fabs(read[i] - samples[i] * expected) <= 1e-6f);
+    auto decibels = address(kAudioLevelControlPropertyDecibelValue); float db = 0; UInt32 dbSize = 4;
+    assert((*driver)->GetPropertyData(driver, volume, 0, &decibels, 0, nullptr, 4, &dbSize, &db) == noErr
+           && std::fabs(db + 31.75f) < 1e-4f);
     auto boolean = address(kAudioBooleanControlPropertyValue); UInt32 value = 1;
     assert((*driver)->SetPropertyData(driver, mute, 0, &boolean, 0, nullptr, 4, &value) == noErr);
     info.mOutputTime.mSampleTime = 512; info.mInputTime.mSampleTime = 1024;

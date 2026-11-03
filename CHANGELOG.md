@@ -14,6 +14,7 @@ like a DJ, worked out fresh for each pair of songs.
 
 ### New features
 
+- Knobs feel like a stepped studio pot on a trackpad: a light tick every 2.5%, a firmer click on each printed mark and the firmest at the ends
 - KnobShift plays the songs on your Mac and mixes each one into the next, the way Apple Music's AutoMix does
 - It listens to every song first, finding where the voice starts and ends, where the drums come in and where the music breaks, so two singers never clash
 - The old singer finishes the line while the new song's beats come in underneath; the new verse lands just as the old song leaves
@@ -33,6 +34,12 @@ like a DJ, worked out fresh for each pair of songs.
 
 ### Fixes
 
+- Speakers that were muted before Knob turned on no longer stay silent behind it: the mute moves onto Knob, where the volume knob shows it
+- Knob's volume follows the same curve as your Mac's speakers, so 10% is as quiet as macOS's 10% instead of much louder; Knob updates its audio device with one password prompt the next time you turn it on
+- The volume no longer gets stuck on Fixed after turning Knob on
+- Tape slowdown eases the old song about 10% slower with its natural pitch, smoothly in and out, instead of a heavy pitch drop
+- Spotify songs download again: Knob now includes Deno, which YouTube downloads need
+- When YouTube pauses downloads from your Mac, the songs say YouTube paused and Knob tells you to try again in a few hours, instead of Not found
 - Clicking the Dock icon brings back a minimised KnobShift window
 - The ••• menu opens again on a click, and About Knob now shows inside the panel with a Back button
 - ADD MUSIC opens its choices on a click again, now with the Apple logo for songs on your Mac and the Spotify mark for Spotify

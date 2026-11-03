@@ -91,8 +91,8 @@ OSStatus kn_io(AudioServerPlugInDriverRef d,AudioObjectID o,AudioObjectID stream
     if(!(time->mFlags&kAudioTimeStampSampleTimeValid) || !isfinite(time->mSampleTime)
        || time->mSampleTime<0 || time->mSampleTime>4503599627370496.0) return kAudioHardwareIllegalOperationError;
     UInt64 start=(UInt64)time->mSampleTime,epoch=atomic_load(&kn_epoch);
-    float* samples=buffer,gain; UInt32 bits=atomic_load(&kn_gain_bits); memcpy(&gain,&bits,4);
-    if(atomic_load(&kn_muted)) gain=0;
+    float* samples=buffer,volume; UInt32 bits=atomic_load(&kn_gain_bits); memcpy(&volume,&bits,4);
+    float gain=atomic_load(&kn_muted)?0:kn_scalar_to_gain(volume);
     for(UInt32 i=0;i<frames;i++) {
         UInt64 frame=start+i;
         if(!write && frame<KN_DELAY) { samples[2*i]=samples[2*i+1]=0; continue; }

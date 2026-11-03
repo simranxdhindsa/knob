@@ -356,8 +356,8 @@ extension KnobShiftModel {
                         (1 - primaryDeck.bassCut) * 100, (1 - secondaryDeck.bassCut) * 100,
                         (1 - secondaryDeck.beatsOnly) * 100, primaryDeck.sweep * 100)
         let old = primaryDeck, new = secondaryDeck
-        let effects = String(format: "  •  effects: reverb %.0f%%, echo %.0f%%, lofi %.0f%%, tape %.0f%%",
-                             old.reverbMix * 100, old.echoMix * 100, old.lofiMix * 100, old.tape * 100)
+        let effects = String(format: "  •  effects: reverb %.0f%%, echo %.0f%%, lofi %.0f%%, slowdown %.0f%% slower",
+                             old.reverbMix * 100, old.echoMix * 100, old.lofiMix * 100, old.tape * 10)
         let voices = (outgoingOnStems ? String(format: "  •  old voice %.0f%% (hall %.0f%%)", old.voiceLevel * 100, old.voiceReverb * 100) : "")
             + (blendHasStems ? String(format: "  •  new voice %.0f%% (reverb %.0f%%)", new.voiceLevel * 100, new.voiceReverb * 100) : "")
         log("KNOBMIX", String(format: "+%.2fs  %3.0f%% done  •  out %@ %.2f  •  in %@ %.2f",

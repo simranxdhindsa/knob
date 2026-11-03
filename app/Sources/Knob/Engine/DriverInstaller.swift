@@ -17,6 +17,21 @@ enum DriverInstaller {
         }
     }
 
+    /// True when the installed audio device is older than the one inside this app (its
+    /// CFBundleVersion), so an update that changed how it sounds, like version 2's volume curve,
+    /// reaches Macs that installed Knob before. App updates replace only the app.
+    static var installedIsOutdated: Bool {
+        guard let bundled = bundledDriver.flatMap({ version(of: $0) }),
+              let installed = version(of: URL(fileURLWithPath: "/Library/Audio/Plug-Ins/HAL/Knob.driver")) else { return false }
+        return installed < bundled
+    }
+
+    private static func version(of driver: URL) -> Int? {
+        let info = driver.appendingPathComponent("Contents/Info.plist")
+        guard let plist = NSDictionary(contentsOf: info), let text = plist["CFBundleVersion"] as? String else { return nil }
+        return Int(text)
+    }
+
     static var bundledDriver: URL? {
         guard let url = Bundle.main.resourceURL?.appendingPathComponent("Knob.driver"),
               FileManager.default.fileExists(atPath: url.path) else { return nil }
