@@ -26,9 +26,10 @@ final class PhoneApp: ObservableObject {
     init() {
         model = KnobModel(engine: engine, volume: volume)
         volume.shift = model.knobShift
-        Self.playInBackground()
         let model = model, engine = engine
         Task {
+            // After the first frame, so the opening shows at once.
+            Self.playInBackground()
             do {
                 model.knobShift.insertOutputEffect(try await PhoneEffectUnit.make(for: engine))
             } catch {

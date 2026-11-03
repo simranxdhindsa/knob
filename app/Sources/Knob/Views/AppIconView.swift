@@ -35,3 +35,25 @@ struct AppIconView: View {
         .accessibilityHidden(true)
     }
 }
+
+/// Knob's knob as the iPhone app's opening shows it: no halo behind it, only its own indicator
+/// marks glowing as they light. The same view draws the iPhone's launch image (`--icons`) and
+/// the live opening (ios/Sources/PhoneLaunch.swift), so the still picture and the first frame of
+/// the animation match exactly.
+struct LaunchKnobPose: View {
+    var value: Double
+    var size: CGFloat
+    var knobScale: Double = 1
+    var knobOpacity: Double = 1
+
+    var body: some View {
+        RealisticKnob(value: .constant(value), size: size, showsMinMax: false,
+                      accessibilityLabel: "Knob", accessibilityValue: "", springsToChanges: false)
+            .allowsHitTesting(false)
+            .scaleEffect(knobScale)
+            .opacity(knobOpacity)
+            .frame(width: size * 1.8, height: size * 1.8)
+            .environment(\.colorScheme, .dark)
+            .accessibilityHidden(true)
+    }
+}
