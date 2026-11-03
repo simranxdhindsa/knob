@@ -140,6 +140,7 @@ final class PhoneMacLink: ObservableObject {
             apply(plan, to: model)
             let result = await copy(plan, from: client, into: model)
             finish(plan, result: result, mac: name, library: library, model: model)
+            if !following, result.error == nil { closeSheetSoon() }
         } catch {
             phase = .idle
             report(Self.message(error), failed: true)
@@ -291,6 +292,16 @@ final class PhoneMacLink: ObservableObject {
         report(parts.joined(separator: " "), failed: result.error != nil)
         let stillComing = waiting > 0 || library.playlists.contains(where: \.downloading)
         if stillComing, result.error == nil { followUp(model) } else { stopFollowing() }
+    }
+
+    /// A sync the person started closes its sheet once it went well, back to the player, after
+    /// a moment to read how it went. One that failed stays open with its message.
+    private func closeSheetSoon() {
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(1_200))
+            guard let self, !self.busy, !self.failed else { return }
+            PhoneSheets.shared.mac = nil
+        }
     }
 
     private func followUp(_ model: KnobShiftModel) {

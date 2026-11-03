@@ -97,11 +97,16 @@ struct PhoneMacSheet: View {
             }
             Button { Task { await link.sync(model) } } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .rotationEffect(.degrees(link.busy ? 360 : 0))
-                        .animation(link.busy ? .linear(duration: 1).repeatForever(autoreverses: false) : Motion.gentle, value: link.busy)
-                    Text(syncLabel).contentTransition(.opacity)
+                    // Turned by the clock, not a repeating animation: a repeating animation also
+                    // caught the label's width changes and slid the arrows from side to side.
+                    TimelineView(.animation(paused: !link.busy)) { timeline in
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .rotationEffect(.degrees(link.busy ? timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1) * 360 : 0))
+                    }
+                    .frame(width: 16, height: 16)
+                    Text(syncLabel)
                 }
+                .transaction { $0.animation = nil }
                 .font(.system(size: 12, weight: .bold)).tracking(0.8).foregroundStyle(.white)
                 .frame(maxWidth: .infinity).frame(height: 44)
                 .background(Capsule().fill(link.busy ? Screen.textTertiary.opacity(0.5) : Palette.accent))

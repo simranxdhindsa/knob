@@ -48,7 +48,8 @@ final class PhoneApp: ObservableObject {
     /// KNOB_PHONE_SILENT=1 measures Knob's sound but plays nothing, KNOB_PHONE_ADD=1 queues every
     /// song in KnobShift/Imported, KNOB_PHONE_PLAY=1 turns Knob on and plays, and
     /// KNOB_PHONE_SHEET=1 opens the sound controls. KNOB_PHONE_MAC=spotify, youtube or sync opens
-    /// that sheet, and KNOB_PHONE_SYNC=1 syncs with Knob on the Mac.
+    /// that sheet, and KNOB_PHONE_SYNC=1 syncs with Knob on the Mac
+    /// (a number of seconds instead waits that long first).
     private static func runChecks(_ model: KnobModel) async {
         let environment = ProcessInfo.processInfo.environment
         PhoneEffectUnit.silent = environment["KNOB_PHONE_SILENT"] == "1"
@@ -64,7 +65,11 @@ final class PhoneApp: ObservableObject {
         }
         if environment["KNOB_PHONE_SHEET"] == "1" { PhoneSheets.shared.sound = true }
         if let sheet = environment["KNOB_PHONE_MAC"].flatMap(PhoneMacSheet.Source.init(rawValue:)) { PhoneSheets.shared.mac = sheet }
-        if environment["KNOB_PHONE_SYNC"] == "1" { await PhoneMacLink.shared.sync(model.knobShift) }
+        if let wait = environment["KNOB_PHONE_SYNC"].flatMap(Double.init) {
+            // A number above 1 waits that many seconds first, so the sheet is on screen.
+            if wait > 1 { try? await Task.sleep(for: .seconds(wait)) }
+            await PhoneMacLink.shared.sync(model.knobShift)
+        }
         if environment["KNOB_PHONE_PLAY"] == "1" {
             // What Knob's sound measured after a few seconds of playback, for the log.
             try? await Task.sleep(for: .seconds(6))
