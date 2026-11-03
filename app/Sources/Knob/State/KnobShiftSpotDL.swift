@@ -160,14 +160,12 @@ final class KnobShiftSpotDL: @unchecked Sendable {
     func download(saveFile: URL, into folder: URL, userAuth: Bool, id: UUID,
                   onLine: @escaping @Sendable (String) -> Void) async -> RunResult {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        // spotDL would sit silently through Spotify's whole day long wait, so check first.
-        if await KnobShiftSpotifyAccount.pausedUntil(userAuth: userAuth) != nil {
-            return RunResult(status: 1, lines: ["Knob: Spotify quota_exceeded"], cancelled: false, stalled: false)
-        }
+        // A save file carries everything spotDL needs, so downloading asks Spotify nothing: no
+        // login, and Spotify pausing its key never stops a download (checked with a broken key).
         let arguments = ["download", saveFile.path,
                          "--format", "m4a", "--bitrate", "disable",
                          "--output", folder.appendingPathComponent("{list-position} {title} - {artists} [{track-id}].{output-ext}").path,
-                         "--threads", "\(KnobShiftImport.Progress.threads)", "--print-errors"] + (userAuth ? ["--user-auth"] : [])
+                         "--threads", "\(KnobShiftImport.Progress.threads)", "--print-errors"]
         return await run(arguments, id: id, onLine: onLine)
     }
 
@@ -407,13 +405,34 @@ final class KnobShiftSpotDL: @unchecked Sendable {
         private var lastOutputAt = Date()
         private let onLine: @Sendable (String) -> Void
         private var sawBotCheck = false
+        private var inDebugRecord = false
         static let keep = 300
         /// Kept in place of YouTube's own message, which comes in a DEBUG line.
         static let botCheckMarker = "Knob: YouTube asks to confirm this is not a bot (youtube_bot_check)."
 
         /// spotDL's DEBUG lines, "[17:39:20] DEBUG ...": read, never shown or kept.
-        static func isDebug(_ line: String) -> Bool {
-            line.hasPrefix("DEBUG") || line.range(of: #"^\[\d{1,2}:\d{2}:\d{2}\] DEBUG "#, options: .regularExpression) != nil
+        static func isDebug(_ line: String) -> Bool { level(line) == "DEBUG" || line.hasPrefix("DEBUG") }
+
+        /// The level of a log record's first line ("[12:57:05] INFO MainThread - ..."), or nil
+        /// for any other line.
+        static func level(_ line: String) -> String? {
+            guard let match = line.range(of: #"^\[\d{1,2}:\d{2}:\d{2}\] [A-Z]+"#, options: .regularExpression) else { return nil }
+            return line[match].split(separator: " ").last.map(String.init)
+        }
+
+        /// A wrapped continuation of the record above it: spotDL indents those.
+        static func isIndented(_ raw: String) -> Bool {
+            let visible = raw.replacingOccurrences(of: "\u{1B}\\[[0-9;?]*[A-Za-z]", with: "", options: .regularExpression)
+            return visible.hasPrefix("    ")
+        }
+
+        /// A record without its time, level, thread and source file, so the log reads as plain
+        /// messages: "[12:57:05] INFO MainThread - Processing query: X   cli.py:73" becomes
+        /// "Processing query: X".
+        static func plain(_ line: String) -> String {
+            guard level(line) != nil else { return line }
+            let text = line.replacingOccurrences(of: #"^\[\d{1,2}:\d{2}:\d{2}\] [A-Z]+\s+\S+ - "#, with: "", options: .regularExpression)
+            return text.replacingOccurrences(of: #"\s+[\w./-]+\.py:\d+$"#, with: "", options: .regularExpression)
         }
 
         init(onLine: @escaping @Sendable (String) -> Void) { self.onLine = onLine }
@@ -435,7 +454,14 @@ final class KnobShiftSpotDL: @unchecked Sendable {
                     sawBotCheck = true
                     ready.append(Self.botCheckMarker)
                 }
-                if !clean.isEmpty, !Self.isDebug(clean) { ready.append(clean) }
+                // A log record starts "[12:57:05] LEVEL"; its wrapped lines start with spaces and
+                // belong to it, so a DEBUG record is dropped whole, wrapped lines included.
+                if let level = Self.level(clean) {
+                    inDebugRecord = level == "DEBUG"
+                } else if !Self.isIndented(line) {
+                    inDebugRecord = false
+                }
+                if !clean.isEmpty, !inDebugRecord { ready.append(Self.plain(clean)) }
             }
             keep(ready)
             lock.unlock()

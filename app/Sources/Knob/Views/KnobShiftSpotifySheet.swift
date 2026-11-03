@@ -83,18 +83,23 @@ struct KnobShiftSpotifySheet: View {
     private var linkField: some View {
         HStack(spacing: 8) {
             Image(systemName: "link").font(.system(size: 11, weight: .semibold)).foregroundStyle(Screen.textTertiary)
-            TextField("Paste a Spotify playlist, album or song link", text: $link)
+            TextField("Paste any Spotify playlist, album or song link. No login needed", text: $link)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .foregroundStyle(Screen.text)
                 .onSubmit(add)
-            Button(action: add) {
-                Text("ADD").font(.system(size: 10, weight: .bold)).tracking(0.7).foregroundStyle(.white)
+            // Empty, the button pastes the link copied from Spotify; with a link in, it adds it.
+            Button(action: linkIsEmpty ? paste : add) {
+                Label(linkIsEmpty ? "PASTE" : "ADD", systemImage: linkIsEmpty ? "doc.on.clipboard" : "plus")
+                    .font(.system(size: 10, weight: .bold)).tracking(0.7).foregroundStyle(.white)
                     .padding(.horizontal, 14).frame(height: 26)
-                    .background(Capsule().fill(canAdd ? Palette.accent : Screen.textTertiary.opacity(0.4)))
+                    .background(Capsule().fill(idle ? Palette.accent : Screen.textTertiary.opacity(0.4)))
+                    .contentTransition(.opacity)
+                    .animation(Motion.snappy, value: linkIsEmpty)
             }
             .buttonStyle(.plain)
-            .disabled(!canAdd)
+            .disabled(!idle)
+            .help(linkIsEmpty ? "Paste the link you copied in Spotify" : "Add this list")
         }
         .padding(.leading, 12).padding(.trailing, 4)
         .frame(height: 34)
@@ -104,6 +109,24 @@ struct KnobShiftSpotifySheet: View {
 
     private var idle: Bool { model.spotifyReadJob == nil && model.spotifyLoginJob == nil }
     private var canAdd: Bool { idle && !link.trimmingCharacters(in: .whitespaces).isEmpty }
+    private var linkIsEmpty: Bool { link.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    /// Puts the copied text in the field, where the person sees it and presses ADD (the button
+    /// turns into ADD as soon as there is a link). Says so when nothing, or no Spotify link, was
+    /// copied.
+    private func paste() {
+        guard let text = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else {
+            model.spotifyStatus = "Nothing to paste. In Spotify, choose Share, then Copy link."
+            return
+        }
+        link = text
+        if KnobShiftPlaylists.parseLink(text) == nil {
+            model.spotifyStatus = "That isn't a Spotify playlist, album or song link."
+        } else if model.spotifyStatus?.hasPrefix("Nothing to paste") == true || model.spotifyStatus?.hasPrefix("That isn't") == true {
+            model.spotifyStatus = nil
+        }
+    }
 
     private func add() {
         guard canAdd else { return }

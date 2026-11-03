@@ -101,16 +101,44 @@ extension KnobShiftModel {
                 spotifyBusy = false
             }
         }
-        let listing: KnobShiftSpotDL.Listing
+        var listing: KnobShiftSpotDL.Listing
+        var listTitle = title
+        // Playlists, albums and songs read first from Spotify's public player, with no key and no
+        // login, so they work for everyone. Only Liked Songs, or a playlist longer than the
+        // player shows (100 songs), goes through spotDL and the Spotify key.
+        var embedded: KnobShiftSpotifyEmbed.Result?
+        if kind != .liked {
+            do {
+                embedded = try await KnobShiftSpotifyEmbed.read(kind: kind, id: id)
+            } catch is CancellationError {
+                return
+            } catch {
+                log("SPOTIFY", "Spotify's public player could not show \(query) (\(error)); reading it through spotDL.")
+            }
+            guard spotifyReadJob == job else { return }
+        }
         do {
-            listing = try await KnobShiftSpotDL.shared.list(query, userAuth: spotifyLoggedIn, id: job)
+            if let embedded, !embedded.truncated {
+                listing = embedded.listing
+                log("SPOTIFY", "Read \(listing.songs.count) song(s) from Spotify's public player, no key needed.")
+            } else {
+                listing = try await KnobShiftSpotDL.shared.list(query, userAuth: spotifyLoggedIn, id: job)
+            }
+            if listTitle == nil { listTitle = embedded?.name }
         } catch is CancellationError {
             return
         } catch let failure as KnobShiftSpotDL.Failure {
             guard spotifyReadJob == job else { return }
-            spotifyStatus = failure == .privateList && spotifyLoggedIn ? "Spotify did not allow access to this list." : failure.message
-            log("SPOTIFY", "Could not read \(query): \(failure).")
-            return
+            // A long playlist whose full list Spotify will not give right now: its first 100 songs.
+            if let embedded {
+                listing = embedded.listing
+                if listTitle == nil { listTitle = embedded.name }
+                log("SPOTIFY", "Could not read all of \(query) (\(failure)); using the first \(listing.songs.count) songs Spotify's public player shows.")
+            } else {
+                spotifyStatus = failure == .privateList && spotifyLoggedIn ? "Spotify did not allow access to this list." : failure.message
+                log("SPOTIFY", "Could not read \(query): \(failure).")
+                return
+            }
         } catch {
             guard spotifyReadJob == job else { return }
             spotifyStatus = KnobShiftSpotDL.Failure.failed.message
@@ -132,7 +160,7 @@ extension KnobShiftModel {
             case .liked: name = "Liked Songs"
             case .album: name = ordered.first?.album_name ?? "Spotify album"
             case .song: name = ordered.first.map { "\($0.name) by \($0.artist)" } ?? "Spotify song"
-            case .playlist: name = title ?? ordered.first?.list_name ?? "Spotify playlist"
+            case .playlist: name = listTitle ?? ordered.first?.list_name ?? "Spotify playlist"
             }
         }
         let initial = KnobShiftImport.initialSelection(songs: ordered, skipped: Set(existing?.skipped ?? [])).union(queued)

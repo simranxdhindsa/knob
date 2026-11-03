@@ -14,6 +14,8 @@ like a DJ, worked out fresh for each pair of songs.
 
 ### New features
 
+- Select songs in the queue like in Music (click, Shift click, Command click, Command A) and remove them together with Delete, REMOVE or a right click, or empty the whole queue with the bin; double click plays a song
+- Paste any Spotify playlist, album or song link and its songs download with no Spotify login or key, for everyone (playlists up to 100 songs; longer ones read in full when you are logged in)
 - Knobs feel like a stepped studio pot on a trackpad: a light tick every 2.5%, a firmer click on each printed mark and the firmest at the ends
 - KnobShift plays the songs on your Mac and mixes each one into the next, the way Apple Music's AutoMix does
 - It listens to every song first, finding where the voice starts and ends, where the drums come in and where the music breaks, so two singers never clash

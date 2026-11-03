@@ -47,4 +47,42 @@ extension KnobShiftModel {
         persistQueue()
         refreshPlanIfNeeded()
     }
+
+    /// Removes many songs at once, ready or still preparing: a selection, or the whole queue.
+    /// One change and one save, however many songs. The files stay on the Mac; a Spotify song
+    /// still waiting to download is not downloaded again later.
+    func remove(ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        if let playing = nowPlaying, ids.contains(playing.id) { stop() }
+        let leaving = tracks.filter { ids.contains($0.id) }.count
+        tracks.removeAll { ids.contains($0.id) }
+        unshuffled.removeAll { ids.contains($0.id) }
+        var skippedByPlaylist: [String: [String]] = [:]
+        for song in pending where ids.contains(song.id) && song.waitingForDownload {
+            if let playlistId = song.playlistId, let spotifyId = song.spotifyId {
+                skippedByPlaylist[playlistId, default: []].append(spotifyId)
+            }
+        }
+        let waiting = pending.filter { ids.contains($0.id) }.count
+        pending.removeAll { ids.contains($0.id) }
+        if !skippedByPlaylist.isEmpty {
+            for (playlistId, songIds) in skippedByPlaylist {
+                guard let index = playlists.firstIndex(where: { $0.id == playlistId }) else { continue }
+                playlists[index].skipped = (playlists[index].skipped ?? []) + songIds
+            }
+            savePlaylists()
+        }
+        log("QUEUE", "Removed \(leaving) song(s) and \(waiting) still preparing.")
+        currentIndex = min(currentIndex, max(0, tracks.count - 1))
+        persistQueue()
+        if tracks.isEmpty {
+            mixState = .idle
+            transitionDescription = "Add local music to begin."
+        }
+    }
+
+    /// Empties the queue.
+    func removeAll() {
+        remove(ids: Set(tracks.map(\.id)).union(pending.map(\.id)))
+    }
 }
