@@ -71,10 +71,12 @@ struct KnobShiftSync {
         let bar = 4 * 60 / matched
         let incomingBeatsOnly = (beatsBeforeVoice ?? .infinity) >= bar
         let wide = gap > outgoingStretch
-        guard !wide || (incomingBeatsOnly && gap <= throwStretch) else {
+        // Wider gaps lock only in a vocal throw: met in the middle when the new beats play alone
+        // long enough, else carried by the old song alone up to `throwOutgoing`.
+        guard !wide || gap <= throwOutgoing || (incomingBeatsOnly && gap <= throwStretch) else {
             return KnobShiftSync(isOn: false, outgoingTempo: a, incomingTempo: matched, meetingTempo: a, notes: [String(
                 format: "Tempo sync off: %.1f to %.1f BPM%@ is %.0f%% apart, more than the %.0f%% two songs can meet without sounding broken.",
-                a, matched, octave, gap * 100, (incomingBeatsOnly ? throwStretch : outgoingStretch) * 100)])
+                a, matched, octave, gap * 100, (incomingBeatsOnly ? throwStretch : throwOutgoing) * 100)])
         }
         var meeting = matched
         if gap <= sameTempo {
