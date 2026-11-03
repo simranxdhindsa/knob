@@ -143,6 +143,18 @@ struct KnobShiftYouTubeSheet: View {
                 .buttonStyle(.plain)
                 .disabled(!idle)
                 .accessibilityLabel("Sign in to YouTube with \(browser.name)")
+                if model.youtubeNeedsDiskAccess {
+                    Button {
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
+                    } label: {
+                        Label("OPEN SETTINGS", systemImage: "lock.open").font(.system(size: 10, weight: .bold)).tracking(0.7)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14).frame(height: 28)
+                            .background(Capsule().fill(Palette.accent))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Opens Full Disk Access in System Settings")
+                }
                 Text("Uses your default browser, \(browser.name). Sign in to YouTube there first. Knob copies only your YouTube sign in, and Sign out deletes it.")
                     .font(.system(size: 9.5)).foregroundStyle(Screen.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)

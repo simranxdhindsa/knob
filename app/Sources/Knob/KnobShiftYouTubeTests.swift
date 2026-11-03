@@ -213,6 +213,7 @@ enum KnobShiftYouTubeTests {
         expect(problem(["ERROR: could not find chrome cookies database in \"/Users/x/Library/Application Support/Google/Chrome\""]) == .browserMissing, "browser never used")
         expect(problem(["ERROR: [Errno 1] Operation not permitted: '/Users/x/Library/Containers/com.apple.Safari/Data/Library/Cookies/Cookies.binarycookies'"]) == .fullDiskAccess, "Safari needs Full Disk Access")
         expect(problem(["WARNING: cannot decrypt v10 cookies: no key found"]) == .keychainDenied, "keychain access refused")
+        expect(!KnobShiftYouTubeParsing.SignInProblem.fullDiskAccess.message("Chrome").contains("-"), "the Full Disk Access message has no dashes")
         expect(problem(["<urlopen error [Errno 8] nodename nor servname provided, or not known>"]) == .offline, "offline while signing in")
         expect(KnobShiftYouTubeParsing.signInArguments(browser: "chrome", into: URL(fileURLWithPath: "/t/c.txt")).suffix(2)
                == ["--", "https://www.youtube.com/playlist?list=LL"], "signing in reads Liked videos to check it worked")

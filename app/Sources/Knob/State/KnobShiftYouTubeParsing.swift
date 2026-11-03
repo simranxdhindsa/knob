@@ -354,7 +354,7 @@ extension KnobShiftYouTubeParsing {
             case .notSignedIn: return "You are not signed in to YouTube in \(browser). Sign in there first, then try again."
             case .browserMissing: return "\(browser) has no sign ins on this Mac yet. Open it, sign in to YouTube, then try again."
             case .keychainDenied: return "macOS did not allow reading \(browser)'s sign in. Try again and choose Allow when macOS asks."
-            case .fullDiskAccess: return "Safari keeps its sign ins locked. Allow Knob in System Settings, Privacy and Security, Full Disk Access, or use another browser."
+            case .fullDiskAccess: return "macOS keeps \(browser)'s sign in locked. Press OPEN SETTINGS, turn on Knob under Full Disk Access, then sign in again."
             case .offline: return "No internet connection. Try again when you are back online."
             case .failed: return "Signing in to YouTube did not work. Try again."
             }

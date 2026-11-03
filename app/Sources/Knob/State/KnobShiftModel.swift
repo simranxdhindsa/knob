@@ -178,6 +178,8 @@ final class KnobShiftModel: ObservableObject {
     @Published internal(set) var youtubeSignedIn = false
     @Published internal(set) var youtubeSigningIn = false
     var youtubeSignInJob: UUID?
+    /// macOS locked the browser's sign in; the sheet offers OPEN SETTINGS.
+    @Published internal(set) var youtubeNeedsDiskAccess = false
     /// One plain sentence about the latest Spotify step, shown in the Spotify sheet.
     @Published internal(set) var spotifyStatus: String?
     @Published internal(set) var spotifyBusy = false

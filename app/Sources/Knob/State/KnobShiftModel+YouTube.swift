@@ -194,6 +194,7 @@ extension KnobShiftModel {
         let job = UUID()
         youtubeSigningIn = true
         youtubeSignInJob = job
+        youtubeNeedsDiskAccess = false
         defer {
             if youtubeSignInJob == job {
                 youtubeSigningIn = false
@@ -215,6 +216,7 @@ extension KnobShiftModel {
             spotifyStatus = nil
         } catch let problem as KnobShiftYouTubeParsing.SignInProblem {
             spotifyStatus = problem.message(browser.name)
+            youtubeNeedsDiskAccess = problem == .fullDiskAccess
             log("YOUTUBE", "Signing in with \(browser.name) did not work: \(problem).")
         } catch {
             spotifyStatus = KnobShiftYouTubeParsing.SignInProblem.failed.message(browser.name)

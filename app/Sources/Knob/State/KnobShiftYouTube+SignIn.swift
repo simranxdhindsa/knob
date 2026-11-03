@@ -11,16 +11,18 @@ extension KnobShiftYouTube {
         let id: String
         let name: String
         let apps: [String]
+        /// Where it keeps its sign ins, inside the home folder.
+        let data: String
     }
 
     static let browsers: [Browser] = [
-        Browser(id: "chrome", name: "Chrome", apps: ["Google Chrome.app"]),
-        Browser(id: "brave", name: "Brave", apps: ["Brave Browser.app"]),
-        Browser(id: "edge", name: "Edge", apps: ["Microsoft Edge.app"]),
-        Browser(id: "firefox", name: "Firefox", apps: ["Firefox.app"]),
-        Browser(id: "opera", name: "Opera", apps: ["Opera.app"]),
-        Browser(id: "vivaldi", name: "Vivaldi", apps: ["Vivaldi.app"]),
-        Browser(id: "safari", name: "Safari", apps: ["Safari.app"]),
+        Browser(id: "chrome", name: "Chrome", apps: ["Google Chrome.app"], data: "Library/Application Support/Google/Chrome"),
+        Browser(id: "brave", name: "Brave", apps: ["Brave Browser.app"], data: "Library/Application Support/BraveSoftware/Brave-Browser"),
+        Browser(id: "edge", name: "Edge", apps: ["Microsoft Edge.app"], data: "Library/Application Support/Microsoft Edge"),
+        Browser(id: "firefox", name: "Firefox", apps: ["Firefox.app"], data: "Library/Application Support/Firefox"),
+        Browser(id: "opera", name: "Opera", apps: ["Opera.app"], data: "Library/Application Support/com.operasoftware.Opera"),
+        Browser(id: "vivaldi", name: "Vivaldi", apps: ["Vivaldi.app"], data: "Library/Application Support/Vivaldi"),
+        Browser(id: "safari", name: "Safari", apps: ["Safari.app"], data: "Library/Containers/com.apple.Safari/Data/Library/Cookies"),
     ]
 
     /// yt-dlp's name for each browser, by the app's bundle id.
@@ -56,6 +58,14 @@ extension KnobShiftYouTube {
     func signIn(with browser: Browser, id: UUID, onLine: @escaping @Sendable (String) -> Void = { _ in }) async throws {
         Self.makeHome()
         Self.removeLeftovers(runCopies: false)
+        // macOS keeps one app's data from other apps unless the person allows it (Full Disk
+        // Access). Asking here, as Knob, also lets macOS show its own question for Knob.
+        let data = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(browser.data)
+        if FileManager.default.fileExists(atPath: data.path) {
+            do { _ = try FileManager.default.contentsOfDirectory(atPath: data.path) } catch {
+                throw KnobShiftYouTubeParsing.SignInProblem.fullDiskAccess
+            }
+        }
         // yt-dlp writes the browser's whole cookie file here; it is cut down and deleted at once.
         // Made first, owner only, so yt-dlp writes into a file nobody else can read. It starts
         // with the cookie file's header line, because yt-dlp refuses an empty one.
