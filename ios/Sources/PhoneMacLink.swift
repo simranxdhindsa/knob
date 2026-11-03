@@ -129,15 +129,16 @@ final class PhoneMacLink: ObservableObject {
     func sync(_ model: KnobShiftModel, found: (NWEndpoint, String)? = nil, opening: String? = nil, following: Bool = false) async {
         guard !busy else { return }
         if !following && found == nil { followRounds = 0 }
+        let began = Date()
         phase = .looking
-        failed = false
-        status = opening ?? "Looking for Knob on your Mac."
+        // The button shows the progress; the line under it keeps the last result until there is a
+        // new one, so a quick sync never makes it flicker. A link being added says what it is doing.
+        if let opening { status = opening }
         do {
             let (endpoint, name): (NWEndpoint, String)
             if let found { (endpoint, name) = found } else { (endpoint, name) = try await findMac() }
             macName = name
             phase = .syncing
-            if opening == nil { status = "Syncing with \(name)." }
             let client = KnobShiftLinkClient(endpoint: endpoint)
             let library = try KnobShiftLink.decoder().decode(KnobShiftLink.Library.self, from: try await client.get("/v1/library"))
             if library.version > KnobShiftLink.version { throw KnobShiftLink.Failure.newerMac }
@@ -147,8 +148,11 @@ final class PhoneMacLink: ObservableObject {
             model.log("LINK", "Sync with \(name): \(plan.transfers.count) to copy, \(plan.copies.count) copied here, \(plan.rows.count) new in the queue, \(plan.onMac) still on the Mac.")
             apply(plan, to: model)
             let result = await copy(plan, from: client, into: model)
-            finish(plan, result: result, mac: name, library: library, model: model)
-            if !following, result.error == nil { closeSheetSoon() }
+            let closes = !following && result.error == nil
+            // A sync over in a blink still spins for a moment, so the tap reads as done, not a flash.
+            let spun = Date().timeIntervalSince(began)
+            if spun < 0.7 { try? await Task.sleep(for: .seconds(0.7 - spun)) }
+            finish(plan, result: result, mac: name, library: library, model: model, closes: closes)
         } catch {
             phase = .idle
             report(Self.message(error), failed: true)
@@ -282,8 +286,7 @@ final class PhoneMacLink: ObservableObject {
     }
 
     private func finish(_ plan: KnobShiftSyncPlan.Result, result: (copied: Int, missing: Int, error: Error?), mac: String,
-                        library: KnobShiftLink.Library, model: KnobShiftModel) {
-        phase = .idle
+                        library: KnobShiftLink.Library, model: KnobShiftModel, closes: Bool) {
         var parts: [String] = []
         if let error = result.error {
             parts.append(Self.message(error))
@@ -297,7 +300,15 @@ final class PhoneMacLink: ObservableObject {
         if waiting > 0 { parts.append("\(Self.songs(waiting)) still downloading on your Mac will come over by themselves.") }
         if plan.noRoom > 0 { parts.append("This iPhone is almost full, so \(Self.songs(plan.noRoom)) stayed on your Mac.") }
         if plan.keptRemoved > 0 { parts.append("\(plan.keptRemoved) playlist\(plan.keptRemoved == 1 ? "" : "s") you removed here stayed removed.") }
-        report(parts.joined(separator: " "), failed: result.error != nil)
+        let summary = parts.joined(separator: " ")
+        if closes {
+            // Straight back to the player: the button keeps spinning while the sheet slides
+            // down, and the result shows in the knob card instead of flipping the sheet first.
+            closeSheet(then: summary)
+        } else {
+            phase = .idle
+            report(summary, failed: result.error != nil)
+        }
         if result.error == nil {
             let more = waiting > 0 ? " More come over as your Mac downloads them." : ""
             pendingDone = result.copied == 0 && plan.rows.isEmpty
@@ -308,15 +319,16 @@ final class PhoneMacLink: ObservableObject {
         if stillComing, result.error == nil { followUp(model) } else { stopFollowing() }
     }
 
-    /// A sync the person started closes its sheet once it went well, back to the player, after
-    /// a moment to read how it went. One that failed stays open with its message.
-    private func closeSheetSoon() {
+    /// A sync the person started that went well closes its sheet at once, back to the player,
+    /// and the knob card tells how it went. One that failed stays open with its message.
+    private func closeSheet(then summary: String) {
+        PhoneSheets.shared.mac = nil
         Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(1_200))
-            guard let self, !self.busy, !self.failed else { return }
-            PhoneSheets.shared.mac = nil
-            // The card comes once the sheet has slid down.
+            // The sheet slides down, then the button settles and the card comes.
             try? await Task.sleep(for: .milliseconds(450))
+            guard let self else { return }
+            self.phase = .idle
+            self.report(summary, failed: false)
             self.done = self.pendingDone
             self.pendingDone = nil
         }
