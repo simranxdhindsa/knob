@@ -89,18 +89,13 @@ log "Installer"
 rm -rf "$out"
 bash "$repo_dir/packaging/build-installer.sh" "$repo_dir/build/Knob.app" "$engine_dir/driver/Knob.driver" "$out"
 
-# An update that changes the driver ships the installer (one password prompt); otherwise the
-# app alone, which installs silently.
-previous_tag=$(git -C "$repo_dir" describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null || true)
+# Updates always ship the app alone, which Sparkle installs silently. Sparkle refuses package
+# installers unless the app carries an Apple Developer ID signature, which Knob does not have
+# (2.0.104 shipped the package because its driver changed, and every update failed). A newer
+# audio device inside the app is installed by the app itself: turning Knob on finds the older
+# one and asks once for the password (DriverInstaller.installedIsOutdated).
 installation_type=
 archive="Knob-$version.zip"
-if [ -n "$previous_tag" ] && ! git -C "$repo_dir" diff --quiet "$previous_tag" HEAD -- driver/; then
-    archive="Knob-Install-$version.pkg.zip"
-    installation_type=package
-    (cd "$out" && ditto -c -k --sequesterRsrc Knob-Install.pkg "$archive")
-    rm -f "$out/Knob-$version.zip"
-    echo "The driver changed since $previous_tag: this update installs the full package."
-fi
 
 log "Update feed"
 sparkle_dir="$work/sparkle"

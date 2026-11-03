@@ -34,6 +34,7 @@ like a DJ, worked out fresh for each pair of songs.
 
 ### Fixes
 
+- Updating to this version works again: the previous update stopped with an Update Error on every Mac
 - Speakers that were muted before Knob turned on no longer stay silent behind it: the mute moves onto Knob, where the volume knob shows it
 - Knob's volume follows the same curve as your Mac's speakers, so 10% is as quiet as macOS's 10% instead of much louder; Knob updates its audio device with one password prompt the next time you turn it on
 - The volume no longer gets stuck on Fixed after turning Knob on
