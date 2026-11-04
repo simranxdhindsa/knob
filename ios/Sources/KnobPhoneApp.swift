@@ -113,16 +113,17 @@ struct PhoneRoot: View {
     @ObservedObject private var link = PhoneMacLink.shared
     /// The opening animation runs once per launch, over the player (PhoneLaunch).
     @State private var launching = true
-    @State private var revealed = false
+    /// The opening's knob has reached the Play button, so the real one takes over.
+    @State private var landed = false
     /// Where the player's Play button is, for the opening's knob to land on.
     @State private var playButton = CGRect.zero
 
     var body: some View {
         ZStack {
-            // The player only fades in, never moves, so its Play button stays where the knob lands.
+            // The player waits ready under the opening's solid background, which fades off it in
+            // one layer. It never moves, so its Play button stays where the knob lands.
             PhonePlayer(model: model.knobShift, knob: model, prepareImports: PhoneLibrary.keep)
-                .opacity(revealed ? 1 : 0)
-                .environment(\.hidesPlayButton, launching)
+                .environment(\.hidesPlayButton, !landed)
                 .onPreferenceChange(PlayButtonFrame.self) { playButton = $0 }
             // A finished sync's "done" card, over the player (KnobDoneCard).
             if let done = link.done {
@@ -132,7 +133,7 @@ struct PhoneRoot: View {
             }
             if launching {
                 PhoneLaunch(playButton: playButton,
-                            onReveal: { withAnimation(.easeOut(duration: 0.5)) { revealed = true } },
+                            onLanded: { landed = true },
                             onFinished: { launching = false })
             }
         }

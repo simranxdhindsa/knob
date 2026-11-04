@@ -5,16 +5,16 @@ import SwiftUI
 /// indicator, the marks going dark one by one, holds for a beat, then sweeps up to the eleventh,
 /// lighting each mark as it passes with a tap felt at each, bumps against its end stop and
 /// strains past it for a moment (the pointer shaking a few degrees beyond the eleventh mark with
-/// a rumble felt in the hand), then flies down along a curve into the player's Play button,
-/// shrinking to its size and turning orange, so the knob you watched becomes the button you tap
-/// (a shared element hand over, like iOS zoom transitions). Only the marks glow: there is no halo
-/// behind the knob. Everything follows the clock frame by frame, so it stays smooth at 120 Hz.
-/// With Reduce Motion it only fades.
+/// a rumble felt in the hand), then flies down into the player's Play button, shrinking to its
+/// size as the knob melts away from the real orange disc behind it, so the knob you watched
+/// becomes the button you tap (a shared element hand over, like iOS zoom transitions). Only the
+/// marks glow: there is no halo behind the knob. Everything follows the clock frame by frame, so
+/// it stays smooth at 120 Hz. With Reduce Motion it only fades.
 struct PhoneLaunch: View {
     /// Where the player's Play button is on screen; zero until the player has laid out.
     var playButton: CGRect
-    /// Called as the landing begins, so the player can fade in underneath it.
-    var onReveal: () -> Void
+    /// Called as the knob arrives, so the real Play button can take over underneath it.
+    var onLanded: () -> Void
     /// Called once the opening has gone, to remove it.
     var onFinished: () -> Void
 
@@ -37,13 +37,15 @@ struct PhoneLaunch: View {
     static let iconValue = 0.68
     /// The turn, in seconds from its start: rest on the icon's pose, wind back to the first
     /// indicator, a beat of stillness, then the sweep up to the eleventh.
-    static let hold = 0.15, windBack = 0.35, rest = 0.1, sweep = 0.75
+    static let hold = 0.05, windBack = 0.25, rest = 0.05, sweep = 0.5
     static var turnLength: Double { hold + windBack + rest + sweep }
     /// The strain at the end stop: how long, how far past the last mark (degrees) and how fast
     /// the pointer shakes (times a second).
-    static let strain = 0.45, strainReach = 9.0, strainRate = 18.0
+    static let strain = 0.3, strainReach = 9.0, strainRate = 18.0
     /// The landing into the Play button, in seconds.
-    static let landing = 0.8
+    static let landing = 0.5
+    /// The last fade once the knob has landed, hiding the swap to the real button, in seconds.
+    static let handOver = 0.12
     /// The knob's body (its skirt) as a share of its size at the launch size (RealisticKnob).
     static let bodyShare: CGFloat = 0.77 * 0.82
 
@@ -58,22 +60,20 @@ struct PhoneLaunch: View {
             // the tap and simply starts to move.
             ZStack {
                 Self.background.opacity(1 - Self.smoother((u - 0.1) / 0.6))
+                // The Play button it becomes, the very same disc, drawn at its final size and
+                // scaled. It waits solid behind the knob, so the knob melts away to reveal it and
+                // no see through moment shows between the two.
+                let body = Self.knobSize * Self.bodyShare
+                let diameter = playButton == .zero ? body : playButton.width
+                PhonePlayDisc(isPlaying: false, turn: 0, showsPointer: false, diameter: diameter)
+                    .scaleEffect(body * spot.scale / diameter)
+                    .opacity(Self.clamp((u - 0.1) / 0.2))
+                    .position(spot.center)
                 // Only the indicator marks glow, as they light.
                 LaunchKnobPose(value: value, size: Self.knobSize,
                                knobScale: spot.scale * (endStop ? 1.035 : 1),
-                               knobOpacity: 1 - Self.clamp((u - 0.45) / 0.35),
+                               knobOpacity: 1 - Self.smoother((u - 0.3) / 0.5),
                                overshoot: strainDegrees(at: timeline.date), scheme: scheme)
-                    .position(spot.center)
-                // The Play button it becomes: orange from halfway, its triangle for the last quarter.
-                let diameter = Self.knobSize * Self.bodyShare * spot.scale
-                Image(systemName: "play.fill")
-                    .font(.system(size: 19 * diameter / 46, weight: .semibold))
-                    .foregroundStyle(Glass.onAccent)
-                    .opacity(Self.clamp((u - 0.75) / 0.25))
-                    .frame(width: diameter, height: diameter)
-                    .background(Circle().fill(Palette.accent))
-                    .shadow(color: Palette.accentGlow.opacity(0.55), radius: 9)
-                    .opacity(Self.clamp((u - 0.45) / 0.45))
                     .position(spot.center)
             }
             .opacity(fading ? 0 : 1)
@@ -100,7 +100,7 @@ struct PhoneLaunch: View {
         if reduceMotion {
             sweepStarted = Date.distantPast
             try? await Task.sleep(for: .milliseconds(350))
-            onReveal()
+            onLanded()
             withAnimation(.easeOut(duration: 0.3)) { fading = true }
             try? await Task.sleep(for: .milliseconds(300))
             onFinished()
@@ -108,7 +108,7 @@ struct PhoneLaunch: View {
         }
         // iOS fades from the launch screen into the app over its first moments: the knob waits on
         // the icon's pose until it is fully on screen, so the whole turn is seen.
-        try? await Task.sleep(for: .milliseconds(350))
+        try? await Task.sleep(for: .milliseconds(250))
         sweepStarted = Date()
         try? await Task.sleep(for: .seconds(Self.turnLength))
         // The end stop: a small bump, as a real knob gives when it is turned all the way.
@@ -118,10 +118,11 @@ struct PhoneLaunch: View {
         // The strain runs on the frame clock (strainDegrees, with its taps in strainPush).
         try? await Task.sleep(for: .seconds(Self.strain - 0.09))
         turned = true
-        try? await Task.sleep(for: .milliseconds(80))
-        onReveal()
         landingStarted = Date()
         try? await Task.sleep(for: .seconds(Self.landing))
+        onLanded()
+        withAnimation(.easeOut(duration: Self.handOver)) { fading = true }
+        try? await Task.sleep(for: .seconds(Self.handOver))
         finished = true
         onFinished()
     }
@@ -173,16 +174,15 @@ struct PhoneLaunch: View {
         return Self.clamp(date.timeIntervalSince(landingStarted) / Self.landing)
     }
 
-    /// Where the knob is and how big, `u` of the way into the Play button: across with an ease
-    /// in and out, down faster at first, so it travels along a curve, shrinking to the button's
-    /// size. Without the button's place yet it stays in the middle and only fades.
+    /// Where the knob is and how big, `u` of the way into the Play button: place and size share
+    /// one ease in and out, so they arrive together and it settles with no jolt. Without the
+    /// button's place yet it stays in the middle and only fades.
     private func landingSpot(_ u: Double, in size: CGSize) -> (center: CGPoint, scale: CGFloat) {
         let start = CGPoint(x: size.width / 2, y: size.height / 2)
         guard playButton != .zero else { return (start, 1) }
         let e = Self.smoother(u)
-        let across = u < 0.5 ? 4 * u * u * u : 1 - pow(-2 * u + 2, 3) / 2
-        let center = CGPoint(x: start.x + (playButton.midX - start.x) * across,
-                             y: start.y + (playButton.midY - start.y) * pow(e, 0.7))
+        let center = CGPoint(x: start.x + (playButton.midX - start.x) * e,
+                             y: start.y + (playButton.midY - start.y) * e)
         let target = playButton.width / (Self.knobSize * Self.bodyShare)
         return (center, 1 + (target - 1) * e)
     }
