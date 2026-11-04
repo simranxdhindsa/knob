@@ -180,9 +180,10 @@ struct PhonePlayerLayout {
     var queueHeight: CGFloat { controlsTop - queueTop - 6 }
 }
 
-/// The player's background: the lower half of the cover shrunk to a few pixels, blurred and
-/// faded towards the theme, so it is a soft wash of the colours the cover melts into, and costs almost nothing
-/// to draw. It fades from song to song.
+/// The player's background: the cover and its reflection shrunk to a few pixels and blurred, so a
+/// soft wash of its colours fills the screen, and costs almost nothing to draw. Dark mode fades it
+/// towards black. Light mode turns it into bright pastels of the same colours (`pastel`), because
+/// white laid over a cover greys a dark one and bleaches a bright one. It fades from song to song.
 struct PhoneAmbient: View {
     let url: URL?
     @State private var wash: UIImage?
@@ -197,21 +198,27 @@ struct PhoneAmbient: View {
             LinearGradient(colors: [p.panelTop, p.panelBottom], startPoint: .top, endPoint: .bottom)
             if let previous { blurred(previous) }
             if let wash { blurred(wash).opacity(shown) }
-            // Light keeps its own brightness and takes only the cover's colour, so the colour
-            // reaches every edge and a dark cover cannot grey the screen out.
             if scheme == .dark { Glass.scrim }
         }
-        .compositingGroup()
-        .task(id: url) {
+        .task(id: "\(url?.path ?? "")\(scheme)") {
             guard let url, let image = await KnobShiftArtwork.load(url) else {
                 previous = nil
                 wash = nil
                 return
             }
-            let size = CGSize(width: 40, height: 40)
+            let side = CGRect(x: 0, y: 0, width: 40, height: 40)
             previous = wash
             shown = 0
-            wash = UIGraphicsImageRenderer(size: size).image { _ in image.draw(in: CGRect(x: 0, y: -size.height, width: size.width, height: size.height * 2)) }
+            // The whole cover with its reflection under it, so its strongest colours reach the bottom too.
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            let reflected = UIGraphicsImageRenderer(size: CGSize(width: side.width, height: side.height * 2), format: format).image { context in
+                image.draw(in: side)
+                context.cgContext.translateBy(x: 0, y: side.height * 2)
+                context.cgContext.scaleBy(x: 1, y: -1)
+                image.draw(in: side)
+            }
+            wash = scheme == .dark ? reflected : Self.pastel(reflected)
             // A frame at nothing first, so the fade has somewhere to start from.
             try? await Task.sleep(for: .milliseconds(30))
             withAnimation(Motion.ambient) { shown = 1 }
@@ -223,10 +230,33 @@ struct PhoneAmbient: View {
         Color.clear
             .overlay {
                 Image(uiImage: image).resizable().scaledToFill()
-                    .blur(radius: 40).saturation(scheme == .dark ? 1.5 : 2.4).scaleEffect(1.3)
+                    .blur(radius: scheme == .dark ? 40 : 90).saturation(scheme == .dark ? 1.5 : 1)
+                    .scaleEffect(scheme == .dark ? 1.3 : 1.7)
             }
             .clipped()
-            .blendMode(scheme == .dark ? .normal : .color)
+    }
+
+    /// Every pixel keeps its hue at one bright level and a capped strength, so text stays readable.
+    /// Near black has no real colour of its own, so it fades to white instead of a random hue.
+    private static func pastel(_ image: UIImage) -> UIImage {
+        guard let source = image.cgImage else { return image }
+        let width = source.width, height = source.height
+        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue),
+              let data = context.data?.assumingMemoryBound(to: UInt8.self) else { return image }
+        context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
+        for pixel in stride(from: 0, to: width * height * 4, by: 4) {
+            var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0
+            UIColor(red: CGFloat(data[pixel]) / 255, green: CGFloat(data[pixel + 1]) / 255, blue: CGFloat(data[pixel + 2]) / 255, alpha: 1)
+                .getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: nil)
+            let strength = min(saturation * 1.5, 0.5) * min(brightness / 0.2, 1)
+            var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0
+            UIColor(hue: hue, saturation: strength, brightness: 0.96, alpha: 1).getRed(&red, green: &green, blue: &blue, alpha: nil)
+            data[pixel] = UInt8(red * 255)
+            data[pixel + 1] = UInt8(green * 255)
+            data[pixel + 2] = UInt8(blue * 255)
+        }
+        return context.makeImage().map { UIImage(cgImage: $0) } ?? image
     }
 }
 
