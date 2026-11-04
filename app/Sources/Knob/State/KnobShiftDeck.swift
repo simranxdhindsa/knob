@@ -20,6 +20,14 @@ final class KnobShiftDeck {
     /// speed unit passes audio through unchanged and the reverb is bypassed.
     private let voiceStretch = AVAudioUnitTimePitch()
     private let voiceRoom = AVAudioUnitReverb()
+    /// The pressed down, muffled voice of a leaving song (see `voicePress`): a compressor before
+    /// the speed unit and a filter after it, both on the voice alone. At rest the compressor's
+    /// threshold sits above anything a song reaches and the filter is wide open, so they pass the
+    /// voice unchanged and stay connected (switching them in mid song would click).
+    private let voiceSquash = AVAudioUnitEffect(audioComponentDescription: AudioComponentDescription(
+        componentType: kAudioUnitType_Effect, componentSubType: kAudioUnitSubType_DynamicsProcessor,
+        componentManufacturer: kAudioUnitManufacturer_Apple, componentFlags: 0, componentFlagsMask: 0))
+    private let voiceMuffle = AVAudioUnitEQ(numberOfBands: 3)
     private let submix = AVAudioMixerNode()
     private let stretch = AVAudioUnitTimePitch()
     private let filter = AVAudioUnitEQ(numberOfBands: 3)
@@ -52,6 +60,16 @@ final class KnobShiftDeck {
         engine.attach(player)
         engine.attach(voice)
         engine.attach(musicStem)
+        // Two low passes in a row (steep, like a voice behind a wall) and a high pass that
+        // thins it, all resting outside the audible range.
+        for (index, type) in [AVAudioUnitEQFilterType.lowPass, .lowPass, .highPass].enumerated() {
+            let muffle = voiceMuffle.bands[index]
+            muffle.filterType = type
+            muffle.frequency = type == .highPass ? Self.restingCutoff : Self.trebleRest
+            muffle.bypass = false
+        }
+        engine.attach(voiceSquash)
+        engine.attach(voiceMuffle)
         engine.attach(voiceStretch)
         engine.attach(voiceRoom)
         voiceRoom.loadFactoryPreset(.largeHall)
@@ -67,8 +85,10 @@ final class KnobShiftDeck {
         for unit in [lofi, echo, room] as [AVAudioUnitEffect] { engine.attach(unit) }
         resetTransitionEffects()
         engine.connect(player, to: submix, format: nil)
-        engine.connect(voice, to: voiceStretch, format: nil)
-        engine.connect(voiceStretch, to: voiceRoom, format: nil)
+        engine.connect(voice, to: voiceSquash, format: nil)
+        engine.connect(voiceSquash, to: voiceStretch, format: nil)
+        engine.connect(voiceStretch, to: voiceMuffle, format: nil)
+        engine.connect(voiceMuffle, to: voiceRoom, format: nil)
         engine.connect(voiceRoom, to: submix, format: nil)
         engine.connect(musicStem, to: submix, format: nil)
         engine.connect(submix, to: stretch, format: nil)
@@ -77,6 +97,7 @@ final class KnobShiftDeck {
         engine.connect(lofi, to: echo, format: nil)
         engine.connect(echo, to: room, format: nil)
         engine.connect(room, to: engine.mainMixerNode, format: nil)
+        applyVoicePress()
     }
 
     private static let restingCutoff: Float = 10
@@ -113,6 +134,35 @@ final class KnobShiftDeck {
             voiceStretch.rate = Float(factor)
             voiceStretch.pitch = Float(1_200 * log2(factor))
         }
+    }
+
+    /// Presses the voice alone down, 0...1 (a "dabi dabi" voice): compressed flat, muffled as if
+    /// behind a wall (low pass from 20 kHz down to 900 Hz) and thinned (high pass up to 180 Hz).
+    /// The song's music is untouched. At rest the compressor's threshold sits at 0 dB, above a
+    /// separated voice's peaks.
+    var voicePress: Double = 0 { didSet { applyVoicePress() } }
+
+    /// How late the voice path plays against the music path (the compressor looks ahead), so
+    /// a separated voice can be started that much further into its file and stay in step.
+    var voiceLatency: TimeInterval { voiceSquash.latency + voiceStretch.latency + voiceMuffle.latency + voiceRoom.latency }
+
+    private func applyVoicePress() {
+        let amount = min(max(voicePress, 0), 1)
+        let cutoff = Float(Double(Self.trebleRest) * pow(900 / Double(Self.trebleRest), amount))
+        voiceMuffle.bands[0].frequency = cutoff
+        voiceMuffle.bands[1].frequency = cutoff
+        voiceMuffle.bands[2].frequency = Float(Double(Self.restingCutoff) * pow(18, amount))
+        let unit = voiceSquash.audioUnit
+        func set(_ parameter: AudioUnitParameterID, _ rest: Double, _ full: Double) {
+            AudioUnitSetParameter(unit, parameter, kAudioUnitScope_Global, 0, AudioUnitParameterValue(rest + (full - rest) * amount), 0)
+        }
+        // Measured on a voice: the level only ever eases down (to about 5 dB under at full,
+        // more on loud lines), with no swell, because the make up gain follows the squeeze.
+        set(kDynamicsProcessorParam_Threshold, 0, -24)
+        set(kDynamicsProcessorParam_HeadRoom, 6, 6)
+        set(kDynamicsProcessorParam_AttackTime, 0.005, 0.005)
+        set(kDynamicsProcessorParam_ReleaseTime, 0.15, 0.15)
+        AudioUnitSetParameter(unit, kDynamicsProcessorParam_OverallGain, kAudioUnitScope_Global, 0, AudioUnitParameterValue(8 * amount * amount), 0)
     }
 
     /// Hall reverb on the voice alone, 0...1.
@@ -233,6 +283,7 @@ final class KnobShiftDeck {
         musicStemLevel = 1
         voiceTape = 0
         voiceReverb = 0
+        voicePress = 0
     }
 
     /// File position this deck has really reached, read from the audio engine. The player

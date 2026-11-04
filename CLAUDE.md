@@ -4,7 +4,9 @@ Guidance for Claude Code when working in this repository.
 
 ## Project
 
-**Knob** is a macOS menu bar app for system-wide sound: a volume control that works on HDMI and other outputs that have no hardware volume, plus power, presets, effects and a 10-band EQ. macOS only.
+**Knob** is a macOS menu bar app for system-wide sound: a volume control that works on HDMI and other outputs that have no hardware volume, plus power, presets, effects and a 10-band EQ. The menu bar app is macOS; there is an iOS app too.
+
+- **Build for iOS too.** Whenever you add or change a feature or any UI, build it for iOS as well and check it works there: no AppKit-only calls in shared code (use `#if os(macOS)` / UIKit branches like `Components/Haptics.swift`), layouts that fit a phone, touch instead of hover or trackpad. Say what you checked for iOS when you report done.
 
 - The user is not a programmer. Explain choices in plain words, make sensible technical decisions yourself, and only ask about things that change what they see or get.
 - **License:** AGPL-3.0 (`LICENSE`, `NOTICE.md`). Keeping Knob private is fine; if it is shared with anyone, its full source must be shared too (`packaging/source-bundle.py` puts it next to the installer). Never delete `LICENSE` or `NOTICE.md`.

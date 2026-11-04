@@ -80,6 +80,8 @@ actor KnobShiftAnalyser {
         if let end = vocals.end {
             steps.append(String(format: "Outro after the voice: %.2fs of music before the audible end.", max(0, quietStart - end)))
         }
+        let hook = KnobShiftHooks.lastHook(in: url, breaks: sections.breaks, audibleEnd: duration - trailing)
+        steps.append(contentsOf: hook.steps)
         let safeOutroCue = fade.cue ?? (trailing >= 1 ? quietStart : nil)
         if let safeOutroCue {
             let source = fade.cue != nil ? "fade start" : "start of the trailing silence"
@@ -97,7 +99,7 @@ actor KnobShiftAnalyser {
                                                lastLineStart: vocals.lastLineStart,
                                                mainVocalOnset: mainVerse, vocalStrays: vocals.strays,
                                                beatEntry: sections.beatEntry, musicBreaks: sections.breaks,
-                                               vocalLineEnds: vocals.lineEnds)
+                                               vocalLineEnds: vocals.lineEnds, lastHookStart: hook.start)
         steps.append(String(format: "Finished in %.0f ms.", Date().timeIntervalSince(started) * 1_000))
         let track = KnobShiftModel.Track(url: url, title: url.deletingPathExtension().lastPathComponent,
                                          duration: duration, tailSilence: trailing, analysis: analysis)

@@ -36,7 +36,7 @@ extension KnobShiftModel {
                 switch result {
                 case .success(let prepared):
                     self.preparedStems = prepared
-                    self.log("STEMS", String(format: "%@ separated in %.1fs: its voice stays silent under the old singer.", next.title, prepared.seconds))
+                    self.log("STEMS", String(format: "%@ separated in %.1fs.", next.title, prepared.seconds))
                 case .failure(let error):
                     self.log("STEMS", "Could not separate \(next.title) (\(error)), so this mix plays the whole song.")
                 }
@@ -50,7 +50,7 @@ extension KnobShiftModel {
                 switch result {
                 case .success(let prepared):
                     self.preparedOutgoingStems = prepared
-                    self.log("STEMS", String(format: "%@ separated in %.1fs: its voice alone can slow down in the mix.", current.title, prepared.seconds))
+                    self.log("STEMS", String(format: "%@ separated in %.1fs: its voice alone can be pressed down in the mix.", current.title, prepared.seconds))
                 case .failure(let error):
                     self.log("STEMS", "Could not separate \(current.title) (\(error)), so its voice is not slowed alone.")
                 }
@@ -60,7 +60,7 @@ extension KnobShiftModel {
 
     /// Moves the leaving deck from its whole file onto its separated music and voice, started on
     /// the same sample and crossfaded in a fifth of a second. The two parts add up to the file
-    /// exactly, so the switch is silent; afterwards its voice alone can slow down. Returns false
+    /// exactly, so the switch is silent; afterwards its voice alone can be pressed down. Returns false
     /// (and changes nothing) when no separation covers this moment.
     func switchOutgoingToStems(_ current: Track) -> Bool {
         let deck = primaryDeck
@@ -79,11 +79,13 @@ extension KnobShiftModel {
         deck.musicStemLevel = 0
         deck.voiceLevel = 0
         deck.musicStem.scheduleSegment(music, startingFrame: skip, frameCount: AVAudioFrameCount(frames), at: nil)
-        deck.voice.scheduleSegment(vocals, startingFrame: skip, frameCount: AVAudioFrameCount(frames), at: nil)
+        // The voice path runs a few milliseconds late, so its part starts that much further in.
+        let lag = AVAudioFramePosition((deck.voiceLatency * rate).rounded())
+        deck.voice.scheduleSegment(vocals, startingFrame: skip + lag, frameCount: AVAudioFrameCount(frames - lag), at: nil)
         let startAt = AVAudioTime(sampleTime: nodeTime.sampleTime + AVAudioFramePosition(lead * nodeTime.sampleRate), atRate: nodeTime.sampleRate)
         deck.musicStem.play(at: startAt)
         deck.voice.play(at: startAt)
-        log("STEMS", String(format: "%@ switches to its separated music and voice at %.2fs, crossfaded, so its voice alone can slow down.", current.title, position))
+        log("STEMS", String(format: "%@ switches to its separated music and voice at %.2fs, crossfaded, so its voice alone can be pressed down.", current.title, position))
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(lead + 0.03))
             for step in 1...8 {
@@ -113,7 +115,9 @@ extension KnobShiftModel {
                 deck.player.scheduleSegment(music, startingFrame: skip, frameCount: AVAudioFrameCount(stemFrames), at: nil)
                 deck.player.scheduleSegment(file, startingFrame: startFrame + stemFrames,
                                             frameCount: AVAudioFrameCount(frames - stemFrames), at: nil)
-                deck.voice.scheduleSegment(vocals, startingFrame: skip, frameCount: AVAudioFrameCount(stemFrames), at: nil)
+                // The voice path runs a few milliseconds late, so its part starts that much further in.
+                let lag = AVAudioFramePosition((deck.voiceLatency * music.processingFormat.sampleRate).rounded())
+                deck.voice.scheduleSegment(vocals, startingFrame: skip + lag, frameCount: AVAudioFrameCount(stemFrames - lag), at: nil)
                 deck.voiceLevel = 0
                 log("STEMS", String(format: "%@ comes in as music and voice side by side for %.1fs, then its original file.",
                                     next.title, Double(stemFrames) / music.processingFormat.sampleRate))

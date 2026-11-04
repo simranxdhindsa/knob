@@ -7,8 +7,8 @@ fixes. Knob updates itself, so installed copies get every version below on their
 
 ### New features
 
-- The next singer always comes in clean: the old song's echo, reverb and voice hall clear away just before the new voice starts
-- When the beats lock, both songs' beats play together for longer before the old song fades
+- After a song with no singing, the echo and reverb clear away just before the next singer starts
+- When the beats lock, both songs' beats play together until the old singer's last words
 
 ### Fixes
 
