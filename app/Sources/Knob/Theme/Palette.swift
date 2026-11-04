@@ -74,6 +74,17 @@ enum Screen {
     static let youtube = Color(hex: 0xFF0033)
 }
 
+/// The iPhone player's modern finish: light text and thin glass over a blurred, darkened cover.
+enum Glass {
+    static let text = Color.white
+    static let secondary = Color.white.opacity(0.65)
+    static let tertiary = Color.white.opacity(0.28)
+    static let fill = Color.white.opacity(0.16)
+    static let stroke = Color.white.opacity(0.1)
+    /// Darkens the blurred cover so light text always reads on it.
+    static let scrim = Color.black.opacity(0.5)
+}
+
 /// The VU meter's own tokens. Its face, ink and hub follow `Palette` like the knobs; only the
 /// needle's shaded base and the glass glare live here.
 enum Meter {
