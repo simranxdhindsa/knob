@@ -42,8 +42,11 @@ extension KnobShiftModel {
         let rise = p < entry ? 0 : Self.shape(min((p - entry) / max(riseShare, 0.001), 1))
         let voiceUp = Self.shape(min(max((p - newVoice) / max(2 * second, 0.001), 0), 1))
         let incoming = locked ? rise * (0.75 + 0.25 * max(voiceUp, 1 - music)) : rise
-        // The new song arrives in a hall and muffled, and comes clear soon after its voice.
-        let clear = min(newVoice + KnobShiftPlan.washEnds * second, 0.97)
+        // The new song arrives in a hall and muffled, and comes clear soon after its voice. Drums
+        // that land with the voice cannot come in ahead of it, so they rise out of the hall for
+        // twice as long instead of arriving all at once.
+        let drumsWithVoice = abs(beatsIn - newVoice) <= second
+        let clear = min(newVoice + (drumsWithVoice ? 2 : 1) * KnobShiftPlan.washEnds * second, 0.97)
         let wash = 1 - Self.shape(min(max((p - entry) / max(clear - entry, 0.001), 0), 1))
         // Once the new voice sings, the old voice sinks under it, by up to 40%, over at least two
         // seconds, so the two are not fighting for the same place.

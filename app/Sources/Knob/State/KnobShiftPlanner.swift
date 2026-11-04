@@ -56,6 +56,23 @@ struct KnobShiftPlan {
     }
     /// The least time the old voice is given to finish once the mix starts.
     static let shortestWords: TimeInterval = 4
+    /// The least room a mix gets before the old voice's last words, unless KnobMix Now asks for
+    /// less: with less, the press and the new song and its voice all land within a second or two.
+    static let shortestRunUp: TimeInterval = 10
+    static let longestRunUp: TimeInterval = 18
+    /// How long before the last words a mix starts when no hook decides it: the whole bars of
+    /// the old song nearest to 14 seconds.
+    static func runUp(bar: TimeInterval) -> TimeInterval {
+        min(max(max(1, (14 / bar).rounded()) * bar, shortestRunUp), longestRunUp)
+    }
+    /// Where a mix starts when no hook decides it: `runUp` before the last words, or on the
+    /// song's own music break, else line ending, nearest to that within the run up's range.
+    static func runUpStart(_ analysis: KnobShiftModel.Analysis, voiceEnd: TimeInterval, bar: TimeInterval) -> TimeInterval {
+        let wanted = voiceEnd - runUp(bar: bar)
+        let range = (voiceEnd - longestRunUp)...(voiceEnd - shortestRunUp)
+        let nearest = { (points: [TimeInterval]) in points.filter(range.contains).min { abs($0 - wanted) < abs($1 - wanted) } }
+        return max(0, nearest(analysis.musicBreaks) ?? nearest(analysis.vocalLineEnds ?? []) ?? wanted)
+    }
     /// The song analysis finds singing in steps of about a second and a half: its first words
     /// come out about this much early and its last words about this much late.
     static let analysisSlack: TimeInterval = 1.25
@@ -162,18 +179,19 @@ struct KnobShiftPlan {
                 voiceEnd = point.at
             }
             // The mix begins where the song's last hook begins (the second chorus of two), so the
-            // old song leaves on its biggest moment. Without a hook it begins over the old voice's
-            // last words, so there is still a voice to press down.
-            let target = Self.length(bar: bar)
+            // old song leaves on its biggest moment. Without a hook, or with one too close to the
+            // last words, it begins a run up before them, so the old voice is pressed down
+            // gradually and the new song has room to come in ahead of its voice.
             var start: TimeInterval
             if let handoffAt {
                 start = handoffAt
-            } else if let hook = outgoing.lastHookStart, hook < voiceEnd, audibleEnd - hook >= Self.shortestMix {
+            } else if let hook = outgoing.lastHookStart, hook < voiceEnd, audibleEnd - hook >= Self.shortestMix,
+                      voiceEnd - hook >= Self.shortestRunUp {
                 start = hook
                 reasoning.append("\(current.title): its last hook begins at \(clock(hook)), so the mix starts there.")
             } else {
-                start = max(0, min(voiceEnd - 0.6 * target, audibleEnd - target))
-                reasoning.append("\(current.title): no last hook found, so the mix starts at \(clock(start)), over its last words.")
+                start = Self.runUpStart(outgoing, voiceEnd: voiceEnd, bar: bar)
+                reasoning.append("\(current.title): no usable last hook, so the mix starts at \(clock(start)), \(seconds(voiceEnd - start)) before its last words.")
             }
             // The old voice's last words end at `lastWords`. The new voice comes in half way to
             // them, over the pressed old voice, so the two songs really mix. The
