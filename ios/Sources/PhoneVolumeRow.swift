@@ -3,10 +3,9 @@ import AVKit
 import MediaPlayer
 import SwiftUI
 
-/// The iPhone's own volume, between its speaker marks. It is Apple's volume slider redrawn to
-/// match the player, the one way an app may set it, so it moves with the volume buttons and shows
-/// no volume banner. The simulator has no such slider, so there it shows the same look on Knob's
-/// own level.
+/// The iPhone's own volume, between its speaker marks. Apple's volume slider is the one way an app
+/// may set it, so it moves with the volume buttons and shows no volume banner. The simulator has
+/// no such slider, so there it shows the same look on Knob's own level.
 struct PhoneVolumeRow: View {
     let knob: KnobModel
 
@@ -24,7 +23,7 @@ struct PhoneVolumeRow: View {
         #if targetEnvironment(simulator)
         PhoneSimulatorVolume(knob: knob)
         #else
-        PhoneSystemVolume()
+        PhoneDeviceVolume()
         #endif
     }
 }
@@ -40,29 +39,62 @@ struct PhoneSimulatorVolume: View {
 }
 #endif
 
-/// Apple's volume slider with its track and handle drawn as images, the way it allows.
+/// The iPhone's volume: Knob draws the line and its handle as one piece from the real level, and
+/// Apple's slider lies invisibly on top to take the finger. Apple's own drawing leaves a gap
+/// between its line and a custom handle.
+struct PhoneDeviceVolume: View {
+    @ObservedObject private var level = PhoneOutputLevel.shared
+
+    var body: some View {
+        ZStack {
+            KnobGroove(value: level.volume, showsCap: true, accessibilityLabel: "", accessibilityValue: "", onChange: { _ in })
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .animation(Motion.snappy, value: level.volume)
+            PhoneSystemVolume()
+        }
+        .onAppear { level.read() }
+    }
+}
+
+/// Apple's volume slider with nothing of its own showing, the handle kept the size of GrooveCap
+/// so a finger on the cap is on the slider's handle.
 struct PhoneSystemVolume: UIViewRepresentable {
     func makeUIView(context: Context) -> MPVolumeView {
         let view = MPVolumeView(frame: .zero)
         view.showsRouteButton = false
-        view.setMinimumVolumeSliderImage(Self.track(Palette.accent), for: .normal)
-        view.setMaximumVolumeSliderImage(Self.track(Glass.fill), for: .normal)
-        let cap = ImageRenderer(content: GrooveCap().padding(4))
-        cap.scale = 3
-        view.setVolumeThumbImage(cap.uiImage, for: .normal)
+        let track = Self.clear(CGSize(width: 13, height: 5)).resizableImage(withCapInsets: UIEdgeInsets(top: 0, left: 6, bottom: 0, right: 6))
+        view.setMinimumVolumeSliderImage(track, for: .normal)
+        view.setMaximumVolumeSliderImage(track, for: .normal)
+        view.setVolumeThumbImage(Self.clear(CGSize(width: GrooveCap.size, height: 30)), for: .normal)
         return view
     }
 
     func updateUIView(_ view: MPVolumeView, context: Context) {}
 
-    private static func track(_ color: Color) -> UIImage {
-        let size = CGSize(width: 13, height: 5)
-        return UIGraphicsImageRenderer(size: size).image { _ in
-            UIColor(color).setFill()
-            UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 2.5).fill()
-        }
-        .resizableImage(withCapInsets: UIEdgeInsets(top: 0, left: 6, bottom: 0, right: 6))
+    private static func clear(_ size: CGSize) -> UIImage {
+        UIGraphicsImageRenderer(size: size).image { _ in }
     }
+}
+
+/// The iPhone's volume as it changes, by the buttons, the slider or Control Center.
+@MainActor
+final class PhoneOutputLevel: ObservableObject {
+    static let shared = PhoneOutputLevel()
+    @Published private(set) var volume = 0.0
+    private var watching: NSKeyValueObservation?
+
+    private init() {
+        read()
+        watching = AVAudioSession.sharedInstance().observe(\.outputVolume) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.read() }
+        }
+        NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.read() }
+        }
+    }
+
+    func read() { volume = Double(AVAudioSession.sharedInstance().outputVolume) }
 }
 
 /// Apple's own output picker (AirPlay, headphones, speakers), orange while sound goes elsewhere.

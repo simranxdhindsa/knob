@@ -74,9 +74,9 @@ struct PhonePlayer: View {
     }
 
     private static let melt: [Gradient.Stop] = [
-        .init(color: .black, location: 0.56), .init(color: .black.opacity(0.82), location: 0.68),
-        .init(color: .black.opacity(0.42), location: 0.82), .init(color: .black.opacity(0.12), location: 0.93),
-        .init(color: .clear, location: 1),
+        .init(color: .black, location: 0.34), .init(color: .black.opacity(0.86), location: 0.46),
+        .init(color: .black.opacity(0.58), location: 0.6), .init(color: .black.opacity(0.28), location: 0.74),
+        .init(color: .black.opacity(0.08), location: 0.88), .init(color: .clear, location: 1),
     ]
 
     private func titleRow(_ layout: PhonePlayerLayout) -> some View {
@@ -179,29 +179,37 @@ struct PhonePlayerLayout {
 struct PhoneAmbient: View {
     let url: URL?
     @State private var wash: UIImage?
+    /// The last song's wash, kept underneath so the next fades in over it with no dark dip.
+    @State private var previous: UIImage?
 
     var body: some View {
         ZStack {
             LinearGradient(colors: [Screen.top, Screen.bottom], startPoint: .top, endPoint: .bottom)
-            if let wash {
-                Color.clear
-                    .overlay {
-                        Image(uiImage: wash).resizable().scaledToFill()
-                            .blur(radius: 40).saturation(1.5).scaleEffect(1.3)
-                    }
-                    .clipped()
-                    .id(wash)
-                    .transition(.opacity)
-            }
+            if let previous { blurred(previous) }
+            if let wash { blurred(wash).id(wash).transition(.opacity) }
             Glass.scrim
         }
         .animation(Motion.ambient, value: wash)
         .task(id: url) {
-            guard let url, let image = await KnobShiftArtwork.load(url) else { wash = nil; return }
+            guard let url, let image = await KnobShiftArtwork.load(url) else {
+                previous = nil
+                wash = nil
+                return
+            }
             let size = CGSize(width: 40, height: 40)
+            previous = wash
             wash = UIGraphicsImageRenderer(size: size).image { _ in image.draw(in: CGRect(x: 0, y: -size.height, width: size.width, height: size.height * 2)) }
         }
         .accessibilityHidden(true)
+    }
+
+    private func blurred(_ image: UIImage) -> some View {
+        Color.clear
+            .overlay {
+                Image(uiImage: image).resizable().scaledToFill()
+                    .blur(radius: 40).saturation(1.5).scaleEffect(1.3)
+            }
+            .clipped()
     }
 }
 
@@ -219,6 +227,9 @@ struct PhoneTimeline: View {
     @ObservedObject var model: KnobShiftModel
     @ObservedObject var clock: KnobShiftClock
     @ObservedObject var scrub: PhoneScrub
+
+    /// How many seconds ahead a planned mix is announced.
+    private static let warning = 5
 
     var body: some View {
         let playing = model.nowPlaying != nil
@@ -259,25 +270,39 @@ struct PhoneTimeline: View {
 
     @ViewBuilder private var chip: some View {
         let lit = model.mixState == .mixing
-        if let text = chipText {
-            Text(text)
-                .font(.system(size: 10, weight: .semibold)).tracking(0.4)
-                .foregroundStyle(lit ? Glass.text : Glass.secondary)
-                .padding(.horizontal, 9)
-                .frame(height: 20)
-                .background(Capsule().fill(lit ? Palette.accent : Glass.fill))
-                .animation(Motion.gentle, value: lit)
+        let text = chipText
+        ZStack {
+            if let text {
+                Text(text)
+                    .font(.system(size: 10, weight: .semibold).monospacedDigit()).tracking(0.4)
+                    .contentTransition(.numericText(countsDown: true))
+                    .foregroundStyle(lit || countdown != nil ? Glass.text : Glass.secondary)
+                    .padding(.horizontal, 9)
+                    .frame(height: 20)
+                    .background(Capsule().fill(lit ? Palette.accent : (countdown != nil ? Palette.accent.opacity(0.45) : Glass.fill)))
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
         }
+        .animation(Motion.snappy, value: text)
+    }
+
+    /// Seconds to a mix that is about to start: the last few of a planned one, or all of them
+    /// once KnobMix Now has been tapped.
+    private var countdown: Int? {
+        guard let mix = model.nextMix, mix.blends, model.mixState != .mixing else { return nil }
+        let left = Int(mix.at.timeIntervalSinceNow.rounded(.up))
+        return left > 0 && (model.mixNowWaiting || left <= Self.warning) ? left : nil
     }
 
     private var chipText: String? {
         guard model.nowPlaying != nil else { return nil }
         if model.mixState == .mixing { return "KNOBMIX" }
-        if model.mixNowWaiting { return "ON THE NEXT BEAT" }
+        if let countdown { return "KNOBMIX IN \(countdown)" }
+        if model.mixNowWaiting { return "KNOBMIX STARTING" }
         switch model.mixState {
         case .preservingEnding: return "FULL ENDING"
         case .analyzing: return "PREPARING"
-        default: return model.nowPlaying?.analysis.tempo.map { String(format: "%.0f BPM", $0) }
+        default: return nil
         }
     }
 }
