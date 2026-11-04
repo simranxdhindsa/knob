@@ -182,6 +182,11 @@ final class KnobShiftDeck {
         }
     }
 
+    /// A moment `seconds` from now that every part of every deck agrees on.
+    static func startTime(after seconds: TimeInterval) -> AVAudioTime {
+        AVAudioTime(hostTime: mach_absolute_time() + AVAudioTime.hostTime(forSeconds: seconds))
+    }
+
     func stop() {
         player.stop()
         voice.stop()

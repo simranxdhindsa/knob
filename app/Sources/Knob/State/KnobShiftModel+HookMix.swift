@@ -100,8 +100,10 @@ extension KnobShiftModel {
         secondaryDeck.bassCut = locked ? music : 0
         // The new song's melody and voice are not held back; only the hall and muffling touch it.
         secondaryDeck.beatsOnly = 0
-        secondaryDeck.sweep = 0.7 * wash
-        secondaryDeck.reverbMix = 0.45 * wash
+        // Each effect rises from nothing in half a second as the song arrives, never already full.
+        let arrive = p < entry ? 0 : Self.shape(min((p - entry) / max(0.5 * second, 0.001), 1))
+        secondaryDeck.sweep = 0.7 * wash * arrive
+        secondaryDeck.reverbMix = 0.45 * wash * arrive
         if blendHasStems { secondaryDeck.voiceLevel = 1 }
         secondaryDeck.volume = Float(incoming)
 

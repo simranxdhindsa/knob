@@ -97,7 +97,7 @@ is pressed down instead of slowed. Everything here is worked out per song
   2:54 to 2:33).
 - **Run up.** With no hook, or a hook under 4 seconds before the last words
   (`shortestWords`), the mix starts a run up before them: the whole bars of the
-  old song nearest to 14 seconds, kept to 10 to 18 (`runUp(bar:)`), moved onto the
+  old song nearest to 10 seconds, kept to 8 to 12 (`runUp(bar:)`), moved onto the
   song's own music break, else line ending, when one is in that range
   (`runUpStart`). Only KnobMix Now can start closer. Starting 0.6 of a mix (about
   4.8 seconds) before the last words was tried and rejected: Why So into Kaali

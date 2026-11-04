@@ -210,7 +210,7 @@ enum KnobShiftMixTests {
         // So is one 3 seconds before them.
         let last = song("Last", duration: 200, voice: 12...197, hook: 194)
         let lastPlan = KnobShiftPlan.make(from: last, to: next)
-        expect(near(lastPlan.start, 182) && near(lastPlan.duration, 18), "6s left after the hook: the same run up (\(f(lastPlan.duration))s)")
+        expect(near(lastPlan.start, 187) && near(lastPlan.duration, 13), "6s left after the hook: the same run up (\(f(lastPlan.duration))s)")
         checkSung(lastPlan, from: last, to: next, "hook 6s from the end", voiceEnd: 197)
         // Silence at the end counts: the hook is judged against what is heard.
         let quiet = song("Quiet", duration: 200, trailing: 10, voice: 12...185, hook: 175)
@@ -224,7 +224,7 @@ enum KnobShiftMixTests {
         let voiceEnd = 150.0
         let none = song("NoHook", duration: 200, voice: 12...voiceEnd)
         let plan = KnobShiftPlan.make(from: none, to: next)
-        expect(near(plan.start, expectedStart(none, voiceEnd: voiceEnd)) && near(plan.start, 135), "no hook found: six bars, 15s, before the voice ends (\(KnobShiftPlan.clock(plan.start)))")
+        expect(near(plan.start, expectedStart(none, voiceEnd: voiceEnd)) && near(plan.start, 140), "no hook found: four bars, 10s, before the voice ends (\(KnobShiftPlan.clock(plan.start)))")
         expect(plan.start < voiceEnd && plan.start + plan.duration > voiceEnd - 0.01, "the voice's last words are inside the mix")
         checkSung(plan, from: none, to: next, "no hook", voiceEnd: voiceEnd)
         // A hook that begins after the voice has ended is not a hook to press the voice on.
@@ -332,8 +332,8 @@ enum KnobShiftMixTests {
         // So is a hook 2s before them.
         let two = song("Two", duration: 200, voice: 12...150, hook: 148)
         let twoPlan = KnobShiftPlan.make(from: two, to: next)
-        expect(near(twoPlan.start, 135) && near(twoPlan.voiceEnd ?? 0, 150) && near(twoPlan.duration, 21.25),
-               "a hook 2s before the last words: a 21.25s mix (\(f(twoPlan.duration))s)")
+        expect(near(twoPlan.start, 140) && near(twoPlan.voiceEnd ?? 0, 150) && near(twoPlan.duration, 16.25),
+               "a hook 2s before the last words: a 16.25s mix (\(f(twoPlan.duration))s)")
         checkSung(twoPlan, from: two, to: next, "hook 2s before the last words", voiceEnd: 150)
         // The bar based length is still what a fade mix and a missing hook are measured in.
         for bar in [1.5, 2.0, 2.5, 3.0, 4.0, 6.0, 20.0] {
@@ -663,10 +663,14 @@ enum KnobShiftMixTests {
         // The new song arrives in a hall and muffled and comes clear after its voice, so it never
         // just appears, and nothing of that is left when the mix ends.
         let arriving = r.filter { $0.p >= mix.entry }
+        // Those effects rise from nothing as it arrives, then only ever clear.
+        let strongest = arriving.indices.max { arriving[$0].newSweep < arriving[$1].newSweep } ?? 0
         if mix.entry < 0.9 {
-            expect(after(r, mix.entry).newSweep > 0.5 && after(r, mix.entry).newRoom > 0.3, "\(name): the new song arrives muffled and in a hall")
+            expect((arriving.first?.newSweep ?? 1) < 0.1, "\(name): the effects on the new song start from nothing")
+            expect(arriving[strongest].newSweep > 0.5 && arriving[strongest].newRoom > 0.3, "\(name): the new song arrives muffled and in a hall")
         }
-        expect(zip(arriving, arriving.dropFirst()).allSatisfy { $1.newSweep <= $0.newSweep + 1e-9 && $1.newRoom <= $0.newRoom + 1e-9 }, "\(name): which only ever clear")
+        let clearing = arriving[strongest...]
+        expect(zip(clearing, clearing.dropFirst()).allSatisfy { $1.newSweep <= $0.newSweep + 1e-9 && $1.newRoom <= $0.newRoom + 1e-9 }, "\(name): which then only ever clear")
         expect(at(r, 1).newSweep <= 1e-6 && at(r, 1).newRoom <= 1e-6, "\(name): and are gone by the end of the mix")
         // The new song: nothing before it comes in, fully up by the end.
         expect(r.filter { $0.p < mix.entry - 0.001 }.allSatisfy { $0.newBeats == 0 }, "\(name): the new song is silent until \(Int((mix.entry * 100).rounded()))%")

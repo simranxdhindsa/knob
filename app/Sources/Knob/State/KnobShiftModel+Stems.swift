@@ -82,7 +82,7 @@ extension KnobShiftModel {
         // The voice path runs a few milliseconds late, so its part starts that much further in.
         let lag = AVAudioFramePosition((deck.voiceLatency * rate).rounded())
         deck.voice.scheduleSegment(vocals, startingFrame: skip + lag, frameCount: AVAudioFrameCount(frames - lag), at: nil)
-        let startAt = AVAudioTime(sampleTime: nodeTime.sampleTime + AVAudioFramePosition(lead * nodeTime.sampleRate), atRate: nodeTime.sampleRate)
+        let startAt = KnobShiftDeck.startTime(after: lead)
         deck.musicStem.play(at: startAt)
         deck.voice.play(at: startAt)
         log("STEMS", String(format: "%@ switches to its separated music and voice at %.2fs, crossfaded, so its voice alone can be pressed down.", current.title, position))

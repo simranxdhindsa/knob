@@ -58,12 +58,12 @@ struct KnobShiftPlan {
     static let shortestWords: TimeInterval = 4
     /// The least room a mix gets before the old voice's last words, unless KnobMix Now asks for
     /// less: with less, the press and the new song and its voice all land within a second or two.
-    static let shortestRunUp: TimeInterval = 10
-    static let longestRunUp: TimeInterval = 18
+    static let shortestRunUp: TimeInterval = 8
+    static let longestRunUp: TimeInterval = 12
     /// How long before the last words a mix starts when no hook decides it: the whole bars of
-    /// the old song nearest to 14 seconds.
+    /// the old song nearest to 10 seconds.
     static func runUp(bar: TimeInterval) -> TimeInterval {
-        min(max(max(1, (14 / bar).rounded()) * bar, shortestRunUp), longestRunUp)
+        min(max(max(1, (10 / bar).rounded()) * bar, shortestRunUp), longestRunUp)
     }
     /// Where a mix starts when no hook decides it: `runUp` before the last words, or on the
     /// song's own music break, else line ending, nearest to that within the run up's range.

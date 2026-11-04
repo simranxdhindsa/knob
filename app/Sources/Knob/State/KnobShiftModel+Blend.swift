@@ -309,11 +309,11 @@ extension KnobShiftModel {
                 guard let drums = next.analysis.beatEntry else { return entryShare }
                 return min(max((entryWait + max(0, drums - lock.incomingStart)) / max(duration, 0.1), entryShare), 1)
             }()
-            // Always on the render clock, even with no wait, so the new song's separated music and
-            // voice start on the same sample: started one after the other they would be out of step.
-            if let now = primaryDeck.player.lastRenderTime, now.isSampleTimeValid {
-                let renderRate = now.sampleRate
-                let startAt = AVAudioTime(sampleTime: now.sampleTime + AVAudioFramePosition(max(wait, 0.05) * renderRate), atRate: renderRate)
+            // On the host clock, shared by every part, even with no wait, so the new song's separated
+            // music and voice start together. Never on a sample count: each part counts only while
+            // it plays, so one that sat idle runs behind and started seconds late, voice last.
+            if primaryDeck.player.lastRenderTime?.isSampleTimeValid == true {
+                let startAt = KnobShiftDeck.startTime(after: max(wait, 0.05))
                 secondaryDeck.player.play(at: startAt)
                 secondaryDeck.voice.play(at: startAt)
             } else {
