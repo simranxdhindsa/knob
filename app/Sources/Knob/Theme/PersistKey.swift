@@ -21,6 +21,8 @@ enum PersistKey: String {
     case knobShiftLastPosition = "knob.shift.lastPosition"
     /// Songs synced from the Mac and taken out of the iPhone's queue, as "playlist/song".
     case knobShiftPhoneDeclined = "knob.shift.phone.declined"
+    /// The queue shows its Spotify and YouTube playlist rows; off by default, a header button shows them.
+    case knobShiftShowPlaylists = "knob.shift.showPlaylists"
     /// Whether the dedicated KnobShift window was visible when Knob last quit.
     case knobShiftWindowOpen = "knob.shift.windowOpen"
     case knobShiftSpotifyNoticeAccepted = "knob.shift.spotify.noticeAccepted"

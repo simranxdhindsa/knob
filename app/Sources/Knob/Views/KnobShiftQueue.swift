@@ -45,6 +45,7 @@ struct KnobShiftQueue: View {
     var onSync: () -> Void = {}
     @State private var selection: Set<UUID> = []
     @State private var confirmingRemoveAll = false
+    @AppStorage(PersistKey.knobShiftShowPlaylists.rawValue) private var showingPlaylists = false
     @Environment(\.surface) private var surface
 
     var body: some View {
@@ -55,6 +56,9 @@ struct KnobShiftQueue: View {
                     Text("\(model.tracks.count + model.pending.count)").font(.system(size: 9, weight: .bold)).foregroundStyle(surface.tertiary)
                 }
                 Spacer()
+                #if os(macOS)
+                if !model.playlists.isEmpty || !model.removedPlaylists.isEmpty { playlistsButton }
+                #endif
                 Button { model.toggleShuffle() } label: {
                     Image(systemName: "shuffle")
                         .font(.system(size: 11, weight: .bold))
@@ -96,7 +100,10 @@ struct KnobShiftQueue: View {
                 Text("The music files stay on your \(Platform.deviceName), so you can add them again later.")
             }
             #if os(macOS)
-            KnobShiftPlaylistRows(model: model, onSpotify: onSpotify, onYouTube: onYouTube)
+            if showingPlaylists {
+                KnobShiftPlaylistRows(model: model, onSpotify: onSpotify, onYouTube: onYouTube)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
             #endif
             if model.tracks.isEmpty && model.pending.isEmpty {
                 empty
@@ -140,6 +147,27 @@ struct KnobShiftQueue: View {
         }
         .screenCard(radius: 16, padding: 14)
     }
+
+    #if os(macOS)
+    /// Shows or hides the Spotify and YouTube playlist rows above the songs. Lit while they show,
+    /// and while a playlist is downloading, so progress is never out of sight unnoticed.
+    private var playlistsButton: some View {
+        let downloading = !model.spotifyProgress.isEmpty
+        return Button {
+            withAnimation(Motion.gentle) { showingPlaylists.toggle() }
+        } label: {
+            Image(systemName: "music.note.list")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(showingPlaylists || downloading ? Palette.accent : surface.tertiary)
+                .frame(width: 24, height: 20)
+                .background(Capsule().fill(showingPlaylists ? Palette.accent.opacity(0.14) : .clear))
+        }
+        .buttonStyle(.plain)
+        .help(showingPlaylists ? "Hide playlists" : "Show playlists")
+        .accessibilityLabel(showingPlaylists ? "Hide playlists" : "Show playlists")
+        .padding(.trailing, 8)
+    }
+    #endif
 
     /// ADD MUSIC: songs on this Mac, or, where Spotify import is available, a dropdown with both
     /// (KnobShiftAddMusic). The header looks the same either way, so it never changes size.
