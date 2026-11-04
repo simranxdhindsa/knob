@@ -96,7 +96,7 @@ struct KnobShiftQueue: View {
                 Text("The music files stay on your \(Platform.deviceName), so you can add them again later.")
             }
             #if os(macOS)
-            KnobShiftPlaylistRows(model: model)
+            KnobShiftPlaylistRows(model: model, onSpotify: onSpotify, onYouTube: onYouTube)
             #endif
             if model.tracks.isEmpty && model.pending.isEmpty {
                 empty

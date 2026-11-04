@@ -32,7 +32,8 @@ extension KnobShiftSpotifyCheck {
 
         print("1. Pick songs from a \(count) song playlist and download them")
         configure(count: count, delay: 0.02, missing: "3")
-        await model.addFromSpotify("https://open.spotify.com/playlist/37i9dQZF1E8UXBoz02kGID?si=x")
+        // A made up id: a real one reads the real list from Spotify's public player, not the fake.
+        await model.addFromSpotify("https://open.spotify.com/playlist/0000000000000000000009?si=x")
         guard let review = model.spotifyReview else {
             expect(false, "the song picker opens (status: \(model.spotifyStatus ?? "none"))")
             return await finishUAT(lag)
@@ -166,6 +167,20 @@ extension KnobShiftSpotifyCheck {
             let folder = reopened.playlists.first { $0.id == resume.playlistId }.map(KnobShiftPlaylists.folder(for:))
             let files = folder.map { KnobShiftPlaylists.files(in: $0).count } ?? 0
             expect(files == 10, "all 10 songs downloaded after reopening (\(files))")
+
+            lag.phase("step 7")
+            print("8. Open again, remove a playlist before its songs are prepared: they leave with it")
+            let waiting = KnobShiftModel(restoresQueue: false)
+            if let playlist = waiting.playlists.first(where: { $0.id == resume.playlistId }) {
+                // Songs come back after a relaunch as bare file paths, through this same call.
+                waiting.enqueueFiles(Array(KnobShiftPlaylists.files(in: KnobShiftPlaylists.folder(for: playlist)).values))
+                expect(waiting.pending.count == 10 && waiting.pending.allSatisfy { $0.playlistId == playlist.id && $0.spotifyId != nil },
+                       "songs back from a relaunch know their playlist")
+                waiting.removePlaylist(playlist)
+                expect(waiting.pending.isEmpty, "no song is left pointing at the moved files (\(waiting.pending.count) left)")
+            } else {
+                expect(false, "the playlist is there after reopening")
+            }
         }
 
         await finishUAT(lag)

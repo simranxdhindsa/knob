@@ -310,7 +310,15 @@ final class KnobShiftModel: ObservableObject {
         let new = urls.filter { known.insert($0.standardizedFileURL.path).inserted }
         guard !new.isEmpty else { return false }
         log("IMPORT", "Added \(new.count) song(s) to the queue. Preparing them one by one.")
-        pending.append(contentsOf: new.map { PendingSong(url: $0) })
+        pending.append(contentsOf: new.map { url in
+            var row = PendingSong(url: url)
+            // Songs back from a relaunch are bare paths; the file says which playlist owns them.
+            if let origin = KnobShiftPlaylists.origin(of: url, in: playlists), let playlistId = origin.playlistId {
+                row.spotifyId = origin.spotifyId
+                row.playlistId = playlistId
+            }
+            return row
+        })
         persistQueue()
         return true
     }

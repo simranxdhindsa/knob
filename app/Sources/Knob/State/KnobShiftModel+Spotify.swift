@@ -282,6 +282,7 @@ extension KnobShiftModel {
         if let playing = nowPlaying, playing.playlistId == playlist.id { stop() }
         let leaving = tracks.filter { $0.playlistId == playlist.id }
         for track in leaving { remove(track) }
+        let waiting = pending.filter { $0.playlistId == playlist.id }.count
         pending.removeAll { $0.playlistId == playlist.id }
         spotifyRaw[playlist.id] = nil
         do {
@@ -295,7 +296,7 @@ extension KnobShiftModel {
         playlists.removeAll { $0.id == playlist.id }
         savePlaylists()
         persistQueue()
-        log("SPOTIFY", "Removed \(playlist.name) with \(leaving.count) song(s).")
+        log("SPOTIFY", "Removed \(playlist.name) with \(leaving.count + waiting) song(s).")
     }
 
     func restorePlaylist(_ removed: KnobShiftRemovedPlaylist) async {
