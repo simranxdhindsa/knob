@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The dark analyser screen: Effects and Equalizer tabs over the live spectrum.
+/// The dark analyser screen: the Effects tab over the live spectrum, and the Equalizer tab.
 struct ScreenSection: View {
     @ObservedObject var model: KnobModel
     @AppStorage(PersistKey.selectedTab.rawValue) private var tab = Tab.effects
@@ -32,10 +32,11 @@ struct ScreenSection: View {
                         .frame(height: 176)
                 } else {
                     ZStack {
-                        SpectrumView(bands: model.spectrum, showsGrid: tab == .equalizer,
-                                     intensity: tab == .effects ? 0.45 : 0.8)
-                            .opacity((model.powerOn ? 1 : 0.35) * (tab == .equalizer ? 0.45 : 1))
                         if tab == .effects {
+                            // The live spectrum sits under the effect knobs only: behind the
+                            // equalizer's faders it read as a second set of bars.
+                            SpectrumView(bands: model.spectrum, showsGrid: false, intensity: 0.45)
+                                .opacity(model.powerOn ? 1 : 0.35)
                             EffectsGrid(model: model)
                         } else {
                             EqualizerBank(model: model)
@@ -129,7 +130,7 @@ struct EffectsGrid: View {
     }
 }
 
-/// One fader per EQ band, over the live spectrum.
+/// One fader per EQ band.
 struct EqualizerBank: View {
     @ObservedObject var model: KnobModel
     private let faderHeight: CGFloat = 106

@@ -151,12 +151,8 @@ final class KnobModel: ObservableObject {
         peakLeft = state.peakLeft
         peakRight = state.peakRight
         spectrumPeak = max(spectrumPeak * 0.995, state.spectrum.max() ?? 0, 0.05)
-        let target = state.spectrum.map { min($0 / spectrumPeak, 1) }
-        if target.count == spectrum.count {
-            spectrum = zip(spectrum, target).map { old, new in new > old ? old + (new - old) * 0.7 : old + (new - old) * 0.25 }
-        } else {
-            spectrum = target
-        }
+        // SpectrumView glides to these on every frame, so they are passed on as measured.
+        spectrum = state.spectrum.map { min($0 / spectrumPeak, 1) }
         guard includeControls else { return }
         if state.effects.count == effects.count { effects = state.effects.map { $0 / 10 } }
         eq = state.eq.map { $0 / 12 }
