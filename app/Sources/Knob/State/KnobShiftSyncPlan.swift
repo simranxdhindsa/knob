@@ -13,6 +13,7 @@ import Foundation
 /// - **Song already on the iPhone:** skipped when its size matches; a different size (a broken
 ///   copy, or a newer download) is copied again, unless that song is playing right now.
 /// - **Song still downloading on the Mac:** a waiting row now, its file on a later sync.
+/// - **Song the Mac could not get:** not added; a row already waiting shows the Mac's reason.
 /// - **Where new songs go:** after the song before them in the playlist's order that is already
 ///   in the queue, so a queue the person rearranged keeps its order around them; failing that,
 ///   before the first song after them; otherwise at the end.
@@ -69,6 +70,8 @@ enum KnobShiftSyncPlan {
         var rows: [Row] = []
         /// Songs the Mac is still downloading.
         var onMac = 0
+        /// Songs the Mac could not get.
+        var failedOnMac = 0
         /// Songs left on the Mac for want of space.
         var noRoom = 0
         var keptRemoved = 0
@@ -113,6 +116,10 @@ enum KnobShiftSyncPlan {
             var newInList: [String] = []
 
             for song in entry.songs where seen.insert(song.id).inserted && !skipped.contains(song.id) {
+                if song.problem != nil, song.file == nil, have[song.id] == nil {
+                    result.failedOnMac += 1
+                    continue
+                }
                 let wanted = !queued.contains(song.id) && !phone.declined.contains("\(mac.id)/\(song.id)")
                 var url = have[song.id]?.url
                 var waiting = false
@@ -156,6 +163,14 @@ enum KnobShiftSyncPlan {
             }
         }
         return result
+    }
+
+    /// Why a song waiting on the iPhone is not on its way, or nil if it is.
+    static func problem(songId: String, playlistId: String, in library: KnobShiftLink.Library) -> String? {
+        guard let song = library.playlists.first(where: { $0.playlist.id == playlistId })?.songs.first(where: { $0.id == songId }) else {
+            return "Not on your Mac"
+        }
+        return song.problem.map { "\($0) on your Mac" }
     }
 
     /// Where a new song goes: after the nearest earlier song of its list that is in the queue

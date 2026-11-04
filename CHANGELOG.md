@@ -12,6 +12,7 @@ it starts at the old song's last hook and brings the next singer in over the old
 
 - Knob comes to iPhone: the KnobShift player and Knob's sound controls, with the song's cover and colours filling the screen in light and dark (for now it is built from Knob's source, it is not on the App Store)
 - Add Spotify and YouTube songs from your iPhone, and sync your playlists from your Mac over your home network
+- The iPhone shows live whether your Mac can be seen, and Sync turns on by itself the moment your Mac appears
 - KnobMix starts at the old song's last hook, wherever it falls, instead of waiting for the very end
 - The old voice is pressed down into a hall while the next singer comes in over it, about half way to the old singer's last words
 - The next song starts just before its first verse instead of from its intro, and arrives through reverb and a slight slow start that clear away
@@ -24,6 +25,9 @@ it starts at the old song's last hook and brings the next singer in over the old
 
 ### Fixes
 
+- A song still downloading on your Mac is never copied to your iPhone half finished
+- A song your Mac could not download now says why on your iPhone, instead of showing Downloading on your Mac forever
+- Songs keep coming to your iPhone for as long as your Mac is downloading them, and carry on when you come back to the app
 - The refresh button on a playlist opens the song picker again, so songs you added on Spotify or YouTube can be downloaded
 - Removing a playlist takes all its songs with it, instead of leaving rows that say Could not read this file
 - Recently removed playlists say plainly how many days you can still restore them

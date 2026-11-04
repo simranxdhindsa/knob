@@ -16,6 +16,9 @@ final class PhoneMacLink: ObservableObject {
 
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var macName: String?
+    /// Whether the Mac can be seen right now, watched while the sheet is open.
+    enum Presence: Equatable { case looking, found, missing, blocked }
+    @Published private(set) var presence: Presence = .looking
     /// The last outcome, as a plain sentence for the sheet.
     @Published private(set) var status: String?
     @Published private(set) var failed = false
@@ -35,17 +38,27 @@ final class PhoneMacLink: ObservableObject {
 
     private var follow: Task<Void, Never>?
     private var followRounds = 0
+    /// Set while songs are still coming, so a follow up stopped by leaving the app starts again.
+    private weak var followed: KnobShiftModel?
+    private var watcher: NWBrowser?
+    private var giveUp: Task<Void, Never>?
+    /// How long the Mac may take to show up before the sheet says it was not found.
+    private static let lookFor: Duration = .seconds(4)
     /// Follow up syncs while the Mac still downloads: every 20 seconds, for up to 15 minutes.
     private static let followEvery: Duration = .seconds(20)
     private static let followLimit = 45
 
     private init() {
         NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.stopFollowing() }
+            MainActor.assumeIsolated { self?.pauseFollowing() }
+        }
+        NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.resumeFollowing() }
         }
     }
 
     var busy: Bool { phase != .idle }
+    var connected: Bool { presence == .found }
 
     // MARK: Finding the Mac
 
@@ -79,6 +92,60 @@ final class PhoneMacLink: ObservableObject {
             }
             browser.start(queue: .main)
             DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { finish(.failure(KnobShiftLink.Failure.notFound)) }
+        }
+    }
+
+    // MARK: Watching for the Mac
+
+    /// Watches the network while the sheet is open, so it shows at once when the Mac comes or goes.
+    func startWatching() {
+        guard watcher == nil else { return }
+        let browser = NWBrowser(for: .bonjour(type: KnobShiftLink.service, domain: nil), using: .tcp)
+        browser.browseResultsChangedHandler = { [weak self] results, _ in
+            MainActor.assumeIsolated { self?.saw(results) }
+        }
+        browser.stateUpdateHandler = { [weak self] state in
+            MainActor.assumeIsolated { self?.watcherChanged(state) }
+        }
+        watcher = browser
+        presence = .looking
+        browser.start(queue: .main)
+        giveUp = Task { [weak self] in
+            try? await Task.sleep(for: Self.lookFor)
+            guard !Task.isCancelled, let self, self.presence == .looking else { return }
+            self.presence = .missing
+        }
+    }
+
+    func stopWatching() {
+        giveUp?.cancel()
+        giveUp = nil
+        watcher?.cancel()
+        watcher = nil
+    }
+
+    private func saw(_ results: Set<NWBrowser.Result>) {
+        let name = results.lazy.compactMap { result -> String? in
+            if case .service(let name, _, _, _) = result.endpoint { return name }
+            return nil
+        }.first
+        guard let name else {
+            if presence == .found { presence = .missing }
+            return
+        }
+        giveUp?.cancel()
+        macName = name
+        presence = .found
+        // "Not found" from before is out of date now.
+        if failed, !busy { status = nil; failed = false }
+    }
+
+    private func watcherChanged(_ state: NWBrowser.State) {
+        switch state {
+        case .waiting(let error), .failed(let error):
+            // -65570: Local Network access is turned off for Knob.
+            if case .dns(let code) = error, code == -65570 { presence = .blocked }
+        default: break
         }
     }
 
@@ -147,6 +214,7 @@ final class PhoneMacLink: ObservableObject {
             let plan = KnobShiftSyncPlan.plan(library, phone: phoneState(model))
             model.log("LINK", "Sync with \(name): \(plan.transfers.count) to copy, \(plan.copies.count) copied here, \(plan.rows.count) new in the queue, \(plan.onMac) still on the Mac.")
             apply(plan, to: model)
+            markWaiting(library, in: model)
             let result = await copy(plan, from: client, into: model)
             let closes = !following && result.error == nil
             // A sync over in a blink still spins for a moment, so the tap reads as done, not a flash.
@@ -157,6 +225,8 @@ final class PhoneMacLink: ObservableObject {
             phase = .idle
             report(Self.message(error), failed: true)
             model.log("LINK", "Sync stopped: \(error).")
+            // A short drop in the Wi-Fi does not end the follow up while songs are still coming.
+            if following { followUp(model) }
         }
     }
 
@@ -213,6 +283,21 @@ final class PhoneMacLink: ObservableObject {
         model.pending.append(contentsOf: rows)
         model.persistQueue()
         if rows.contains(where: { !$0.waitingForDownload }) { Task { await model.processPending() } }
+    }
+
+    /// Rows waiting from earlier syncs say what the Mac says now: on its way, or why it is not.
+    private func markWaiting(_ library: KnobShiftLink.Library, in model: KnobShiftModel) {
+        var rows = model.pending
+        var changed = false
+        for index in rows.indices where rows[index].waitingForDownload {
+            guard let id = rows[index].spotifyId, let playlist = rows[index].playlistId else { continue }
+            let problem = KnobShiftSyncPlan.problem(songId: id, playlistId: playlist, in: library)
+            guard rows[index].failure != problem else { continue }
+            rows[index].failure = problem
+            rows[index].stage = problem == nil ? "Downloading on your Mac" : nil
+            changed = true
+        }
+        if changed { model.pending = rows }
     }
 
     /// Copies the songs one by one. A lost connection is tried once more after finding the Mac
@@ -297,7 +382,8 @@ final class PhoneMacLink: ObservableObject {
         }
         if result.copied > 0 { parts.append("\(Self.songs(result.copied)) copied.") }
         let waiting = plan.onMac + result.missing
-        if waiting > 0 { parts.append("\(Self.songs(waiting)) still downloading on your Mac will come over by themselves.") }
+        if waiting > 0 { parts.append("\(Self.songs(waiting)) still downloading on your Mac will come over while this app is open.") }
+        if plan.failedOnMac > 0 { parts.append("\(Self.songs(plan.failedOnMac)) could not be downloaded on your Mac.") }
         if plan.noRoom > 0 { parts.append("This iPhone is almost full, so \(Self.songs(plan.noRoom)) stayed on your Mac.") }
         if plan.keptRemoved > 0 { parts.append("\(plan.keptRemoved) playlist\(plan.keptRemoved == 1 ? "" : "s") you removed here stayed removed.") }
         let summary = parts.joined(separator: " ")
@@ -315,6 +401,8 @@ final class PhoneMacLink: ObservableObject {
                 ? Done(title: "All synced", detail: "Everything from \(mac) is on this iPhone.\(more)")
                 : Done(title: "Synced", detail: "\(Self.songs(result.copied)) copied from \(mac).\(more)")
         }
+        // Songs arriving means the Mac is getting somewhere, so the time limit starts again.
+        if result.copied > 0 { followRounds = 0 }
         let stillComing = waiting > 0 || library.playlists.contains(where: \.downloading)
         if stillComing, result.error == nil { followUp(model) } else { stopFollowing() }
     }
@@ -336,6 +424,7 @@ final class PhoneMacLink: ObservableObject {
 
     private func followUp(_ model: KnobShiftModel) {
         follow?.cancel()
+        followed = model
         guard followRounds < Self.followLimit, UIApplication.shared.applicationState != .background else { return }
         followRounds += 1
         follow = Task { [weak self, weak model] in
@@ -345,7 +434,19 @@ final class PhoneMacLink: ObservableObject {
         }
     }
 
+    private func pauseFollowing() {
+        follow?.cancel()
+        follow = nil
+    }
+
+    private func resumeFollowing() {
+        guard let followed else { return }
+        followRounds = 0
+        Task { await sync(followed, following: true) }
+    }
+
     private func stopFollowing() {
+        followed = nil
         follow?.cancel()
         follow = nil
     }

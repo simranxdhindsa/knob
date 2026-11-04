@@ -39,6 +39,8 @@ enum KnobShiftLink {
             var size: Int64?
             var name: String?
             var artist: String?
+            /// Why the Mac could not get it ("YouTube paused"), so it is not shown as on its way.
+            var problem: String? = nil
         }
     }
 

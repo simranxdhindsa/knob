@@ -109,6 +109,16 @@ enum KnobShiftLinkCheck {
         result = plan(library([(road, [song(a), song(b, size: nil)])], downloading: true), .init(playlists: []))
         expect(result.onMac == 1 && result.rows.last?.songId == b && result.rows.last?.waiting == true, "a song still downloading on the Mac waits in the queue")
         expect(!result.transfers.contains { $0.songId == b }, "and is not asked for yet")
+        var refused = song(b, size: nil)
+        refused.file = nil
+        refused.problem = "YouTube paused"
+        let failedList = library([(road, [song(a), refused])])
+        result = plan(failedList, .init(playlists: []))
+        expect(result.failedOnMac == 1 && result.onMac == 0 && !result.rows.contains { $0.songId == b }, "a song the Mac could not get is not added")
+        expect(KnobShiftSyncPlan.problem(songId: b, playlistId: road.id, in: failedList) == "YouTube paused on your Mac", "a song waiting here shows the Mac's reason")
+        expect(KnobShiftSyncPlan.problem(songId: a, playlistId: road.id, in: failedList) == nil, "a song on its way shows no problem")
+        expect(KnobShiftSyncPlan.problem(songId: c, playlistId: road.id, in: failedList) == "Not on your Mac", "a song the Mac dropped says so")
+        expect(KnobShiftSyncPlan.problem(songId: a, playlistId: "gone", in: failedList) == "Not on your Mac", "and so does one from a playlist it removed")
         let unticked = playlist(road.id, "Road Trip", songs: [a, b], skipped: [b])
         result = plan(library([(unticked, [song(a), song(b)])]), .init(playlists: []))
         expect(result.rows.map(\.songId) == [a], "songs unticked on the Mac are left out")
@@ -164,13 +174,15 @@ enum KnobShiftLinkCheck {
         setenv("KNOB_YOUTUBE_ROOT", temp.appendingPathComponent("YouTube").path, 1)
         defer { try? FileManager.default.removeItem(at: temp) }
         let (a, b, c) = (id(1), id(2), id(3))
-        let list = playlist("road00000000000000000a", "Road Trip", songs: [a, b, c])
+        let list = playlist("road00000000000000000a", "Road Trip", songs: [a, b, c, id(4)])
         let folder = KnobShiftPlaylists.folder(for: list)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let first = Data((0..<1_500_000).map { UInt8(truncatingIfNeeded: $0 &* 31) })
         let second = Data((0..<40_000).map { UInt8(truncatingIfNeeded: $0 &* 7) })
         try? first.write(to: folder.appendingPathComponent("01 Song One - Artist [\(a)].m4a"))
         try? second.write(to: folder.appendingPathComponent("02 Song Two - Artist [\(b)].m4a"))
+        // spotDL writes straight into the folder, so a song on its way can already have a file.
+        try? Data("half a song".utf8).write(to: folder.appendingPathComponent("03 Song Three - Artist [\(c)].m4a"))
         try? Data("secret".utf8).write(to: temp.appendingPathComponent("private.txt"))
         KnobShiftPlaylists.save(.init(playlists: [list]))
 
@@ -180,7 +192,12 @@ enum KnobShiftLinkCheck {
         row.playlistId = list.id
         row.spotifyName = "Song Three"
         row.waitingForDownload = true
-        model.pending = [row]
+        let d = id(4)
+        var broken = row
+        broken.spotifyId = d
+        broken.spotifyName = "Song Four"
+        broken.failure = "YouTube paused"
+        model.pending = [row, broken]
         let port: UInt16 = await withCheckedContinuation { continuation in
             KnobShiftLinkServer.shared.start(model: model, advertise: false) { continuation.resume(returning: $0) }
         }
@@ -189,10 +206,15 @@ enum KnobShiftLinkCheck {
             let library = try KnobShiftLink.decoder().decode(KnobShiftLink.Library.self, from: try await client.get("/v1/library"))
             let songs = library.playlists.first?.songs ?? []
             expect(library.version == KnobShiftLink.version && library.playlists.count == 1, "the library is read")
-            expect(songs.map(\.id) == [a, b, c], "its songs come in the playlist's order")
+            expect(songs.map(\.id) == [a, b, c, d], "its songs come in the playlist's order")
             expect(songs.first?.size == Int64(first.count) && songs.first?.name == "Song One" && songs.first?.artist == "Artist", "with sizes and names")
-            expect(songs.last?.file == nil && songs.last?.name == "Song Three" && library.playlists.first?.downloading == true,
+            expect(songs[2].file == nil && songs[2].name == "Song Three" && library.playlists.first?.downloading == true,
                    "a song still downloading is listed without a file")
+            expect(songs[3].file == nil && songs[3].problem == "YouTube paused", "a song the Mac could not get carries the reason")
+            do {
+                try await client.download(KnobShiftLink.filePath(playlistId: list.id, songId: c), to: temp.appendingPathComponent("half.part"), expected: nil)
+                expect(false, "a half written song is not sent")
+            } catch { expect(true, "a half written song is not sent") }
 
             let target = temp.appendingPathComponent("copy.part")
             try await client.download(KnobShiftLink.filePath(playlistId: list.id, songId: a), to: target, expected: songs.first?.size)

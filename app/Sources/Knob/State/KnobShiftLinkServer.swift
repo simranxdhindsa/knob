@@ -112,6 +112,9 @@ final class KnobShiftLinkServer {
                   let file = KnobShiftPlaylists.files(in: KnobShiftPlaylists.folder(for: playlist))[path[2]] else {
                 return Self.reply(connection, status: 404, text: "This song is not on the Mac any more.")
             }
+            guard !model.pending.contains(where: { $0.playlistId == playlist.id && $0.spotifyId == path[2] && $0.waitingForDownload }) else {
+                return Self.reply(connection, status: 404, text: "This song is still downloading on your Mac.")
+            }
             Self.stream(file, on: connection)
             model.log("LINK", "Sending \(file.lastPathComponent) to the iPhone.")
         case ("POST", ["add"]):
@@ -131,11 +134,18 @@ final class KnobShiftLinkServer {
     // MARK: What the Mac offers
 
     /// Every playlist with its songs in order. Downloaded songs carry their file; songs still on
-    /// their way are listed only while the Mac is still getting them (not ones it could not find).
+    /// their way have none yet, even if spotDL has started writing one; songs the Mac could not
+    /// get carry the reason.
     static func library(of model: KnobShiftModel) -> KnobShiftLink.Library {
         var waiting: [String: [String: KnobShiftModel.PendingSong]] = [:]
-        for song in model.pending where song.failure == nil {
-            if let playlist = song.playlistId, let id = song.spotifyId { waiting[playlist, default: [:]][id] = song }
+        var failed: [String: [String: KnobShiftModel.PendingSong]] = [:]
+        for song in model.pending {
+            guard let playlist = song.playlistId, let id = song.spotifyId else { continue }
+            if song.failure == nil {
+                waiting[playlist, default: [:]][id] = song
+            } else if song.waitingForDownload {
+                failed[playlist, default: [:]][id] = song
+            }
         }
         var names: [String: (String, String?)] = [:]
         for track in model.tracks { if let id = track.spotifyId { names[id] = (track.name, track.artist) } }
@@ -143,7 +153,11 @@ final class KnobShiftLinkServer {
             let files = KnobShiftPlaylists.files(in: KnobShiftPlaylists.folder(for: playlist))
             let skipped = Set(playlist.skipped ?? [])
             let songs = playlist.spotifyOrder.filter { !skipped.contains($0) }.compactMap { id -> KnobShiftLink.Library.Song? in
-                if let file = files[id] {
+                if let row = failed[playlist.id]?[id] {
+                    return .init(id: id, file: nil, size: nil, name: row.name, artist: row.artist, problem: row.failure)
+                }
+                let onItsWay = waiting[playlist.id]?[id]?.waitingForDownload == true
+                if !onItsWay, let file = files[id] {
                     let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init)
                     let split = KnobShiftModel.Track.split(file.deletingPathExtension().lastPathComponent)
                     return .init(id: id, file: file.lastPathComponent, size: size,

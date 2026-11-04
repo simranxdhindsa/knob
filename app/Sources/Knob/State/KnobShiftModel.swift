@@ -330,6 +330,13 @@ final class KnobShiftModel: ObservableObject {
             retryDownload(song)
             return
         }
+        #else
+        // The Mac does the downloading: the next sync brings the song or says what is wrong.
+        if song.waitingForDownload {
+            pending[index].failure = nil
+            pending[index].stage = "Coming on the next sync"
+            return
+        }
         #endif
         pending[index].failure = nil
         pending[index].progress = 0

@@ -21,6 +21,7 @@ struct PhoneMacSheet: View {
     @ObservedObject private var link = PhoneMacLink.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.scenePhase) private var phase
     @State var source: Source
     @State private var text = ""
     @State private var declinedCount = KnobShiftSyncPlan.declined.count
@@ -41,6 +42,14 @@ struct PhoneMacSheet: View {
         .tint(Palette.accent)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .onAppear { link.startWatching() }
+        .onDisappear { link.stopWatching() }
+        .onChange(of: phase) { _, now in
+            // iOS stops the watching in the background, so it starts afresh on return.
+            guard now == .active else { return }
+            link.stopWatching()
+            link.startWatching()
+        }
     }
 
     private var header: some View {
@@ -67,7 +76,7 @@ struct PhoneMacSheet: View {
     private var linkForm: some View {
         VStack(alignment: .leading, spacing: 10) {
             LinkField(placeholder: source == .spotify ? "Paste a Spotify playlist, album or song link" : "Paste a YouTube video, playlist or album link",
-                      text: $text, enabled: !link.busy, pasteHelp: "Paste the copied link", addHelp: "Add these songs",
+                      text: $text, enabled: !link.busy && link.connected, pasteHelp: "Paste the copied link", addHelp: "Add these songs",
                       onPaste: { text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" },
                       onAdd: add)
             Text("Knob on your Mac downloads the songs and sends them to this iPhone over Wi-Fi, so keep it open on the same Wi-Fi. Keep only music you have the right to keep.")
@@ -89,9 +98,12 @@ struct PhoneMacSheet: View {
             HStack(spacing: 10) {
                 Image(systemName: "laptopcomputer").font(.system(size: 16)).foregroundStyle(Glass.secondary)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(link.macName ?? "Your Mac").font(.system(size: 13, weight: .semibold)).foregroundStyle(Glass.text)
-                    Text("Spotify and YouTube playlists from Knob on your Mac")
-                        .font(.system(size: 10)).foregroundStyle(Glass.secondary)
+                    Text(link.connected ? link.macName ?? "Your Mac" : "Your Mac").font(.system(size: 13, weight: .semibold)).foregroundStyle(Glass.text)
+                    HStack(spacing: 5) {
+                        Circle().fill(link.connected ? Palette.accent : Glass.secondary).frame(width: 6, height: 6)
+                        Text(presenceText).font(.system(size: 10)).foregroundStyle(Glass.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Spacer()
             }
@@ -107,13 +119,13 @@ struct PhoneMacSheet: View {
                     Text(syncLabel)
                 }
                 .transaction { $0.animation = nil }
-                .font(.system(size: 12, weight: .bold)).tracking(0.8).foregroundStyle(Glass.onAccent)
+                .font(.system(size: 12, weight: .bold)).tracking(0.8).foregroundStyle(canSync ? Glass.onAccent : Glass.secondary)
                 .frame(maxWidth: .infinity).frame(height: 44)
-                .background(Capsule().fill(link.busy ? Glass.secondary.opacity(0.5) : Palette.accent))
-                .shadow(color: Palette.accentGlow.opacity(link.busy ? 0 : 0.35), radius: 8)
+                .background(Capsule().fill(canSync ? AnyShapeStyle(Palette.accent) : AnyShapeStyle(Glass.fill)))
+                .shadow(color: Palette.accentGlow.opacity(canSync ? 0.35 : 0), radius: 8)
             }
             .buttonStyle(.plain)
-            .disabled(link.busy)
+            .disabled(!canSync)
             .accessibilityHint("Copies the playlists your Mac has to this iPhone")
             if link.phase == .syncing, link.toCopy > 0 {
                 ProgressView(value: Double(link.copied), total: Double(link.toCopy)).tint(Palette.accent)
@@ -137,9 +149,26 @@ struct PhoneMacSheet: View {
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Glass.fill))
     }
 
+    private var canSync: Bool { link.connected && !link.busy }
+
+    private var presenceText: String {
+        switch link.presence {
+        case .looking: return "Looking for your Mac"
+        case .found: return "Connected"
+        case .missing: return "Not found. Open Knob on your Mac, on the same network as this iPhone."
+        case .blocked: return "Allow Local Network for Knob in Settings."
+        }
+    }
+
     private var syncLabel: String {
         switch link.phase {
-        case .idle: return "SYNC FROM MAC"
+        case .idle:
+            switch link.presence {
+            case .found: return "SYNC FROM MAC"
+            case .looking: return "LOOKING FOR YOUR MAC"
+            case .missing: return "MAC NOT FOUND"
+            case .blocked: return "LOCAL NETWORK IS OFF"
+            }
         case .looking: return "LOOKING FOR YOUR MAC"
         case .adding: return "YOUR MAC IS READING"
         case .syncing: return link.toCopy > 0 ? "COPYING \(link.copied) OF \(link.toCopy)" : "SYNCING"
