@@ -24,6 +24,9 @@ it starts at the old song's last hook and brings the next singer in over the old
 - Every preset has an icon, and presets you save get their own
 - If YouTube blocks downloads, you can choose to continue with your own YouTube sign in from your browser; it is off unless you turn it on
 - Knob prepares two songs at a time on your Mac, so big playlists are ready sooner
+- The KnobShift player on your Mac has the iPhone's modern look: the song's cover and colours fill the window, and the orange Play dial lights its marks as the song plays; turn its ring to move through the song
+- The sound visualiser moves smoothly, and shows under the effects only, so the equalizer stays clear
+- Your playlists in the queue now hide behind a button, so the queue shows your songs first
 
 ### Fixes
 
@@ -39,6 +42,8 @@ it starts at the old song's last hook and brings the next singer in over the old
 - Songs without a clear last chorus now mix over about 12 seconds, so the next song no longer arrives all at once
 - Fixed a mix where the next song played only its beats for a while: its voice now always starts on time
 - Fixed vocals being heard twice during a mix
+- After an iPhone update, your songs are ready at once instead of being prepared again one by one
+- Songs Spotify or YouTube could not find are no longer searched for again every time Knob starts; Retry still tries them
 - Mix effects always rise from nothing instead of starting at full strength
 - KnobMix now finds a song's last chorus even when the music does not break before it
 - A song on iPhone is no longer treated as an instrumental when its voice could not be read
