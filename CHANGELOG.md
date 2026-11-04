@@ -38,6 +38,7 @@ it starts at the old song's last hook and brings the next singer in over the old
 - The new singer no longer keeps a reverb after an echo out mix
 - Songs without a clear last chorus now mix over about 12 seconds, so the next song no longer arrives all at once
 - Fixed a mix where the next song played only its beats for a while: its voice now always starts on time
+- Fixed vocals being heard twice during a mix
 - Mix effects always rise from nothing instead of starting at full strength
 - KnobMix now finds a song's last chorus even when the music does not break before it
 - A song on iPhone is no longer treated as an instrumental when its voice could not be read

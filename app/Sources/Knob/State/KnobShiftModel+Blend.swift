@@ -245,8 +245,6 @@ extension KnobShiftModel {
             // With its voice held back separately, the new song's melody can come through too.
             secondaryDeck.beatsOnly = pivot > 0.02 ? (blendHasStems ? 0.5 : 1) : 0
             try startEngineIfNeeded()
-            // Both decks share the engine's render clock, so a start time on the outgoing
-            // deck's timeline is sample-accurate for the incoming deck too.
             // In a sung mix the new song only starts where its beats come in, so none of its
             // intro is used up while it would be silent. Locked, that wait is a whole number of
             // the old song's strong beats, so the beat lock holds.
@@ -309,17 +307,12 @@ extension KnobShiftModel {
                 guard let drums = next.analysis.beatEntry else { return entryShare }
                 return min(max((entryWait + max(0, drums - lock.incomingStart)) / max(duration, 0.1), entryShare), 1)
             }()
-            // On the host clock, shared by every part, even with no wait, so the new song's separated
-            // music and voice start together. Never on a sample count: each part counts only while
-            // it plays, so one that sat idle runs behind and started seconds late, voice last.
-            if primaryDeck.player.lastRenderTime?.isSampleTimeValid == true {
-                let startAt = KnobShiftDeck.startTime(after: max(wait, 0.05))
-                secondaryDeck.player.play(at: startAt)
-                secondaryDeck.voice.play(at: startAt)
-            } else {
-                secondaryDeck.player.play()
-                secondaryDeck.voice.play()
-            }
+            // On the host clock, even with no wait, so the new song's separated music and voice start
+            // together. Never on a sample count: a part's clock runs at the speed of the stretch
+            // after it, so the decks' clocks drift apart and one deck started seconds off the other.
+            let startAt = KnobShiftDeck.startTime(after: max(wait, 0.05))
+            secondaryDeck.player.play(at: startAt)
+            secondaryDeck.voice.play(at: startAt)
             log("DECK", "\(secondaryDeck.name) loaded \(next.title) from \(Self.seconds(lock.incomingStart)) at volume 0, speed \(String(format: "%.3f", secondaryDeck.rate)), bass and melody held back so only its beats come in.")
 
             let started = Date().addingTimeInterval(lock.delay)

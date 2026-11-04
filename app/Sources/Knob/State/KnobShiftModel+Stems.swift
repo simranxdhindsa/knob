@@ -71,24 +71,40 @@ extension KnobShiftModel {
             return false
         }
         let lead = 0.2
-        let position = deck.startOffset + Double(playerTime.sampleTime) / playerTime.sampleRate + lead
+        let position = deck.startOffset + Double(playerTime.sampleTime) / playerTime.sampleRate + lead * deck.rate
+        // Still on the parts it arrived on: a second voice would queue behind the first and sing
+        // lines over again, so this song leaves whole.
+        guard position >= deck.arrivalStemsEnd else {
+            log("STEMS", "\(current.title) is still on the parts it arrived on, so it leaves whole.")
+            return false
+        }
         let rate = music.processingFormat.sampleRate
         let skip = AVAudioFramePosition(((position - stems.start) * rate).rounded())
         let frames = min(music.length, vocals.length) - skip
         guard skip >= 0, frames > AVAudioFramePosition(rate) else { return false }
+        // A fade cut short by a pause must not leave the file part down.
+        deck.fileLevel = 1
         deck.musicStemLevel = 0
         deck.voiceLevel = 0
+        // A node left playing would start these at once, not at `startAt`.
+        deck.musicStem.stop()
+        deck.voice.stop()
         deck.musicStem.scheduleSegment(music, startingFrame: skip, frameCount: AVAudioFrameCount(frames), at: nil)
         // The voice path runs a few milliseconds late, so its part starts that much further in.
         let lag = AVAudioFramePosition((deck.voiceLatency * rate).rounded())
         deck.voice.scheduleSegment(vocals, startingFrame: skip + lag, frameCount: AVAudioFrameCount(frames - lag), at: nil)
-        let startAt = KnobShiftDeck.startTime(after: lead)
+        // From the moment `position` was read, so the parts land on the file they replace.
+        let startAt = nodeTime.isHostTimeValid
+            ? AVAudioTime(hostTime: nodeTime.hostTime + AVAudioTime.hostTime(forSeconds: lead))
+            : KnobShiftDeck.startTime(after: lead)
         deck.musicStem.play(at: startAt)
         deck.voice.play(at: startAt)
         log("STEMS", String(format: "%@ switches to its separated music and voice at %.2fs, crossfaded, so its voice alone can be pressed down.", current.title, position))
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(lead + 0.03))
             for step in 1...8 {
+                // Next, Stop or a seek reloaded the deck: its levels are no longer this fade's.
+                guard deck.musicStem.isPlaying else { return }
                 let share = Float(step) / 8
                 deck.fileLevel = 1 - share
                 deck.musicStemLevel = share
@@ -108,8 +124,13 @@ extension KnobShiftModel {
             for (wait, pause) in [(0.0, 0.0), (5, 5), (15, 10), (30, 15)] {
                 try? await Task.sleep(for: .seconds(pause))
                 guard let self, self.nowPlaying?.id == track.id, self.primaryDeck === deck else { return }
-                self.log("VOICE", String(format: "%@ %.0fs after the mix: voice part %@ at %.0f%%, music part %.0f%%, file %.0f%%, pressed %.0f%%, hall %.0f%%, sweep %.0f%%, deck volume %.0f%%, speed %.3f.",
-                                         track.title, wait, deck.voice.isPlaying ? "playing" : "stopped", deck.voiceLevel * 100, deck.musicStemLevel * 100,
+                let now = deck.player.lastRenderTime
+                let clock = { (node: AVAudioPlayerNode) -> Double in
+                    guard let now, let time = node.playerTime(forNodeTime: now), time.sampleRate > 0 else { return 0 }
+                    return Double(time.sampleTime) / time.sampleRate
+                }
+                self.log("VOICE", String(format: "%@ %.0fs after the mix: voice clock %.2fs, music clock %.2fs, voice part %@ at %.0f%%, music part %.0f%%, file %.0f%%, pressed %.0f%%, hall %.0f%%, sweep %.0f%%, deck volume %.0f%%, speed %.3f.",
+                                         track.title, wait, clock(deck.voice), clock(deck.player), deck.voice.isPlaying ? "playing" : "stopped", deck.voiceLevel * 100, deck.musicStemLevel * 100,
                                          deck.fileLevel * 100, deck.voicePress * 100, deck.voiceReverb * 100, deck.sweep * 100, deck.volume * 100, deck.rate))
             }
         }
@@ -134,6 +155,7 @@ extension KnobShiftModel {
                 let lag = AVAudioFramePosition((deck.voiceLatency * music.processingFormat.sampleRate).rounded())
                 deck.voice.scheduleSegment(vocals, startingFrame: skip + lag, frameCount: AVAudioFrameCount(stemFrames - lag), at: nil)
                 deck.voiceLevel = 0
+                deck.arrivalStemsEnd = start + Double(stemFrames) / music.processingFormat.sampleRate
                 log("STEMS", String(format: "%@ comes in as music and voice side by side for %.1fs, then its original file.",
                                     next.title, Double(stemFrames) / music.processingFormat.sampleRate))
                 return true
