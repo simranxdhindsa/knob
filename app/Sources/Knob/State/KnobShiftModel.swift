@@ -117,6 +117,9 @@ final class KnobShiftModel: ObservableObject {
         var failure: String?
         /// Where it joins the queue once prepared (a song synced from the Mac); nil adds it at the end.
         var placement: KnobShiftSyncPlan.Placement? = nil
+        /// False for a song on its way into a playlist only (an import or a sync): it stays out
+        /// of the queue, and once downloaded and prepared it waits in its playlist, ready to add.
+        var joinsQueue = true
         var title: String { url.deletingPathExtension().lastPathComponent }
         /// "Title - Artist" file names split the same way as ready songs.
         var name: String { spotifyName ?? Track.split(title).name }
@@ -320,8 +323,18 @@ final class KnobShiftModel: ObservableObject {
     func enqueueFiles(_ urls: [URL]) -> Bool {
         var known = Set(tracks.map { $0.url.standardizedFileURL.path })
         known.formUnion(pending.map { $0.url.standardizedFileURL.path })
+        // A song still on its way into its playlist joins the queue where it is, instead of twice.
+        let wanted = Set(urls.map { $0.standardizedFileURL.path })
+        var promoted = false
+        for index in pending.indices where !pending[index].joinsQueue && wanted.contains(pending[index].url.standardizedFileURL.path) {
+            pending[index].joinsQueue = true
+            promoted = true
+        }
         let new = urls.filter { known.insert($0.standardizedFileURL.path).inserted }
-        guard !new.isEmpty else { return false }
+        guard !new.isEmpty else {
+            if promoted { persistQueue() }
+            return promoted
+        }
         log("IMPORT", "Added \(new.count) song(s) to the queue. Preparing them one by one.")
         pending.append(contentsOf: new.map { url in
             var row = PendingSong(url: url)
@@ -369,8 +382,11 @@ final class KnobShiftModel: ObservableObject {
 
     func isQueued(_ url: URL) -> Bool {
         let path = url.standardizedFileURL
-        return tracks.contains { $0.url.standardizedFileURL == path } || pending.contains { $0.url.standardizedFileURL == path }
+        return tracks.contains { $0.url.standardizedFileURL == path } || pending.contains { $0.joinsQueue && $0.url.standardizedFileURL == path }
     }
+
+    /// The waiting rows the queue shows: not songs on their way into a playlist only.
+    var queuePending: [PendingSong] { pending.filter(\.joinsQueue) }
 
     /// When a newly ready song becomes the next one while music plays, plan the mix into it.
     func refreshPlanIfNeeded() {

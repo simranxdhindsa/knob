@@ -92,6 +92,6 @@ extension KnobShiftModel {
 
     /// Empties the queue.
     func removeAll() {
-        remove(ids: Set(tracks.map(\.id)).union(pending.map(\.id)), remembers: false)
+        remove(ids: Set(tracks.map(\.id)).union(queuePending.map(\.id)), remembers: false)
     }
 }

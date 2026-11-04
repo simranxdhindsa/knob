@@ -27,13 +27,6 @@ extension KnobShiftModel {
 
     var spotifyAvailable: Bool { KnobShiftSpotDL.isAvailable }
 
-    /// Songs of a playlist in the queue, ready or on their way.
-    func songCount(in playlist: KnobShiftPlaylist) -> (ready: Int, total: Int) {
-        let ready = tracks.reduce(0) { $0 + ($1.playlistId == playlist.id ? 1 : 0) }
-        let waiting = pending.reduce(0) { $0 + ($1.playlistId == playlist.id ? 1 : 0) }
-        return (ready, ready + waiting)
-    }
-
     /// Spotify ids already in the queue, ready or on their way; one pass, so checking thousands
     /// of songs stays instant.
     func queuedSpotifyIds(in playlistId: String? = nil) -> Set<String> {
@@ -212,8 +205,9 @@ extension KnobShiftModel {
         addSpotifyRows(for: wanted, playlist: playlist)
     }
 
-    /// Queue rows for songs not in the queue yet: downloaded ones are prepared, the rest wait for
-    /// their download. All rows are added in one change, so thousands appear without a stall.
+    /// Rows for the playlist's songs: downloaded ones are prepared, the rest wait for their
+    /// download. They stay out of the queue and wait in the playlist once ready, where the
+    /// Playlists view adds them. All rows are added in one change, so thousands appear without a stall.
     func addSpotifyRows(for songs: [KnobShiftSpotDL.Song], playlist: KnobShiftPlaylist, unavailable: Set<String> = []) {
         let folder = KnobShiftPlaylists.folder(for: playlist)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -227,6 +221,7 @@ extension KnobShiftModel {
             row.playlistId = playlist.id
             row.spotifyName = song.name
             row.spotifyArtist = song.artists.joined(separator: ", ")
+            row.joinsQueue = false
             if files[song.song_id] == nil {
                 row.waitingForDownload = true
                 if unavailable.contains(song.song_id) {
@@ -245,7 +240,7 @@ extension KnobShiftModel {
         }
         if rows.count > toDownload.count { Task { await processPending() } }
         if toDownload.isEmpty {
-            spotifyStatus = rows.isEmpty ? "\(playlist.name) is up to date." : "Added \(rows.count) song\(rows.count == 1 ? "" : "s") from \(playlist.name)."
+            spotifyStatus = rows.isEmpty ? "\(playlist.name) is up to date." : "\(rows.count) song\(rows.count == 1 ? " is" : "s are") ready in \(playlist.name). Open it from Playlists to add them."
         } else {
             enqueueDownload(playlist, songs: toDownload)
         }

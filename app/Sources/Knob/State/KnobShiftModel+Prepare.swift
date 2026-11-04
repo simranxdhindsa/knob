@@ -98,6 +98,14 @@ extension KnobShiftModel {
             let origin = KnobShiftPlaylists.origin(of: song.url, in: playlists)
             track.spotifyId = song.spotifyId ?? origin?.spotifyId
             track.playlistId = song.playlistId ?? origin?.playlistId
+            // A playlist only song is prepared for later: its result is saved, so adding it from
+            // its playlist is instant. It may have been added to the queue meanwhile.
+            guard pending.first(where: { $0.id == song.id })?.joinsQueue ?? true else {
+                cover?.cancel()
+                pending.removeAll { $0.id == song.id }
+                logAnalysis(result)
+                return
+            }
             if let cover {
                 await cover.value
                 reveal(track.id)

@@ -293,7 +293,8 @@ final class PhoneMacLink: ObservableObject {
         return model.tracks.compactMap { id($0.url, $0.spotifyId) } + model.pending.compactMap { id($0.url, $0.spotifyId) }
     }
 
-    /// The playlists and the new queue rows, all in one change, so the songs show at once.
+    /// The playlists and the rows for their new songs, all in one change. The rows stay out of
+    /// the queue: each song is prepared once it is here and then waits in its playlist.
     private func apply(_ plan: KnobShiftSyncPlan.Result, to model: KnobShiftModel) {
         model.playlists = plan.playlists
         model.savePlaylists()
@@ -316,6 +317,8 @@ final class PhoneMacLink: ObservableObject {
             song.waitingForDownload = row.waiting
             song.stage = row.waiting ? (coming.contains(row.songId) ? "Coming from your Mac" : "Downloading on your Mac") : nil
             song.placement = row.placement
+            // Synced songs wait in their playlist, ready to add from the Playlists view.
+            song.joinsQueue = false
             return song
         }
         guard !rows.isEmpty else { return }

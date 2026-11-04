@@ -8,3 +8,4 @@ KnobShiftScreen
 KnobShiftNowPlaying
 KnobShiftQueue
 KnobShiftAddMusic
+KnobShiftPlaylistsView
