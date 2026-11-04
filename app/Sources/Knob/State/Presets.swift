@@ -6,6 +6,25 @@ struct Preset: Hashable, Identifiable {
     let url: URL
     var id: URL { url }
 
+    /// This preset's menu icon. A factory preset has its own. A saved one gets a random looking
+    /// pick from `customIcons`, worked out from its name so it never changes between launches.
+    var icon: String {
+        Preset.factoryIcons[name] ?? Preset.customIcons[name.unicodeScalars.reduce(5381) { ($0 &* 33 &+ Int($1.value)) & 0xFFFFFF } % Preset.customIcons.count]
+    }
+
+    private static let factoryIcons = [
+        "Default": "dial.medium", "General": "slider.horizontal.3", "Music": "music.note", "Voice": "mic",
+        "Volume Boost": "speaker.wave.3", "Gaming": "gamecontroller", "Classic Processing": "waveform",
+        "Light Processing": "waveform.path", "Bass Boost": "hifispeaker", "Streaming Video": "play.rectangle",
+        "Movies": "film", "TV": "tv", "Transcription": "text.bubble"
+    ]
+
+    static let customIcons = [
+        "star", "heart", "bolt", "flame", "leaf", "moon", "sun.max", "cloud", "drop", "snowflake",
+        "sparkles", "crown", "guitars", "headphones", "pianokeys", "music.mic", "radio", "wand.and.stars",
+        "paperplane", "car", "bicycle", "pawprint", "hare", "globe"
+    ]
+
     /// Factory presets, then the user's own (alphabetical).
     static func all() -> [Preset] { factory() + user() }
 

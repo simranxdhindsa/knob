@@ -7,6 +7,8 @@ struct PillMenu<Item: Hashable>: View {
     let selection: Item?
     let title: (Item) -> String
     let placeholder: String
+    /// An SF Symbol beside each choice in the open menu.
+    var icon: ((Item) -> String)? = nil
     let onSelect: (Item) -> Void
 
     @Environment(\.colorScheme) private var scheme
@@ -19,8 +21,15 @@ struct PillMenu<Item: Hashable>: View {
         let p = Palette.of(scheme)
         Menu {
             ForEach(items, id: \.self) { item in
-                Button { onSelect(item) } label: {
-                    if item == selection { Label(title(item), systemImage: "checkmark") } else { Text(title(item)) }
+                if let icon {
+                    // A toggle, so the chosen one keeps its tick beside its own icon.
+                    Toggle(isOn: Binding(get: { item == selection }, set: { _ in onSelect(item) })) {
+                        Label(title(item), systemImage: icon(item))
+                    }
+                } else {
+                    Button { onSelect(item) } label: {
+                        if item == selection { Label(title(item), systemImage: "checkmark") } else { Text(title(item)) }
+                    }
                 }
             }
         } label: {

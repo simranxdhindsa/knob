@@ -143,7 +143,7 @@ struct PresetBar: View {
                 HardwareIconButton(systemImage: "xmark", label: "Cancel") { naming = false }
             } else {
                 PillMenu(items: model.presets, selection: model.currentPreset, title: { $0.name },
-                         placeholder: "Choose a preset") { model.select($0) }
+                         placeholder: "Choose a preset", icon: \.icon) { model.select($0) }
                 HardwareIconButton(systemImage: "chevron.left", label: "Previous preset") { model.stepPreset(-1) }
                 HardwareIconButton(systemImage: "chevron.right", label: "Next preset") { model.stepPreset(1) }
                 HardwareIconButton(systemImage: "square.and.arrow.down", label: "Save as a new preset") {
