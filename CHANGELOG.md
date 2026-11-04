@@ -14,6 +14,9 @@ fixes. Knob updates itself, so installed copies get every version below on their
 
 - A song whose voice ends a couple of seconds before it does no longer squeezes the whole mix into its last 2 seconds; it leaves at an earlier break instead
 - The new singer no longer keeps a reverb after an echo out mix
+- Songs without a clear last chorus now mix gradually over about 20 seconds, so the next song no longer arrives all at once
+- KnobMix now finds a song's last chorus even when the music does not break before it, and the next song starts just before its first verse instead of from its intro
+- A song on iPhone is no longer treated as an instrumental when its voice could not be read
 
 ## 3.0
 

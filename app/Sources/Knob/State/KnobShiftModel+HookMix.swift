@@ -3,7 +3,7 @@ import Foundation
 /// The sung mix, from the old song's last hook into the next song:
 /// 1. The old song keeps playing its beats while its voice alone is pressed down: compressed
 ///    and muffled as if behind a wall, into a hall. Its speed and pitch stay as they are.
-/// 2. The new song comes in up to 3 seconds before its voice, from the beginning of the mix when
+/// 2. The new song comes in up to 2 seconds before its voice, from the beginning of the mix when
 ///    it can, in a hall and muffled, so it never just appears: in time with the old beats when the
 ///    tempos lock; starting a little slow, reaching its own speed with its voice, when they cannot.
 /// 3. The new voice comes in half way to the old voice's last words; the pressed old voice sinks under it,

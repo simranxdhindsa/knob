@@ -93,7 +93,7 @@ enum KnobShiftMixTests {
         var start: TimeInterval
         if let handoffAt {
             start = handoffAt
-        } else if let hook = track.analysis.lastHookStart, hook <= voiceEnd - KnobShiftPlan.shortestRunUp, end - hook >= KnobShiftPlan.shortestMix {
+        } else if let hook = track.analysis.lastHookStart, hook <= voiceEnd - KnobShiftPlan.shortestWords, end - hook >= KnobShiftPlan.shortestMix {
             start = hook
         } else {
             start = KnobShiftPlan.runUpStart(track.analysis, voiceEnd: voiceEnd, bar: bar(track))
@@ -170,9 +170,9 @@ enum KnobShiftMixTests {
     private static func constants() {
         print("The numbers the rules are built on")
         expect(KnobShiftPlan.targetMix == 8 && KnobShiftPlan.shortestMix == 6 && KnobShiftPlan.longestMix == 16, "a mix aims at 8s, between 6 and 16")
-        expect(KnobShiftPlan.handover == 0.5 && KnobShiftPlan.leastOverlap == 0.25 && KnobShiftPlan.mostTogether(bar: 1) == 5 && KnobShiftPlan.mostTogether(bar: 1.8) == 7.2 && KnobShiftPlan.mostTogether(bar: 3) == 8 && KnobShiftPlan.shortestWords == 4 && KnobShiftPlan.introLead == 3 && KnobShiftPlan.introSpeed == 0.92 && KnobShiftPlan.washEnds == 2.5 && KnobShiftPlan.voiceRing == 3
+        expect(KnobShiftPlan.handover == 0.5 && KnobShiftPlan.leastOverlap == 0.25 && KnobShiftPlan.mostTogether(bar: 1) == 5 && KnobShiftPlan.mostTogether(bar: 1.8) == 7.2 && KnobShiftPlan.mostTogether(bar: 3) == 8 && KnobShiftPlan.shortestWords == 4 && KnobShiftPlan.introLead == 2 && KnobShiftPlan.introSpeed == 0.92 && KnobShiftPlan.washEnds == 2.5 && KnobShiftPlan.voiceRing == 3
                && KnobShiftPlan.longestPress == 30,
-               "the voices overlap by at least 0.25s and at most four bars (5 to 8s), the old voice gets at least 4s, up to 3s of intro, the old voice rings 3s, at most 30s of pressing")
+               "the voices overlap by at least 0.25s and at most four bars (5 to 8s), the old voice gets at least 4s, up to 2s of intro, the old voice rings 3s, at most 30s of pressing")
         expect(KnobShiftPlan.tail(bar: 2.5) == 7.5 && KnobShiftPlan.tail(bar: 1.4) == 6 && KnobShiftPlan.tail(bar: 4) == 8,
                "three bars of the old song after its last words, 6 to 8s")
     }
@@ -182,9 +182,9 @@ enum KnobShiftMixTests {
         let current = song("Hook", duration: 200, voice: 12...170, hook: 160)
         let plan = KnobShiftPlan.make(from: current, to: next)
         expect(near(plan.start, 160), "it starts at the hook, 2:40 (\(KnobShiftPlan.clock(plan.start)))")
-        expect(near(plan.voiceEnd ?? 0, 170) && near(plan.handoff, 162) && near(plan.duration, 17.5),
-               "last words 2:50, the new song at 2:42, its voice half way to them, 17.5s in all (\(f(plan.duration))s)")
-        expect(near(plan.incomingOffset, 13) && plan.beatsBeforeVoice.map { near($0, 3) } == true, "the new song starts at 0:13, 3s before its voice")
+        expect(near(plan.voiceEnd ?? 0, 170) && near(plan.handoff, 163) && near(plan.duration, 17.5),
+               "last words 2:50, the new song at 2:43, its voice half way to them, 17.5s in all (\(f(plan.duration))s)")
+        expect(near(plan.incomingOffset, 14) && plan.beatsBeforeVoice.map { near($0, 2) } == true, "the new song starts at 0:14, 2s before its voice")
         checkSung(plan, from: current, to: next, "hook at 2:40", voiceEnd: 170)
         // A hook 30s ahead of the last words is still the start.
         let early = song("Early", duration: 200, voice: 12...170, hook: 140)
@@ -202,10 +202,10 @@ enum KnobShiftMixTests {
         expect(near(outroPlan.start, 110), "a long outro changes nothing, it starts at the hook (\(KnobShiftPlan.clock(outroPlan.start)))")
         expect(outroPlan.start + outroPlan.duration <= 120 + KnobShiftPlan.longestTail + 0.01, "the long outro is skipped")
         checkSung(outroPlan, from: outro, to: next, "30s of outro", voiceEnd: 120)
-        // A hook 5 seconds before the last words is too close: the mix gets its run up instead.
+        // A hook 5 seconds before the last words is still the start, however little is left.
         let late = song("Late", duration: 200, voice: 12...197, hook: 192)
         let latePlan = KnobShiftPlan.make(from: late, to: next)
-        expect(near(latePlan.start, 182) && near(latePlan.duration, 18), "8s left after the hook: too close, 15s of run up and then the end, 18s (\(f(latePlan.duration))s)")
+        expect(near(latePlan.start, 192) && near(latePlan.duration, 8), "8s left after the hook, 5s before the last words: it starts there and runs to the end, 8s (\(f(latePlan.duration))s)")
         checkSung(latePlan, from: late, to: next, "hook 8s from the end", voiceEnd: 197)
         // So is one 3 seconds before them.
         let last = song("Last", duration: 200, voice: 12...197, hook: 194)
@@ -263,7 +263,7 @@ enum KnobShiftMixTests {
         expect(near(hookedPlan.start, 190), "its last hook, 3:10, is the start (\(KnobShiftPlan.clock(hookedPlan.start)))")
         checkSung(hookedPlan, from: hooked, to: next, "sings to the end, hook", voiceEnd: 210.64)
         let nearHook = song("NearHook", tempo: 86, duration: 222, voice: 12...221.5, lastLine: 177.75, breaks: [180, 210.64], hook: 202)
-        expect(near(KnobShiftPlan.make(from: nearHook, to: next).start, expectedStart(nearHook, voiceEnd: 210.64)), "a hook 8s before the break is too close, the mix gets its run up")
+        expect(near(KnobShiftPlan.make(from: nearHook, to: next).start, 202), "a hook 8s before the break is the start")
         // A hook after the cut point is after the voice has ended: it is not used.
         let late = song("LateHook", tempo: 86, duration: 222, voice: 12...221.5, lastLine: 177.75, breaks: [180, 210.64], hook: 215)
         expect(near(KnobShiftPlan.make(from: late, to: next).start, expectedStart(late, voiceEnd: 210.64)), "a hook after the cut point is ignored")
@@ -324,10 +324,10 @@ enum KnobShiftMixTests {
             expect(near(plan.start, 120) && near(plan.duration, 30 + tail), "\(Int(tempo)) BPM: the hook is 30s before the last words, so 30s of pressing and a \(f(tail))s tail make \(f(plan.duration))s")
             checkSung(plan, from: current, to: partner, "\(Int(tempo)) BPM", voiceEnd: 150)
         }
-        // A hook 5s before the last words is too close: the run up, then the tail.
+        // A hook 5s before the last words is still the start (No Luck's is 4.6s).
         let five = song("Five", duration: 200, voice: 12...150, hook: 145)
         let fivePlan = KnobShiftPlan.make(from: five, to: next)
-        expect(near(fivePlan.start, 135) && near(fivePlan.duration, 22.5), "a hook 5s before the last words: a 22.5s mix (\(f(fivePlan.duration))s)")
+        expect(near(fivePlan.start, 145) && near(fivePlan.duration, 12.5), "a hook 5s before the last words is the start: a 12.5s mix (\(f(fivePlan.duration))s)")
         checkSung(fivePlan, from: five, to: next, "hook 5s before the last words", voiceEnd: 150)
         // So is a hook 2s before them.
         let two = song("Two", duration: 200, voice: 12...150, hook: 148)
@@ -347,7 +347,7 @@ enum KnobShiftMixTests {
         let current = song("Old", tempo: 96, duration: 200, voice: 12...170, hook: 150)
         let same = song("Same", tempo: 96, duration: 220, voice: 16...200, main: 17)
         let plan = KnobShiftPlan.make(from: current, to: same)
-        expect(near(plan.start, 150) && near(plan.handoff, 159), "beats lock: it comes in 3s before its voice, which lands 8s before the last words (\(KnobShiftPlan.clock(plan.handoff)) of a mix from \(KnobShiftPlan.clock(plan.start)))")
+        expect(near(plan.start, 150) && near(plan.handoff, 160), "beats lock: it comes in 2s before its voice, which lands 8s before the last words (\(KnobShiftPlan.clock(plan.handoff)) of a mix from \(KnobShiftPlan.clock(plan.start)))")
         let unsure = song("Unsure", tempo: nil, duration: 220, voice: 16...200, main: 17)
         let apart = KnobShiftPlan.make(from: current, to: unsure)
         expect(near(apart.handoff, plan.handoff) && near(apart.start, plan.start) && near(apart.duration, plan.duration), "the new tempo is unknown, so no lock: the same plan")
@@ -393,7 +393,7 @@ enum KnobShiftMixTests {
         let fast = song("Fast", tempo: 128, duration: 220, voice: 16...200, main: 17)
         let plan = KnobShiftPlan.make(from: current, to: fast)
         expect(!KnobShiftSync.make(outgoing: current.analysis, incoming: fast.analysis, beatsBeforeVoice: 6).isOn, "90 into 128 BPM does not lock")
-        expect(near(plan.start, 140) && near(plan.handoff, 142), "it still starts at the hook and the new song comes in at 2:22")
+        expect(near(plan.start, 140) && near(plan.handoff, 143), "it still starts at the hook and the new song comes in at 2:23")
         checkSung(plan, from: current, to: fast, "90 into 128 BPM", voiceEnd: 150)
     }
 
@@ -428,16 +428,16 @@ enum KnobShiftMixTests {
         // A long intro: the song comes in well back, never earlier than its start.
         let long = partner("Long", 100...230, 100)
         let longPlan = KnobShiftPlan.make(from: current, to: long)
-        expect(near(longPlan.incomingOffset, 97), "a voice at 1:40: the song comes in from \(KnobShiftPlan.clock(longPlan.incomingOffset)), 3s ahead of it")
+        expect(near(longPlan.incomingOffset, 98), "a voice at 1:40: the song comes in from \(KnobShiftPlan.clock(longPlan.incomingOffset)), 2s ahead of it")
         checkSung(longPlan, from: current, to: long, "voice at 1:40", voiceEnd: 170)
         // A voice at 6s, well before the main verse at 40s, is a sung intro: the song starts at
         // its main verse (Naggnee, Putt Jam Te Lau).
         let adlib = partner("Adlib", 6...230, 40)
         let adlibPlan = KnobShiftPlan.make(from: current, to: adlib)
-        expect(adlibPlan.beatsBeforeVoice.map { near($0, 3) } ?? false && near(adlibPlan.incomingOffset, 37), "a voice at 0:06 is an intro, the song starts 3s before its main verse at 0:40")
+        expect(adlibPlan.beatsBeforeVoice.map { near($0, 2) } ?? false && near(adlibPlan.incomingOffset, 38), "a voice at 0:06 is an intro, the song starts 2s before its main verse at 0:40")
         // A voice less than 8s before the main verse is where it starts singing (Jee Karuga).
         let close = partner("Close", 34...230, 40)
-        expect(near(KnobShiftPlan.make(from: current, to: close).incomingOffset, 31), "a voice at 0:34, 6s before the verse, is the first singing")
+        expect(near(KnobShiftPlan.make(from: current, to: close).incomingOffset, 32), "a voice at 0:34, 6s before the verse, is the first singing")
         let firstSinging = KnobShiftPlan.firstSinging(adlib.analysis), closeSinging = KnobShiftPlan.firstSinging(close.analysis)
         expect(firstSinging.map { near($0.at, 40) && $0.onGrid } == true && closeSinging.map { near($0.at, 34) && !$0.onGrid } == true,
                "the main verse is marked as on the phrase grid, an earlier voice is not")
@@ -471,7 +471,7 @@ enum KnobShiftMixTests {
         let current = song("Old", tempo: 96, duration: 200, voice: 12...170, hook: 140)
         let quick = song("Quick", tempo: 96, duration: 240, voice: 3...230, main: 3.5)
         let plan = KnobShiftPlan.make(from: current, to: quick)
-        expect(near(plan.incomingOffset, 0) && plan.beatsBeforeVoice.map { near($0, 3) } == true, "a voice at 0:03: it comes in from its very start, 3s ahead of its voice")
+        expect(near(plan.incomingOffset, 1) && plan.beatsBeforeVoice.map { near($0, 2) } == true, "a voice at 0:03: it comes in from 0:01, 2s ahead of its voice")
         checkSung(plan, from: current, to: quick, "voice at 0:03", voiceEnd: 170)
         let instant = song("Instant", tempo: 96, duration: 240, voice: 1...230, main: 1)
         let instantPlan = KnobShiftPlan.make(from: current, to: instant)
@@ -479,7 +479,7 @@ enum KnobShiftMixTests {
         checkSung(instantPlan, from: current, to: instant, "voice at 0:01", voiceEnd: 170)
         let silent = song("Silent", tempo: 96, duration: 240, voice: 4...230, main: 4, lead: 1.5)
         let silentPlan = KnobShiftPlan.make(from: current, to: silent)
-        expect(near(silentPlan.incomingOffset, 1.5), "after 1.5s of silence: it comes in as the silence ends, 2.5s ahead of its voice")
+        expect(near(silentPlan.incomingOffset, 2), "after 1.5s of silence: it comes in from 0:02, 2s ahead of its voice")
         checkSung(silentPlan, from: current, to: silent, "voice at 0:04 after silence", voiceEnd: 170)
         let tight = song("TightLead", tempo: 96, duration: 240, voice: 4...230, main: 4, lead: 3.5)
         let tightPlan = KnobShiftPlan.make(from: current, to: tight)

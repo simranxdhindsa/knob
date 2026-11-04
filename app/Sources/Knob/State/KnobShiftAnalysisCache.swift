@@ -9,7 +9,7 @@ import Foundation
 /// analysis version all still match; otherwise the song is analysed again and the result
 /// replaced. Bump `version` whenever the analysis itself changes, so old results are not reused.
 enum KnobShiftAnalysisCache {
-    static let version = 5
+    static let version = 6
 
     struct Entry: Codable {
         let version: Int

@@ -89,6 +89,21 @@ is pressed down instead of slowed. Everything here is worked out per song
   2:54.66). The start moves later only when that hook is more than 30 seconds
   before the old voice's last words (`longestPress`), since the hook finder can
   pick an earlier chorus (Moosedrilla: 1:51.6, so the mix starts at 2:50).
+- **Finding the hook.** Music breaks are checked first. When none is a hook, every
+  half second of the later song is compared with everything before it, and the
+  last strongly repeating stretch is the hook (`lastRepeat`): Why So's chorus
+  comes back at 3:20 with no break. This is only a fallback, because over a whole
+  song it also catches verses that sound alike (it would move No Luck's hook from
+  2:54 to 2:33).
+- **Run up.** With no hook, or a hook under 4 seconds before the last words
+  (`shortestWords`), the mix starts a run up before them: the whole bars of the
+  old song nearest to 14 seconds, kept to 10 to 18 (`runUp(bar:)`), moved onto the
+  song's own music break, else line ending, when one is in that range
+  (`runUpStart`). Only KnobMix Now can start closer. Starting 0.6 of a mix (about
+  4.8 seconds) before the last words was tried and rejected: Why So into Kaali
+  Hoodie pressed the old voice in 1.3 seconds and the new voice arrived 1.4 seconds
+  in, so the new song seemed to appear all at once. With a run up it takes 20.2
+  seconds, and the new voice arrives 5.3 seconds in.
 - **Old voice.** It is pressed down from the start of the mix: compressed and
   muffled into a hall, keeping its speed and pitch, while its beats play on. It
   is fully pressed, with 80% hall, when the next voice arrives, then sinks by up
@@ -97,7 +112,7 @@ is pressed down instead of slowed. Everything here is worked out per song
   tail: that is why the ring is this long.
 - **Next song's start.** It starts a little before its singing, never from the
   top of a long intro: from the beginning of the mix when its voice arrives
-  within 3 seconds, else 3 seconds ahead of the voice (`introLead`), and at least
+  within 2 seconds, else 2 seconds ahead of the voice (`introLead`), and at least
   0.3 seconds ahead (`voiceLead`) plus two beats of room for the beat lock. A voice 8 seconds or more before the main verse is a sung intro
   and is skipped (`firstSinging`, `introVoice`). Naggnee has a voice at 0:00 and
   its main verse at 0:22.5, so it starts from 0:22. A lead in of two bars was
@@ -115,18 +130,28 @@ is pressed down instead of slowed. Everything here is worked out per song
   early and last words about 1.25 seconds late (`analysisSlack`), so both are
   corrected first. A main verse placed on the phrase grid is not corrected. It is
   placed only when the tempo is known and the beat comes in within 40 seconds.
+- **Voice that could not be read.** On the iPhone the sound classifier sometimes
+  gives back nothing, which says nothing about the song. It is tried once more, and
+  a song it still fails on is not saved, so it is measured again next time
+  (`Result.failed`). Until then the song starts at its beat entry, not its top, when
+  that is at least 8 seconds in (`firstSinging`): No Good read as an instrumental
+  played from 0:00, though its beat and main verse come in at 0:22.
 - **Next song's arrival.** It never just appears. It comes in muffled and in a
   hall (`sweep`, `reverbMix` on its deck), and both clear 2.5 seconds after its
   voice arrives (`washEnds`). A clean arrival was tried and rejected: even with
   the voices overlapping it sounded like a plain crossfade. When the beats cannot
   lock, its music starts 8% slow and reaches its own speed as its voice comes in
-  (`introSpeed`). The voice itself is never slowed or pressed.
+  (`introSpeed`). The voice itself is never slowed or pressed. When its drums land
+  within a second of its voice (Kaali Hoodie, both at 0:33.53), they cannot come in
+  first, so the hall and muffling clear over twice as long, 5 seconds, and they
+  rise out of it instead.
 - **Old song's tail.** After the last words its beats stay under the new voice
   for three of its bars, kept to 6 to 8 seconds (`tail(bar:)`), then it is gone.
   The song's own end can cut this short (TODH ends 1.8 seconds after them).
-- **Length.** It follows from the above, so it differs per song. Measured: 10.6
-  seconds (No Luck into Jee Karuga) to about 38 (Moosedrilla into Double Down,
-  Nabhe Di Bottal into Putt Jam Te Lau).
+- **Length.** It follows from the above, so it differs per song: about 15 seconds
+  at least, unless the song ends first or KnobMix Now asks for less. Measured: 16.1
+  seconds (Kaali Hoodie into Sardaari), 20.2 (Why So into Kaali Hoodie), up to about
+  38 (Moosedrilla into Double Down, Nabhe Di Bottal into Putt Jam Te Lau).
 
 The earlier rules (`KnobShiftPlan`, checked by `--knobshift-mix-check`):
 

@@ -145,8 +145,8 @@ extension KnobShiftModel {
                             voiceEnd: TimeInterval, offset: TimeInterval, sync: KnobShiftSync, voiceThrow: Bool = false) {
         do {
             // A sung mix starts the new song a little before it starts singing, not from the top
-            // of its intro: from the beginning of the mix when its voice arrives within 3 seconds,
-            // else 3 seconds ahead of the voice, with room for the beat lock, which moves forward
+            // of its intro: from the beginning of the mix when its voice arrives within 2 seconds,
+            // else 2 seconds ahead of the voice, with room for the beat lock, which moves forward
             // to its next strong beat. A sung intro well before the main verse is skipped, so the
             // song starts at its main verse. The analysis finds the first singing about 1.25
             // seconds early, so those first words are taken that much later; a main verse placed
@@ -160,7 +160,7 @@ extension KnobShiftModel {
                 let speed = sync.isOn ? max(sync.meetingTempo / sync.outgoingTempo, 0.1) : 1
                 let wordsIn = max((voiceEnd - KnobShiftPlan.analysisSlack - position) / speed, 0)
                 let voiceIn = KnobShiftPlan.newVoiceEntry(wordsEnd: wordsIn, bar: current.analysis.tempo.map { 4 * 60 / $0 } ?? 2.5)
-                let lead = max(KnobShiftPlan.voiceLead + lockRoom, min(voiceIn, KnobShiftPlan.introLead))
+                let lead = min(max(KnobShiftPlan.voiceLead + lockRoom, voiceIn), KnobShiftPlan.introLead)
                 entryOffset = max(min(next.analysis.leadingSilence, firstWords), firstWords - lead)
                 log("KNOBMIX", String(format: "%@ sings from about %.2fs, so it starts from %.2fs, not from its intro.", next.title, firstWords, entryOffset))
             }

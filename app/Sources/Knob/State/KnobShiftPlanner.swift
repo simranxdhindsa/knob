@@ -80,7 +80,7 @@ struct KnobShiftPlan {
     static let voiceLead: TimeInterval = 0.3
     /// The most of the new song's own music played before its voice comes in: it starts at the
     /// beginning of the mix when the voice arrives within this long, later otherwise.
-    static let introLead: TimeInterval = 3
+    static let introLead: TimeInterval = 2
     /// When the beats cannot lock, the new song's music starts this slow and reaches its own
     /// speed as its voice comes in, so the voice itself is never slowed.
     static let introSpeed = 0.92
@@ -102,7 +102,12 @@ struct KnobShiftPlan {
         let early = analysis.vocalOnset, main = analysis.mainVocalOnset
         let placed = (analysis.tempo ?? 0) > 0 && (analysis.beatEntry.map { $0 <= 40 } ?? false)
         if let early, let main, early <= main - introVoice { return (main, placed) }
-        guard let first = [early, main].compactMap({ $0 }).min() else { return nil }
+        guard let first = [early, main].compactMap({ $0 }).min() else {
+            // No voice found: a long intro still ends where the beat comes in, so a song is never
+            // started from its top just because its voice could not be read.
+            if placed, let entry = analysis.beatEntry, entry >= introVoice { return (entry, true) }
+            return nil
+        }
         return (first, placed && first != early)
     }
     /// How long the old pressed voice rings on into the new song after its last words.
@@ -179,14 +184,15 @@ struct KnobShiftPlan {
                 voiceEnd = point.at
             }
             // The mix begins where the song's last hook begins (the second chorus of two), so the
-            // old song leaves on its biggest moment. Without a hook, or with one too close to the
-            // last words, it begins a run up before them, so the old voice is pressed down
-            // gradually and the new song has room to come in ahead of its voice.
+            // old song leaves on its biggest moment (No Luck's is only 4.6 seconds before its last
+            // words). Without a hook, or with one too close to them to finish in, it begins a run
+            // up before them, so the old voice is pressed down gradually and the new song has room
+            // to come in ahead of its voice.
             var start: TimeInterval
             if let handoffAt {
                 start = handoffAt
             } else if let hook = outgoing.lastHookStart, hook < voiceEnd, audibleEnd - hook >= Self.shortestMix,
-                      voiceEnd - hook >= Self.shortestRunUp {
+                      voiceEnd - hook >= Self.shortestWords {
                 start = hook
                 reasoning.append("\(current.title): its last hook begins at \(clock(hook)), so the mix starts there.")
             } else {

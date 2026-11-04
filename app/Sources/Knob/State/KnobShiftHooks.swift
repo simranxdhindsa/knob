@@ -7,7 +7,10 @@ import Foundation
 /// mix should begin. It listens to the sound itself, as 24 bands of loudness every half second,
 /// and compares each music break (the places where sections change) with everything heard at
 /// least 20 seconds before it. A break whose next 10 seconds repeat an earlier stretch is a
-/// hook; the last one with enough song left to mix is returned.
+/// hook; the last one with enough song left to mix is returned. Some choruses come back with no
+/// break at all (Why So, at 3:20): when no break is a hook, every half second is compared the
+/// same way, and the last strongly repeating stretch gives the hook. Only then, because over a
+/// whole song this also catches verses that sound alike (it would put No Luck's hook at 2:33).
 enum KnobShiftHooks {
     private static let step = 0.5
     private static let windowLength = 10.0
@@ -15,10 +18,13 @@ enum KnobShiftHooks {
     private static let minimumRemaining = 10.0
     private static let bands = 24
     private static let frameSize = 4_096
+    /// A dip this short inside a repeating stretch does not end it.
+    private static let repeatGap = 6.0
+    /// A repeat must hold this long to count, so one lucky match is not a hook.
+    private static let shortestRepeat = 2.0
 
-    static func lastHook(in url: URL, breaks: [TimeInterval], audibleEnd: TimeInterval) -> (start: TimeInterval?, steps: [String]) {
+    static func lastHook(in url: URL, breaks: [TimeInterval], beats: [TimeInterval], audibleEnd: TimeInterval) -> (start: TimeInterval?, steps: [String]) {
         let candidates = breaks.filter { $0 >= audibleEnd * 0.4 && audibleEnd - $0 >= minimumRemaining }
-        guard !candidates.isEmpty else { return (nil, ["Hook: skipped, no music break in the later part of the song."]) }
         guard let features = readFeatures(url) else { return (nil, ["Hook: skipped, the sound could not be read."]) }
         let span = Int(windowLength / step)
         guard features.count > span * 2 else { return (nil, ["Hook: skipped, the song is too short."]) }
@@ -43,18 +49,54 @@ enum KnobShiftHooks {
             }
             scored.append((candidate, best, Double(bestAt) * step))
         }
-        guard let top = scored.map(\.score).max() else { return (nil, ["Hook: skipped, nothing to compare against."]) }
         // A hook repeats about as well as the song's best repeat does; a floor keeps a song
         // with no real repeats from picking one.
+        let top = scored.map(\.score).max() ?? 0
         let threshold = max(0.6, 0.9 * top)
         var steps = scored.map { String(format: "Hook check at %@: repeats %@ with %.2f similarity.", Self.clock($0.at), Self.clock($0.match), $0.score) }
-        guard let hook = scored.last(where: { $0.score >= threshold }) else {
-            steps.append(String(format: "Hook: none, nothing repeats well enough (best %.2f, needs 0.60).", top))
+        if let hook = scored.last(where: { $0.score >= threshold }) {
+            steps.append(String(format: "Hook: the last hook begins at %@ (%.2f similarity, needs %.2f), %.0fs before the end.",
+                                Self.clock(hook.at), hook.score, threshold, audibleEnd - hook.at))
+            return (hook.at, steps)
+        }
+        // No break is a hook: compare every half second of the later part of the song.
+        let first = Int(audibleEnd * 0.4 / step), last = min(Int((audibleEnd - minimumRemaining) / step), vectors.count - 1)
+        guard first < last else {
+            steps.append("Hook: none, the song is too short to look for repeats.")
             return (nil, steps)
         }
-        steps.append(String(format: "Hook: the last hook begins at %@ (%.2f similarity, needs %.2f), %.0fs before the end.",
-                            Self.clock(hook.at), hook.score, threshold, audibleEnd - hook.at))
-        return (hook.at, steps)
+        let scores = (first...last).map { frame in
+            (0..<max(frame - span - Int(minimumGap / step), 0)).reduce(0.0) { best, earlier in
+                var dot: Float = 0
+                vDSP_dotpr(vectors[earlier], 1, vectors[frame], 1, &dot, vDSP_Length(vectors[frame].count))
+                return max(best, Double(dot))
+            }
+        }
+        guard let found = lastRepeat(in: scores, step: step) else {
+            steps.append(String(format: "Hook: none, nothing repeats well enough (best %.2f, needs 0.60).", max(top, scores.max() ?? 0)))
+            return (nil, steps)
+        }
+        let heard = Double(first + found) * step
+        let start = beats.min { abs($0 - heard) < abs($1 - heard) } ?? heard
+        steps.append(String(format: "Hook: no music break is a hook, but the sound repeats strongly from %@ (%.2f similarity), %.0fs before the end.",
+                            Self.clock(start), scores[found], audibleEnd - start))
+        return (start, steps)
+    }
+
+    /// The index where the last strongly repeating stretch begins, in `scores` taken `step`
+    /// seconds apart. Strong means about as good as the song's best repeat.
+    static func lastRepeat(in scores: [Double], step: TimeInterval) -> Int? {
+        guard let top = scores.max() else { return nil }
+        let threshold = max(0.6, 0.9 * top)
+        var runs: [(from: Int, to: Int)] = []
+        for (index, score) in scores.enumerated() where score >= threshold {
+            if let open = runs.last, Double(index - open.to) * step <= repeatGap {
+                runs[runs.count - 1].to = index
+            } else {
+                runs.append((index, index))
+            }
+        }
+        return runs.last { Double($0.to - $0.from) * step >= shortestRepeat }?.from
     }
 
     private static func clock(_ time: TimeInterval) -> String {

@@ -33,6 +33,40 @@ extension KnobShiftMixTests {
         }
     }
 
+    /// Why So's real repeat scores, every 2 seconds from 2:40: its chorus comes back at 3:20 with
+    /// no music break, so only comparing every moment finds it.
+    static func hookWithoutBreak() {
+        print("A chorus that comes back with no music break (Why So, 35 seconds from the end)")
+        let earlier = [0.73, 0.65, 0.57, 0.53, 0.52, 0.52, 0.56, 0.62, 0.67, 0.66, 0.66, 0.60, 0.54, 0.54, 0.48]
+        let late = [0.69, 0.69, 0.61, 0.59, 0.61, 0.84, 0.74, 0.71, 0.90, 0.91, 0.90, 0.91, 0.81, 0.72, 0.63, 0.54, 0.55, 0.56]
+        let found = KnobShiftHooks.lastRepeat(in: earlier + late, step: 2)
+        expect(found == earlier.count + 5, "the last strong repeat starts at 3:20, the jump to 84%, 20 steps of 2s after 2:40")
+        let everyHalf = (earlier + late).flatMap { [$0, $0, $0, $0] }
+        let start = KnobShiftHooks.lastRepeat(in: everyHalf, step: 0.5).map { Double($0) * 0.5 }
+        expect(start.map { near($0, Double(earlier.count + 5) * 2) } == true, "read every half second, the short dip at 3:22 does not split it (\(start ?? -1)s)")
+        expect(KnobShiftHooks.lastRepeat(in: [0.5, 0.55, 0.58, 0.52], step: 0.5) == nil, "nothing repeats well enough: no hook")
+        expect(KnobShiftHooks.lastRepeat(in: [0.2, 0.9, 0.2, 0.2, 0.2], step: 0.5) == nil, "one lucky match is not a hook")
+        expect(KnobShiftHooks.lastRepeat(in: [0.2, 0.9, 0.9, 0.9, 0.9, 0.9, 0.2], step: 0.5) == 1, "a repeat that holds for 2s is one")
+    }
+
+    /// Reported: No Good read as an instrumental on the iPhone and played from 0:00, though its
+    /// beat and main verse come in at 0:22.
+    static func noVoiceRead() {
+        print("A new song whose voice could not be read starts at its beat, not its top")
+        var analysis = song("No Good", tempo: 172, duration: 199.54, voice: nil).analysis
+        analysis.beatEntry = 22.02
+        let noGood = KnobShiftModel.Track(url: URL(fileURLWithPath: "/tmp/No Good.m4a"), title: "No Good", duration: 199.54, tailSilence: 0, analysis: analysis)
+        expect(KnobShiftPlan.firstSinging(analysis).map { near($0.at, 22.02) && $0.onGrid } == true, "its beat entry stands in for its first singing")
+        let plan = KnobShiftPlan.make(from: song("Old", duration: 200, voice: 12...170, hook: 150), to: noGood)
+        expect(near(plan.incomingOffset, 20.02), "it comes in 2s before its beat at 0:22, not from 0:00 (\(KnobShiftPlan.clock(plan.incomingOffset)))")
+        var soon = analysis
+        soon.beatEntry = 4
+        expect(KnobShiftPlan.firstSinging(soon) == nil, "a beat 4s in is no long intro: it plays from its top")
+        var late = analysis
+        late.beatEntry = 45
+        expect(KnobShiftPlan.firstSinging(late) == nil, "a beat after 40s is not trusted")
+    }
+
     /// Real numbers from the songs' analyses: Why So has no hook, and Kaali Hoodie's drums and
     /// main verse land together at 0:33.53. The new song and its voice used to arrive within 1.4
     /// seconds of the start, with the old voice pressed down in about the same time.
@@ -51,7 +85,7 @@ extension KnobShiftMixTests {
         let newVoiceIn = plan.handoff + (plan.beatsBeforeVoice ?? 0) - plan.start
         expect(near(plan.voiceEnd ?? 0, 221.25) && near(plan.start, 221.25 - 5 * 240 / 90), "five bars before its last line ending, 13.3s (\(KnobShiftPlan.clock(plan.start)))")
         expect(newVoiceIn >= 5, "the old voice is pressed down over \(f(newVoiceIn))s before the new voice")
-        expect(plan.beatsBeforeVoice.map { near($0, KnobShiftPlan.introLead) } == true, "the new song plays 3s ahead of its voice")
+        expect(plan.beatsBeforeVoice.map { near($0, KnobShiftPlan.introLead) } == true, "the new song plays 2s ahead of its voice")
         expect(plan.duration >= 18, "\(f(plan.duration))s in all")
         checkSung(plan, from: current, to: kaali, "Why So into Kaali Hoodie", voiceEnd: 221.25)
         // A hook with room is still the start, whatever the run up would have been.
@@ -71,5 +105,7 @@ extension KnobShiftMixTests {
             return Float(model.secondaryDeck.sweep)
         }
         expect(muffled(0.25) > 0.05 && muffled(0.1) == 0, "3s after the voice the drums are still clearing, earlier drums have cleared")
+        hookWithoutBreak()
+        noVoiceRead()
     }
 }
