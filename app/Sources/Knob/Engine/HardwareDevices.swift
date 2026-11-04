@@ -99,6 +99,30 @@ enum HardwareDevices {
         AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, .main) { _, _ in handler() }
     }
 
+    /// Calls `handler` on the main queue whenever a device appears or goes (headphones plugged
+    /// in, Bluetooth connecting), so the Output menu follows without restarting Knob.
+    static func observeDevices(_ handler: @escaping () -> Void) {
+        var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDevices,
+                                                 mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, .main) { _, _ in handler() }
+    }
+
+    /// Every output device with its name, read straight from Core Audio, for the Output menu
+    /// while the engine is off. Knob's own device is left out, as the engine's list does.
+    static func outputDevices() -> [OutputDevice] {
+        all().filter { $0.hasOutput && $0.uid != knobUID && !OutputDevice.isSystemHelper($0.uid) }.compactMap { device in
+            var address = AudioObjectPropertyAddress(mSelector: kAudioObjectPropertyName,
+                                                     mScope: kAudioObjectPropertyScopeGlobal,
+                                                     mElement: kAudioObjectPropertyElementMain)
+            var name: Unmanaged<CFString>?
+            var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+            guard AudioObjectGetPropertyData(device.id, &address, 0, nil, &size, &name) == noErr,
+                  let text = name?.takeRetainedValue() as String? else { return nil }
+            return OutputDevice(uid: device.uid, name: text)
+        }
+    }
+
     private static let muteAddress = AudioObjectPropertyAddress(
         mSelector: kAudioDevicePropertyMute,
         mScope: kAudioDevicePropertyScopeOutput, mElement: kAudioObjectPropertyElementMain)

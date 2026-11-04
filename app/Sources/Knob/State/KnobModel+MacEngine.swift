@@ -16,6 +16,7 @@ extension KnobModel {
         // A previous run may have stopped while speakers were raised underneath Knob.
         if !knobIsOutput { VolumeHandoff.giveBack() }
         HardwareDevices.observeDefaultOutput { [weak self] in self?.defaultOutputChanged() }
+        HardwareDevices.observeDevices { [weak self] in self?.devicesChanged() }
         volumeKeys.isActive = { [weak self] in self?.knobIsOutput == true }
         volumeKeys.onStep = { [weak self] direction in self?.stepVolume(direction) }
     }
@@ -220,6 +221,29 @@ extension KnobModel {
             await takeOverOutput(followingSystem: true)
             reclaiming = false
         }
+    }
+
+    /// Headphones, a Bluetooth speaker or a display came or went: the Output menu lists what is
+    /// there now. A Bluetooth device appears a moment before it can tell its name, so the list
+    /// is read again shortly after.
+    private func devicesChanged() {
+        Task { [weak self] in
+            for wait in [300, 1_500] {
+                try? await Task.sleep(for: .milliseconds(wait))
+                await self?.refreshOutputs()
+            }
+        }
+    }
+
+    /// The outputs from the engine while it runs, or straight from the Mac while it is off.
+    func refreshOutputs() async {
+        var latest = HardwareDevices.outputDevices()
+        if connection == .online, let json = try? await engine.send("getDevices", [:]) {
+            latest = OutputDevice.list(json: json)
+        }
+        guard latest != outputs else { return }
+        outputs = latest
+        knobShift.log("OUTPUT", "Outputs now: \(latest.map(\.name).joined(separator: ", ")).")
     }
 
     private var knobIsOutput: Bool {
