@@ -22,6 +22,8 @@ struct LinkField: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .foregroundStyle(Screen.text)
+                .tint(Palette.accent)
+                .autocorrectionDisabled()
                 .onSubmit(onAdd)
             Button(action: isEmpty ? onPaste : onAdd) {
                 Label(isEmpty ? "PASTE" : "ADD", systemImage: isEmpty ? "doc.on.clipboard" : "plus")

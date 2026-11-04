@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// A hardware-style rotary knob: recessed well, shadowed skirt, lit cap, pointer and a glowing
@@ -17,6 +16,12 @@ struct RealisticKnob: View {
     var accessibilityLabel: String
     var accessibilityValue: String
     var onEditingChanged: (Bool) -> Void = { _ in }
+    /// Outside changes (the volume keys) ease in with a spring. Off for a turn that is already
+    /// moved frame by frame, such as the iPhone app's opening, where a spring would lag behind.
+    var springsToChanges = true
+    /// Degrees the pointer alone is pushed past where the value puts it, while the marks stay:
+    /// the iPhone opening's knob straining against its end stop. 0 everywhere else.
+    var pointerOvershoot: Double = 0
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.isEnabled) private var isEnabled
@@ -51,7 +56,7 @@ struct RealisticKnob: View {
             .contentShape(Circle())
             .gesture(drag)
             .onTapGesture(count: 2) { if let d = defaultValue { set(d, animated: true) } }
-            .animation(dragStart == nil ? Motion.knob : nil, value: value)
+            .animation(dragStart == nil && springsToChanges ? Motion.knob : nil, value: value)
             .opacity(isEnabled ? 1 : 0.45)
 
             if showsMinMax {
@@ -157,7 +162,7 @@ struct RealisticKnob: View {
         let length: CGFloat = capDiameter * 0.2
         let lift: CGFloat = capDiameter * 0.325
         let glow: Color = scheme == .dark ? Color.white.opacity(0.35) : .clear
-        let degrees: Double = -Self.sweep / 2 + Self.sweep * v
+        let degrees: Double = -Self.sweep / 2 + Self.sweep * v + pointerOvershoot
         return Capsule()
             .fill(p.knobIndicator)
             .frame(width: width, height: length)
@@ -176,7 +181,7 @@ struct RealisticKnob: View {
                     rotary = RotaryDrag(sweep: Self.sweep, size: size, value: value)
                     onEditingChanged(true)
                 }
-                if let next = rotary?.move(to: g.location, precision: NSEvent.modifierFlags.contains(.shift)) {
+                if let next = rotary?.move(to: g.location, precision: Platform.fineAdjust) {
                     set(next, animated: false)
                 }
             }

@@ -67,6 +67,8 @@ cat > "$bundle/Contents/Info.plist" <<PLIST
 <key>NSHumanReadableCopyright</key><string>Free software under the GNU AGPL v3.</string>
 <key>NSMicrophoneUsageDescription</key><string>Knob reads the sound your apps play through Knob's own audio device, so it can add effects. It never listens to your microphone.</string>
 <key>NSAudioCaptureUsageDescription</key><string>Knob reads the sound your apps play through Knob's own audio device, so it can add effects. It never listens to your microphone.</string>
+<key>NSLocalNetworkUsageDescription</key><string>Knob sends your KnobShift playlists to Knob on your iPhone over your home Wi-Fi.</string>
+<key>NSBonjourServices</key><array><string>_knobshift._tcp</string></array>
 <key>SUFeedURL</key><string>$feed_url</string>
 <key>SUPublicEDKey</key><string>$(cat "$repo_dir/packaging/update-public-key.txt")</string>
 <key>SUEnableAutomaticChecks</key><true/>

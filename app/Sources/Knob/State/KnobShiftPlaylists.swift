@@ -42,18 +42,26 @@ enum KnobShiftPlaylists {
     /// Starts the id of every YouTube playlist.
     static let youtubePrefix = "yt:"
 
-    /// ~/Music/KnobShift/Spotify, which also keeps the index of every playlist;
+    /// Where KnobShift keeps its songs: ~/Music/KnobShift on the Mac; on the iPhone, a KnobShift
+    /// folder in the app's own Documents, which the Files app shows.
+    static var home: URL {
+        #if os(macOS)
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Music/KnobShift", isDirectory: true)
+        #else
+        URL.documentsDirectory.appendingPathComponent("KnobShift", isDirectory: true)
+        #endif
+    }
+
+    /// KnobShift/Spotify, which also keeps the index of every playlist;
     /// KNOB_SPOTIFY_ROOT moves it for the command line checks.
     static var root: URL {
         if let path = ProcessInfo.processInfo.environment["KNOB_SPOTIFY_ROOT"] { return URL(fileURLWithPath: path, isDirectory: true) }
-        return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Music/KnobShift/Spotify", isDirectory: true)
+        return home.appendingPathComponent("Spotify", isDirectory: true)
     }
-    /// ~/Music/KnobShift/YouTube; KNOB_YOUTUBE_ROOT moves it for the command line checks.
+    /// KnobShift/YouTube; KNOB_YOUTUBE_ROOT moves it for the command line checks.
     static var youtubeRoot: URL {
         if let path = ProcessInfo.processInfo.environment["KNOB_YOUTUBE_ROOT"] { return URL(fileURLWithPath: path, isDirectory: true) }
-        return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Music/KnobShift/YouTube", isDirectory: true)
+        return home.appendingPathComponent("YouTube", isDirectory: true)
     }
     static func folderRoot(for source: KnobShiftPlaylist.Source) -> URL { source == .youtube ? youtubeRoot : root }
     static var removedRoot: URL { removedFolderRoot(for: .spotify) }
@@ -159,6 +167,14 @@ enum KnobShiftPlaylists {
         return found
     }
 
+    /// A YouTube video id: 11 letters, digits, "-" or "_". Here rather than with the YouTube
+    /// import, so the iPhone app can read the names of songs the Mac downloaded.
+    static func isYouTubeVideoId(_ text: String) -> Bool { text.count == 11 && text.allSatisfy(isYouTubeIdCharacter) }
+
+    static func isYouTubeIdCharacter(_ character: Character) -> Bool {
+        character.isASCII && (character.isLetter || character.isNumber || character == "-" || character == "_")
+    }
+
     /// The song id at the end of a file name: "… [id]" with a 22 character Spotify id, or
     /// "… [yt-id]" with an 11 character YouTube id. The "yt-" keeps ordinary brackets apart.
     static func songId(inFileName name: String) -> String? {
@@ -166,7 +182,7 @@ enum KnobShiftPlaylists {
         let id = String(name[open.upperBound..<name.index(before: name.endIndex)])
         if id.hasPrefix("yt-") {
             let video = String(id.dropFirst(3))
-            return KnobShiftYouTubeParsing.isVideoId(video) ? video : nil
+            return isYouTubeVideoId(video) ? video : nil
         }
         return id.count == 22 && id.allSatisfy({ $0.isLetter || $0.isNumber }) ? id : nil
     }

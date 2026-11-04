@@ -62,11 +62,9 @@ enum KnobShiftYouTubeParsing {
 
     private static let hosts: Set<String> = ["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be", "www.youtu.be"]
 
-    private static func isIdCharacter(_ character: Character) -> Bool {
-        character.isASCII && (character.isLetter || character.isNumber || character == "-" || character == "_")
-    }
+    private static func isIdCharacter(_ character: Character) -> Bool { KnobShiftPlaylists.isYouTubeIdCharacter(character) }
 
-    static func isVideoId(_ text: String) -> Bool { text.count == 11 && text.allSatisfy(isIdCharacter) }
+    static func isVideoId(_ text: String) -> Bool { KnobShiftPlaylists.isYouTubeVideoId(text) }
 
     private static func isListId(_ text: String) -> Bool { (2...80).contains(text.count) && text.allSatisfy(isIdCharacter) }
 

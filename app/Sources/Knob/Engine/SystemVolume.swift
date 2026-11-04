@@ -2,15 +2,6 @@ import AudioToolbox
 import CoreAudio
 import Foundation
 
-/// The Mac's own output volume, the same one the volume keys change.
-protocol VolumeControl: AnyObject {
-    /// Called on the main thread with (volume 0...1, muted, can be controlled).
-    var onChange: ((Double, Bool, Bool) -> Void)? { get set }
-    func start()
-    func setVolume(_ volume: Double)
-    func setMuted(_ muted: Bool)
-}
-
 /// Reads and writes the default output device's main volume through Core Audio and follows
 /// changes made anywhere else (volume keys, Control Center, switching outputs).
 final class SystemVolume: VolumeControl {

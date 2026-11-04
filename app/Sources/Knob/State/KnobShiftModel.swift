@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import AVFoundation
 import Foundation
 
@@ -105,6 +109,8 @@ final class KnobShiftModel: ObservableObject {
         var isActive = false
         /// Set when preparing failed; the queue offers Retry.
         var failure: String?
+        /// Where it joins the queue once prepared (a song synced from the Mac); nil adds it at the end.
+        var placement: KnobShiftSyncPlan.Placement? = nil
         var title: String { url.deletingPathExtension().lastPathComponent }
         /// "Title - Artist" file names split the same way as ready songs.
         var name: String { spotifyName ?? Track.split(title).name }
@@ -173,6 +179,10 @@ final class KnobShiftModel: ObservableObject {
     /// (KnobShiftModel+Spotify.swift).
     @Published internal(set) var playlists: [KnobShiftPlaylist] = []
     @Published internal(set) var removedPlaylists: [KnobShiftRemovedPlaylist] = []
+    var persistScheduled = false
+    /// When the song in the player and its position were last saved (rememberNowPlaying).
+    var rememberedAt = Date.distantPast
+    #if os(macOS)
     @Published internal(set) var spotifyLoggedIn = false
     /// Signed in to YouTube with Google, and signing in now; the dashboard's rows are in youtubeHub.
     @Published internal(set) var youtubeSignedIn = false
@@ -201,12 +211,12 @@ final class KnobShiftModel: ObservableObject {
     /// Each playlist's songs exactly as spotDL describes them, to download without asking
     /// Spotify again.
     var spotifyRaw: [String: [String: Data]] = [:]
-    var persistScheduled = false
     /// Songs waiting for their playlist's next spotDL run, by playlist id.
     var queuedDownloads: [String: [KnobShiftSpotDL.Song]] = [:]
     /// The logged in Spotify account's name and playlists, for the Spotify sheet.
     @Published internal(set) var spotifyAccount: KnobShiftSpotifyAccount.Account?
     @Published internal(set) var spotifyAccountLoading = false
+    #endif
 
     private let analyser = KnobShiftAnalyser()
     private let audioEngine = AVAudioEngine()
@@ -271,7 +281,13 @@ final class KnobShiftModel: ObservableObject {
         if restoresQueue {
             Task { [weak self] in await self?.restoreQueue() }
         }
-        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
+        #if os(macOS)
+        let leaving = NSApplication.willTerminateNotification
+        #else
+        // An iPhone app is usually stopped in the background, never told it is quitting.
+        let leaving = UIApplication.didEnterBackgroundNotification
+        #endif
+        NotificationCenter.default.addObserver(forName: leaving, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.persistQueueNow() }
         }
     }
@@ -299,10 +315,12 @@ final class KnobShiftModel: ObservableObject {
 
     func retry(_ song: PendingSong) {
         guard let index = pending.firstIndex(where: { $0.id == song.id }) else { return }
+        #if os(macOS)
         if song.waitingForDownload {
             retryDownload(song)
             return
         }
+        #endif
         pending[index].failure = nil
         pending[index].progress = 0
         log("IMPORT", "Retrying \(song.title).")
@@ -353,8 +371,7 @@ final class KnobShiftModel: ObservableObject {
                 track.spotifyId = song.spotifyId ?? origin?.spotifyId
                 track.playlistId = song.playlistId ?? origin?.playlistId
                 pending.removeAll { $0.id == song.id }
-                tracks.append(track)
-                if isShuffled { unshuffled.append(track) }
+                place(track, at: song.placement)
                 logAnalysis(result)
                 refreshPlanIfNeeded()
             } catch {
@@ -377,6 +394,22 @@ final class KnobShiftModel: ObservableObject {
             transitionDescription = "Ready. Choose a song to begin."
             log("READY", "Prepared \(tracks.count) song(s).")
         }
+    }
+
+    /// Adds a prepared song where it was planned to go: next to a song of its playlist, or last.
+    private func place(_ track: Track, at placement: KnobShiftSyncPlan.Placement?) {
+        func index(in list: [Track]) -> Int {
+            switch placement {
+            case .after(let id)?: return list.lastIndex { $0.spotifyId == id }.map { $0 + 1 } ?? list.count
+            case .before(let id)?: return list.firstIndex { $0.spotifyId == id } ?? list.count
+            default: return list.count
+            }
+        }
+        let at = index(in: tracks)
+        // The song playing keeps its place in the order: one added before it moves it along.
+        if at <= currentIndex, !tracks.isEmpty, nowPlaying != nil { currentIndex += 1 }
+        tracks.insert(track, at: at)
+        if isShuffled { unshuffled.insert(track, at: index(in: unshuffled)) }
     }
 
     private func setProgress(_ value: Double, for id: UUID) {
@@ -426,6 +459,24 @@ final class KnobShiftModel: ObservableObject {
         mixState = tracks.isEmpty ? .idle : .ready
     }
 
+    /// The level of everything KnobShift plays, 0...1: what the iPhone app's volume knob turns.
+    var outputVolume: Float {
+        get { audioEngine.mainMixerNode.outputVolume }
+        set { audioEngine.mainMixerNode.outputVolume = min(max(newValue, 0), 1) }
+    }
+
+    /// Puts an effect between KnobShift's mix and the speakers: Knob's own sound in the iPhone
+    /// app, which has no system wide engine to play through.
+    func insertOutputEffect(_ effect: AVAudioNode) {
+        let output = audioEngine.outputNode
+        let format = output.inputFormat(forBus: 0)
+        audioEngine.attach(effect)
+        audioEngine.disconnectNodeOutput(audioEngine.mainMixerNode)
+        audioEngine.connect(audioEngine.mainMixerNode, to: effect, format: format)
+        audioEngine.connect(effect, to: output, format: format)
+        log("SESSION", "Knob's sound added after the mix, at \(Int(format.sampleRate)) Hz.")
+    }
+
     /// Used only by Knob's command-line smoke check. The audio graph still runs, but its output
     /// is muted so automated checks never make sound or change the system output.
     func playForCheck(volume: Float = 0, bySelecting track: Track? = nil) {
@@ -458,6 +509,7 @@ final class KnobShiftModel: ObservableObject {
             primaryDeck.pause()
             progressTask?.cancel()
             isPlaying = false
+            rememberNowPlaying()
         } else {
             log("PLAY", "Resumed at \(Self.seconds(playbackTime)).")
             do { try startEngineIfNeeded() }
@@ -538,6 +590,7 @@ final class KnobShiftModel: ObservableObject {
             startProgressUpdates()
         }
         log("DECK", "\(primaryDeck.name) is primary: \(track.title) from \(Self.seconds(time)) of \(Self.seconds(track.duration)), \(remaining) frames, \(play ? "playing" : "paused").")
+        rememberNowPlaying()
     }
 
     /// Every way of making sound goes through here: Play, clicking a song, Next, Previous,
@@ -582,6 +635,8 @@ final class KnobShiftModel: ObservableObject {
         progressTask = Task { [weak self] in
             while !Task.isCancelled {
                 self?.updatePlaybackTime()
+                // Where the song is, saved every 5 seconds, so even a crash loses little.
+                if let self, Date().timeIntervalSince(self.rememberedAt) >= 5 { self.rememberNowPlaying() }
                 try? await Task.sleep(for: .milliseconds(100))
             }
         }
@@ -624,6 +679,7 @@ final class KnobShiftModel: ObservableObject {
         pending = [PendingSong(url: URL(fileURLWithPath: "/nonexistent/Nagni - TEJAY.mp3"), progress: 0.6, isActive: true),
                    PendingSong(url: URL(fileURLWithPath: "/nonexistent/18 Lakh - Rehal.mp3")),
                    PendingSong(url: URL(fileURLWithPath: "/nonexistent/Broken File.mp3"), failure: "Could not read this file")]
+        #if os(macOS)
         // Spotify playlists: one downloading, one finished, one removed, with their songs.
         let road = KnobShiftPlaylist(id: "demoroad", name: "Punjabi Road Trip", link: "", kind: .playlist,
                                      folderName: "Punjabi Road Trip", spotifyOrder: [], addedAt: Date())
@@ -653,8 +709,10 @@ final class KnobShiftModel: ObservableObject {
         missing.failure = "Not found"
         missing.playlistId = liked.id
         pending.insert(contentsOf: [downloading, missing], at: 0)
+        #endif
     }
 
+    #if os(macOS)
     /// Songs for screenshots, as spotDL would describe them.
     static func previewSongs(_ names: [String]) -> [KnobShiftSpotDL.Song] {
         names.enumerated().compactMap { index, name in
@@ -662,6 +720,7 @@ final class KnobShiftModel: ObservableObject {
             return try? JSONDecoder().decode(KnobShiftSpotDL.Song.self, from: Data(json.utf8))
         }
     }
+    #endif
 
     func logSection(_ title: String) {
         log("SECTION", title)

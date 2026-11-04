@@ -1,6 +1,12 @@
 #pragma once
+// KNOB_PHONE: the iPhone app, which has no Mac audio devices; it starts the controller from a
+// sample rate and calls render() from its own audio unit.
+#ifndef KNOB_PHONE
 #include "audio-bridge.h"
+#endif
+#include <array>
 #include <memory>
+#include <string>
 #include <atomic>
 #include <functional>
 #include <mutex>
@@ -12,7 +18,13 @@ public:
     DSPController();
     ~DSPController();
     bool available() const noexcept;
+#ifndef KNOB_PHONE
     void prepare(AudioBridge& bridge, const std::string& outputUID);
+#endif
+    /// Prepares for stereo sound at this rate; the part of prepare that needs no Mac device.
+    void prepare(int sampleRate);
+    /// Processes interleaved stereo samples in place, as the engine's audio callback does.
+    void render(float* samples, size_t frames) noexcept { process(this, samples, frames); }
     // Control edits keep transport running; callback processing resumes after the edit.
     void edit(const std::function<void()>& mutation);
     void bypass(bool enabled) noexcept;

@@ -9,13 +9,13 @@ struct AlbumArtwork: View {
     var lit = false
     var animated = false
 
-    @State private var image: NSImage?
+    @State private var image: PlatformImage?
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: size * 0.14, style: .continuous)
         ZStack {
             if let image {
-                Image(nsImage: image).resizable().scaledToFill()
+                Image(platformImage: image).resizable().scaledToFill()
             } else if let url {
                 GeneratedArtwork(seed: url.deletingPathExtension().lastPathComponent, animated: animated)
             } else {

@@ -53,6 +53,14 @@ struct KnobLauncher {
             KnobShiftSpotifyCheck.run(Array(arguments[(index + 1)...]))
             return
         }
+        if arguments.contains("--knobshift-link-check") {
+            MainActor.assumeIsolated { KnobShiftLinkCheck.run() }
+            return
+        }
+        if arguments.contains("--knobshift-link-serve") {
+            MainActor.assumeIsolated { KnobShiftLinkCheck.serve() }
+            return
+        }
         if arguments.contains("--knobshift-mix-check") {
             MainActor.assumeIsolated { KnobShiftMixTests.run() }
             exit(MainActor.assumeIsolated { KnobShiftMixTests.failures } == 0 ? 0 : 1)
@@ -89,6 +97,10 @@ struct KnobApp: App {
         model.start()
         model.restorePower()
         Updater.shared.start()
+        // Offers the KnobShift playlists to Knob on the iPhone, over the home Wi-Fi.
+        KnobShiftLinkServer.shared.start(model: model.knobShift)
+        // Now Playing in Control Center and the keyboard's play keys.
+        KnobShiftNowPlayingCenter.shared.start(model: model.knobShift)
         DispatchQueue.main.async {
             DevWindow.showIfRequested(model: model)
             KnobShiftWindow.restoreIfNeeded(model: model.knobShift)

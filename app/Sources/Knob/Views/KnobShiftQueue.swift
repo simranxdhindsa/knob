@@ -41,6 +41,7 @@ struct KnobShiftQueue: View {
     var onAdd: () -> Void
     var onSpotify: () -> Void = {}
     var onYouTube: () -> Void = {}
+    var onSync: () -> Void = {}
     @State private var selection: Set<UUID> = []
     @State private var confirmingRemoveAll = false
 
@@ -90,9 +91,11 @@ struct KnobShiftQueue: View {
                 Button("Remove all", role: .destructive) { selection = []; model.removeAll() }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("The music files stay on your Mac, so you can add them again later.")
+                Text("The music files stay on your \(Platform.deviceName), so you can add them again later.")
             }
+            #if os(macOS)
             KnobShiftPlaylistRows(model: model)
+            #endif
             if model.tracks.isEmpty && model.pending.isEmpty {
                 empty
             } else {
@@ -105,7 +108,7 @@ struct KnobShiftQueue: View {
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
                 .tint(Palette.accent)
-                .onDeleteCommand(perform: removeSelection)
+                .onDeleteKey(perform: removeSelection)
                 .contextMenu(forSelectionType: UUID.self) { ids in
                     if !ids.isEmpty {
                         Button(ids.count == 1 ? "Remove from Queue" : "Remove \(ids.count) Songs from Queue") {
@@ -136,7 +139,11 @@ struct KnobShiftQueue: View {
     /// ADD MUSIC: songs on this Mac, or, where Spotify import is available, a dropdown with both
     /// (KnobShiftAddMusic). The header looks the same either way, so it never changes size.
     private var addMusic: some View {
+        #if os(macOS)
         KnobShiftAddMusic(spotify: model.spotifyAvailable, youtube: model.youtubeAvailable, onMac: onAdd, onSpotify: onSpotify, onYouTube: onYouTube)
+        #else
+        KnobShiftAddMusic(spotify: true, youtube: true, onMac: onAdd, onSpotify: onSpotify, onYouTube: onYouTube, sync: true, onSync: onSync)
+        #endif
     }
 
     /// Strips the list's own look, and leaves room on the right for the scroll bar so it never
@@ -213,11 +220,17 @@ struct KnobShiftQueue: View {
         .padding(.vertical, 6)
     }
 
+    #if os(macOS)
+    private static let emptyHint = "KnobShift mixes them into each other like a DJ. Spotify and YouTube links work too, from ADD MUSIC."
+    #else
+    private static let emptyHint = "KnobShift mixes them into each other like a DJ. Tap ADD MUSIC to pick songs from the Files app."
+    #endif
+
     private var empty: some View {
         VStack(spacing: 8) {
             Image(systemName: "music.note.list").font(.system(size: 24)).foregroundStyle(Palette.accent.opacity(0.85))
-            Text("Add songs from your Mac").font(.system(size: 12, weight: .semibold)).foregroundStyle(Screen.text)
-            Text("KnobShift mixes them into each other like a DJ. Spotify and YouTube links work too, from ADD MUSIC.")
+            Text("Add songs from your \(Platform.deviceName)").font(.system(size: 12, weight: .semibold)).foregroundStyle(Screen.text)
+            Text(Self.emptyHint)
                 .font(.system(size: 10)).foregroundStyle(Screen.textTertiary)
                 .multilineTextAlignment(.center)
         }
