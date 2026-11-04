@@ -67,8 +67,8 @@ struct GrooveCap: View {
     static let size: CGFloat = 20
 
     var body: some View {
-        Circle().fill(Glass.text)
+        Circle().fill(Glass.onAccent)
             .frame(width: Self.size, height: Self.size)
-            .shadow(color: Glass.scrim, radius: 3, y: 1)
+            .shadow(color: Glass.shadow, radius: 3, y: 1)
     }
 }
