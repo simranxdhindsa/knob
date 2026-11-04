@@ -51,7 +51,9 @@ final class PhoneApp: ObservableObject {
     /// song in KnobShift/Imported, KNOB_PHONE_PLAY=1 turns Knob on and plays, and
     /// KNOB_PHONE_SHEET=1 opens the sound controls. KNOB_PHONE_MAC=spotify, youtube or sync opens
     /// that sheet, and KNOB_PHONE_SYNC=1 syncs with Knob on the Mac
-    /// (a number of seconds instead waits that long first).
+    /// (a number of seconds instead waits that long first). KNOB_PHONE_QUEUE=1 opens the queue (or
+    /// after that many seconds), KNOB_PHONE_MIX=n asks for a KnobMix and KNOB_PHONE_PAUSE=n pauses,
+    /// both after n seconds.
     private static func runChecks(_ model: KnobModel) async {
         let environment = ProcessInfo.processInfo.environment
         PhoneEffectUnit.silent = environment["KNOB_PHONE_SILENT"] == "1"
@@ -66,6 +68,18 @@ final class PhoneApp: ObservableObject {
             if let first = model.knobShift.tracks.first { model.knobShift.select(first) }
         }
         if environment["KNOB_PHONE_SHEET"] == "1" { PhoneSheets.shared.sound = true }
+        if let wait = environment["KNOB_PHONE_QUEUE"].flatMap(Double.init) {
+            if wait > 1 { try? await Task.sleep(for: .seconds(wait)) }
+            PhoneSheets.shared.queue = true
+        }
+        if let wait = environment["KNOB_PHONE_MIX"].flatMap(Double.init) {
+            try? await Task.sleep(for: .seconds(wait))
+            model.knobShift.mixNow()
+        }
+        if let wait = environment["KNOB_PHONE_PAUSE"].flatMap(Double.init) {
+            try? await Task.sleep(for: .seconds(wait))
+            model.knobShift.pauseOrResume()
+        }
         if let sheet = environment["KNOB_PHONE_MAC"].flatMap(PhoneMacSheet.Source.init(rawValue:)) { PhoneSheets.shared.mac = sheet }
         if let wait = environment["KNOB_PHONE_SYNC"].flatMap(Double.init) {
             // A number above 1 waits that many seconds first, so the sheet is on screen.
@@ -91,9 +105,8 @@ final class PhoneApp: ObservableObject {
     }
 }
 
-/// The phone's main screen is the KnobShift player; Knob's sound controls (power, presets,
-/// effects and equalizer) open from its sound button. There is no volume knob: the iPhone's own
-/// volume buttons do that.
+/// The phone's main screen is the KnobShift player (PhonePlayer); Knob's sound controls (power,
+/// presets, effects and equalizer) open from its sound button.
 struct PhoneRoot: View {
     @ObservedObject var model: KnobModel
     @ObservedObject private var sheets = PhoneSheets.shared
@@ -107,7 +120,7 @@ struct PhoneRoot: View {
     var body: some View {
         ZStack {
             // The player only fades in, never moves, so its Play button stays where the knob lands.
-            KnobShiftPlayerView(model: model.knobShift, onSound: { sheets.sound = true }, prepareImports: PhoneLibrary.keep)
+            PhonePlayer(model: model.knobShift, knob: model, prepareImports: PhoneLibrary.keep)
                 .opacity(revealed ? 1 : 0)
                 .environment(\.hidesPlayButton, launching)
                 .onPreferenceChange(PlayButtonFrame.self) { playButton = $0 }
