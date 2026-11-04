@@ -47,6 +47,8 @@ struct LaunchKnobPose: View {
     var knobOpacity: Double = 1
     /// Degrees the pointer strains past the end stop.
     var overshoot: Double = 0
+    /// The knob's finish: the opening follows the iPhone's theme.
+    var scheme = ColorScheme.dark
 
     var body: some View {
         RealisticKnob(value: .constant(value), size: size, showsMinMax: false,
@@ -56,7 +58,7 @@ struct LaunchKnobPose: View {
             .scaleEffect(knobScale)
             .opacity(knobOpacity)
             .frame(width: size * 1.8, height: size * 1.8)
-            .environment(\.colorScheme, .dark)
+            .environment(\.colorScheme, scheme)
             .accessibilityHidden(true)
     }
 }
