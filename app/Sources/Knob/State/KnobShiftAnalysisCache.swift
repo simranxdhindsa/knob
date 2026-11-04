@@ -61,7 +61,8 @@ enum KnobShiftAnalysisCache {
 
     /// Results saved before paths were portable were filed under the app's old folder on the
     /// iPhone. Once per launch, each is moved under the song's portable path, so the songs
-    /// prepared before an update stay prepared. Results whose song is gone are left as they are.
+    /// prepared before an update stay prepared. Results that are outdated, or whose song has gone
+    /// or changed, are cleared away.
     private static let renamed: Void = {
         // On the Mac paths never moved, so there is nothing to look through.
         #if os(iOS)
@@ -69,9 +70,18 @@ enum KnobShiftAnalysisCache {
         for file in files where file.pathExtension == "json" {
             guard let data = try? Data(contentsOf: file), let entry = try? decoder.decode(Entry.self, from: data),
                   entry.path != Platform.portable(entry.path) else { continue }
+            // An outdated result is no use, and an older install's copy must never replace one
+            // already moved over.
             let song = URL(fileURLWithPath: Platform.relocated(entry.path))
-            guard let stamp = stamp(song), let target = entryURL(for: song),
-                  entry.size == stamp.size, abs(entry.modified.timeIntervalSince(stamp.modified)) < 1 else { continue }
+            guard entry.version == version, let stamp = stamp(song), let target = entryURL(for: song),
+                  entry.size == stamp.size, abs(entry.modified.timeIntervalSince(stamp.modified)) < 1 else {
+                try? FileManager.default.removeItem(at: file)
+                continue
+            }
+            if FileManager.default.fileExists(atPath: target.path) {
+                try? FileManager.default.removeItem(at: file)
+                continue
+            }
             let moved = Entry(version: entry.version, path: stamp.path, size: entry.size, modified: entry.modified,
                               duration: entry.duration, tailSilence: entry.tailSilence, analysis: entry.analysis, steps: entry.steps)
             guard let encoded = try? encoder.encode(moved), (try? encoded.write(to: target, options: .atomic)) != nil else { continue }
