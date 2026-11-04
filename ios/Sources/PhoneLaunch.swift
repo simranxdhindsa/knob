@@ -44,8 +44,9 @@ struct PhoneLaunch: View {
     static let strain = 0.3, strainReach = 9.0, strainRate = 18.0
     /// The landing into the Play button, in seconds.
     static let landing = 0.5
-    /// The last fade once the knob has landed, hiding the swap to the real button, in seconds.
-    static let handOver = 0.12
+    /// Once landed, how long the real button gets to settle under this copy, then the last fade
+    /// that hides the swap, in seconds.
+    static let settle = 0.25, handOver = 0.12
     /// The knob's body (its skirt) as a share of its size at the launch size (RealisticKnob).
     static let bodyShare: CGFloat = 0.77 * 0.82
 
@@ -127,6 +128,9 @@ struct PhoneLaunch: View {
         landingStarted = Date()
         try? await Task.sleep(for: .seconds(Self.landing))
         onLanded()
+        // The real button's triangle draws itself in as it appears, which showed as a dip from
+        // white to pink: this copy stays solid on top until that is over.
+        try? await Task.sleep(for: .seconds(Self.settle))
         withAnimation(.easeOut(duration: Self.handOver)) { fading = true }
         try? await Task.sleep(for: .seconds(Self.handOver))
         finished = true
