@@ -6,8 +6,8 @@ import SwiftUI
 /// lighting each mark as it passes with a tap felt at each, bumps against its end stop and
 /// strains past it for a moment (the pointer shaking a few degrees beyond the eleventh mark with
 /// a rumble felt in the hand), then flies down into the player's Play button, shrinking to its
-/// size as the knob melts away from the real orange disc behind it, so the knob you watched
-/// becomes the button you tap (a shared element hand over, like iOS zoom transitions). Only the
+/// size and fading to orange, so the knob you watched becomes the button you tap (a shared
+/// element hand over, like iOS zoom transitions). Only the
 /// marks glow: there is no halo behind the knob. Everything follows the clock frame by frame, so
 /// it stays smooth at 120 Hz. With Reduce Motion it only fades.
 struct PhoneLaunch: View {
@@ -63,17 +63,24 @@ struct PhoneLaunch: View {
                 // Only the indicator marks glow, as they light.
                 LaunchKnobPose(value: value, size: Self.knobSize,
                                knobScale: spot.scale * (endStop ? 1.035 : 1),
-                               knobOpacity: 1 - Self.smoother((u - 0.55) / 0.4),
+                               knobOpacity: 1 - Self.clamp((u - 0.45) / 0.35),
                                overshoot: strainDegrees(at: timeline.date), scheme: scheme)
                     .position(spot.center)
-                // The Play button it becomes, the very same disc, growing solid out of the knob's
-                // centre until it covers it. Never faded: the grey knob blended with a see through
-                // disc dulled the orange and greyed the triangle, which looked like a flicker.
+                // The Play button it becomes: orange fading in over the knob from halfway, then
+                // the real disc with its triangle for the last quarter. Its glow is gone by the
+                // end, as the real button has none.
                 let body = Self.knobSize * Self.bodyShare
                 let diameter = playButton == .zero ? body : playButton.width
-                PhonePlayDisc(isPlaying: false, turn: 0, showsPointer: false, diameter: diameter)
-                    .scaleEffect(max(body * spot.scale / diameter * Self.smoother((u - 0.1) / 0.5), 0.001))
-                    .position(spot.center)
+                ZStack {
+                    Circle().fill(Palette.accent)
+                        .shadow(color: Palette.accentGlow.opacity(0.55 * (1 - Self.clamp((u - 0.8) / 0.2))), radius: 9)
+                    PhonePlayDisc(isPlaying: false, turn: 0, showsPointer: false, diameter: diameter)
+                        .opacity(Self.clamp((u - 0.75) / 0.25))
+                }
+                .frame(width: diameter, height: diameter)
+                .scaleEffect(body * spot.scale / diameter)
+                .opacity(Self.clamp((u - 0.45) / 0.45))
+                .position(spot.center)
             }
             .opacity(fading ? 0 : 1)
             // The strain is felt with the shake it is seen with: one tap each time the pointer
