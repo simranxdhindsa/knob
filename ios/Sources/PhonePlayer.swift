@@ -303,11 +303,7 @@ struct PhoneTimeline: View {
         if model.mixState == .mixing { return "KNOBMIX" }
         if let countdown { return "KNOBMIX IN \(countdown)" }
         if model.mixNowWaiting { return "KNOBMIX STARTING" }
-        switch model.mixState {
-        case .preservingEnding: return "FULL ENDING"
-        case .analyzing: return "PREPARING"
-        default: return nil
-        }
+        return model.mixState == .analyzing ? "PREPARING" : nil
     }
 }
 
