@@ -20,6 +20,7 @@ struct PhoneMacSheet: View {
     @ObservedObject var model: KnobShiftModel
     @ObservedObject private var link = PhoneMacLink.shared
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
     @State var source: Source
     @State private var text = ""
     @State private var declinedCount = KnobShiftSyncPlan.declined.count
@@ -36,8 +37,8 @@ struct PhoneMacSheet: View {
             .padding(20)
         }
         .scrollDismissesKeyboard(.interactively)
-        .background(LinearGradient(colors: [Screen.top, Screen.bottom], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
-        .environment(\.colorScheme, .dark)
+        .background(LinearGradient(colors: [Palette.of(scheme).panelTop, Palette.of(scheme).panelBottom], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
+        .environment(\.glassCards, true)
         .tint(Palette.accent)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
@@ -53,11 +54,11 @@ struct PhoneMacSheet: View {
                 }
             }
             Text(source == .sync ? "SYNC FROM YOUR MAC" : "ADD FROM \(source.title.uppercased())")
-                .font(.system(size: 12, weight: .heavy)).tracking(1.4).foregroundStyle(Screen.text)
+                .font(.system(size: 12, weight: .heavy)).tracking(1.4).foregroundStyle(Glass.text)
             Spacer()
             Button { dismiss() } label: {
-                Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Screen.textSecondary)
-                    .frame(width: 30, height: 30).background(Circle().fill(Screen.tabTrack))
+                Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Glass.secondary)
+                    .frame(width: 30, height: 30).background(Circle().fill(Glass.fill))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Close")
@@ -71,7 +72,7 @@ struct PhoneMacSheet: View {
                       onPaste: { text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" },
                       onAdd: add)
             Text("Knob on your Mac downloads the songs and sends them to this iPhone over Wi-Fi, so keep it open on the same Wi-Fi. Keep only music you have the right to keep.")
-                .font(.system(size: 11)).foregroundStyle(Screen.textSecondary)
+                .font(.system(size: 11)).foregroundStyle(Glass.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -87,11 +88,11 @@ struct PhoneMacSheet: View {
     private var syncCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                Image(systemName: "laptopcomputer").font(.system(size: 16)).foregroundStyle(Screen.textSecondary)
+                Image(systemName: "laptopcomputer").font(.system(size: 16)).foregroundStyle(Glass.secondary)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(link.macName ?? "Your Mac").font(.system(size: 13, weight: .semibold)).foregroundStyle(Screen.text)
+                    Text(link.macName ?? "Your Mac").font(.system(size: 13, weight: .semibold)).foregroundStyle(Glass.text)
                     Text("Spotify and YouTube playlists from Knob on your Mac")
-                        .font(.system(size: 10)).foregroundStyle(Screen.textTertiary)
+                        .font(.system(size: 10)).foregroundStyle(Glass.secondary)
                 }
                 Spacer()
             }
@@ -109,7 +110,7 @@ struct PhoneMacSheet: View {
                 .transaction { $0.animation = nil }
                 .font(.system(size: 12, weight: .bold)).tracking(0.8).foregroundStyle(.white)
                 .frame(maxWidth: .infinity).frame(height: 44)
-                .background(Capsule().fill(link.busy ? Screen.textTertiary.opacity(0.5) : Palette.accent))
+                .background(Capsule().fill(link.busy ? Glass.secondary.opacity(0.5) : Palette.accent))
                 .shadow(color: Palette.accentGlow.opacity(link.busy ? 0 : 0.35), radius: 8)
             }
             .buttonStyle(.plain)
@@ -119,7 +120,7 @@ struct PhoneMacSheet: View {
                 ProgressView(value: Double(link.copied), total: Double(link.toCopy)).tint(Palette.accent)
             }
             if let status = link.status {
-                Text(status).font(.system(size: 11)).foregroundStyle(link.failed ? Palette.accent : Screen.textSecondary)
+                Text(status).font(.system(size: 11)).foregroundStyle(link.failed ? Palette.accent : Glass.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if declinedCount > 0 {
@@ -134,7 +135,7 @@ struct PhoneMacSheet: View {
             }
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Screen.tabTrack))
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Glass.fill))
     }
 
     private var syncLabel: String {
@@ -148,7 +149,7 @@ struct PhoneMacSheet: View {
 
     private func playlists(_ library: KnobShiftLink.Library) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("ON YOUR MAC").font(.system(size: 9, weight: .bold)).tracking(1.2).foregroundStyle(Screen.textTertiary)
+            Text("ON YOUR MAC").font(.system(size: 9, weight: .bold)).tracking(1.2).foregroundStyle(Glass.secondary)
             ForEach(library.playlists, id: \.playlist.id) { entry in
                 PhoneMacPlaylistRow(entry: entry, here: here(entry))
             }
@@ -176,8 +177,8 @@ struct PhoneMacPlaylistRow: View {
             }
             .frame(width: 20)
             VStack(alignment: .leading, spacing: 2) {
-                Text(entry.playlist.name).font(.system(size: 12, weight: .semibold)).foregroundStyle(Screen.text).lineLimit(1)
-                Text(detail).font(.system(size: 10)).foregroundStyle(Screen.textTertiary)
+                Text(entry.playlist.name).font(.system(size: 12, weight: .semibold)).foregroundStyle(Glass.text).lineLimit(1)
+                Text(detail).font(.system(size: 10)).foregroundStyle(Glass.secondary)
             }
             Spacer()
             if here >= entry.songs.count, !entry.songs.isEmpty {

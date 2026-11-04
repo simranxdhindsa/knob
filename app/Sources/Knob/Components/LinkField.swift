@@ -13,15 +13,17 @@ struct LinkField: View {
     var onPaste: () -> Void
     var onAdd: () -> Void
 
+    @Environment(\.glassCards) private var glass
+
     private var isEmpty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "link").font(.system(size: 11, weight: .semibold)).foregroundStyle(Screen.textTertiary)
+            Image(systemName: "link").font(.system(size: 11, weight: .semibold)).foregroundStyle(glass ? Glass.secondary : Screen.textTertiary)
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
-                .foregroundStyle(Screen.text)
+                .foregroundStyle(glass ? Glass.text : Screen.text)
                 .tint(Palette.accent)
                 .autocorrectionDisabled()
                 .onSubmit(onAdd)
@@ -39,7 +41,7 @@ struct LinkField: View {
         }
         .padding(.leading, 12).padding(.trailing, 4)
         .frame(height: 34)
-        .background(Capsule().fill(Screen.tabTrack))
-        .overlay(Capsule().strokeBorder(Screen.highlight, lineWidth: 1))
+        .background(Capsule().fill(glass ? Glass.fill : Screen.tabTrack))
+        .overlay(Capsule().strokeBorder(glass ? Glass.stroke : Screen.highlight, lineWidth: 1))
     }
 }
