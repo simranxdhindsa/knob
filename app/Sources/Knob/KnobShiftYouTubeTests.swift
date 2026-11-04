@@ -159,6 +159,16 @@ enum KnobShiftYouTubeTests {
         let download = KnobShiftYouTubeParsing.downloadArguments(for: song, into: folder, ffmpeg: "/x/ffmpeg")
         expect(download.suffix(2) == ["--", "https://www.youtube.com/watch?v=fOT0BUpITw8"], "the link comes last, after --, so it is never read as an option")
         expect(!download.contains("--cookies") && !download.contains("--cookies-from-browser"), "downloads never use any browser's sign in")
+        let signedIn = KnobShiftYouTubeParsing.downloadArguments(for: song, into: folder, ffmpeg: "/x/ffmpeg", browser: .firefox)
+        expect(signedIn.contains("--cookies-from-browser") && signedIn.contains("firefox") && signedIn.suffix(2).first == "--",
+               "with a browser turned on, its sign in is used and the link still comes last")
+        expect(KnobShiftSpotDL.browserArguments(nil).isEmpty && KnobShiftSpotDL.browserArguments(.chrome) == ["--yt-dlp-args", "--cookies-from-browser chrome"],
+               "spotDL gets a browser only when one is turned on")
+        expect(KnobShiftYouTubeParsing.classify(["FileNotFoundError: could not find chrome cookies database in \"/x\""]) == .browserSignIn,
+               "a browser that cannot be read is told apart from a song that is gone")
+        expect(KnobShiftSpotDL.classify(["could not find chrome cookies database"]) == .browserSignIn, "for Spotify songs too")
+        expect(KnobShiftYouTubeParsing.classify(["Sign in to confirm you're not a bot. Use --cookies-from-browser"]) == .botCheck,
+               "YouTube's own hint about cookies is still a bot check")
         let search = KnobShiftYouTubeParsing.searchArguments(for: song, into: folder, ffmpeg: "/x/ffmpeg")
         expect(search.last == "ytsearch1:Artist Song", "a missing video is searched by artist and name")
         let list = KnobShiftYouTubeParsing.listArguments("https://www.youtube.com/playlist?list=PLx")

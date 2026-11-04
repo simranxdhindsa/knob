@@ -22,10 +22,13 @@ it starts at the old song's last hook and brings the next singer in over the old
 - KnobShift shows on your lock screen and in Apple's media controls, and Next does a KnobMix
 - The song you played last comes back in the player, ready to play from where you stopped
 - Every preset has an icon, and presets you save get their own
+- If YouTube blocks downloads, you can choose to continue with your own YouTube sign in from your browser; it is off unless you turn it on
+- Knob prepares two songs at a time on your Mac, so big playlists are ready sooner
 
 ### Fixes
 
 - A song still downloading on your Mac is never copied to your iPhone half finished
+- Sync always talks to the Knob with your full music, and shows your Mac's latest playlists each time you open it
 - A song your Mac could not download now says why on your iPhone, instead of showing Downloading on your Mac forever
 - Songs keep coming to your iPhone for as long as your Mac is downloading them, and carry on when you come back to the app
 - The refresh button on a playlist opens the song picker again, so songs you added on Spotify or YouTube can be downloaded
@@ -36,6 +39,9 @@ it starts at the old song's last hook and brings the next singer in over the old
 - Songs without a clear last chorus now mix gradually over about 20 seconds, so the next song no longer arrives all at once
 - KnobMix now finds a song's last chorus even when the music does not break before it
 - A song on iPhone is no longer treated as an instrumental when its voice could not be read
+- A song whose voice could not be read is read again by itself, and if that fails too its row offers Retry
+- Song covers show in grey while a song is prepared, then come up to full colour when it is ready
+- When YouTube pauses a long download, the songs now say YouTube paused instead of Not found
 - The orange glow stays inside the analyser screen and no longer blows out
 
 ## 3.0

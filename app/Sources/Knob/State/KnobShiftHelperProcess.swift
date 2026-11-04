@@ -246,7 +246,12 @@ final class KnobShiftHelperProcess: @unchecked Sendable {
 
         init(onLine: @escaping @Sendable (String) -> Void) { self.onLine = onLine }
 
-        var lines: [String] { lock.lock(); defer { lock.unlock() }; return kept }
+        /// The bot check is said once, so it stays even after a long run pushes it out of `kept`.
+        var lines: [String] {
+            lock.lock()
+            defer { lock.unlock() }
+            return sawBotCheck && !kept.contains(Self.botCheckMarker) ? kept + [Self.botCheckMarker] : kept
+        }
         var lastOutput: Date { lock.lock(); defer { lock.unlock() }; return lastOutputAt }
 
         func append(_ data: Data) {

@@ -100,6 +100,21 @@ extension KnobShiftModel {
         return true
     }
 
+    /// Logs what a song's voice is doing as a mix ends and while it settles, so a voice that goes
+    /// missing after a mix can be traced: is its part playing, at what level, and is anything
+    /// still pressing it down.
+    func traceVoice(of track: Track, on deck: KnobShiftDeck) {
+        Task { @MainActor [weak self] in
+            for (wait, pause) in [(0.0, 0.0), (5, 5), (15, 10), (30, 15)] {
+                try? await Task.sleep(for: .seconds(pause))
+                guard let self, self.nowPlaying?.id == track.id, self.primaryDeck === deck else { return }
+                self.log("VOICE", String(format: "%@ %.0fs after the mix: voice part %@ at %.0f%%, music part %.0f%%, file %.0f%%, pressed %.0f%%, hall %.0f%%, sweep %.0f%%, deck volume %.0f%%, speed %.3f.",
+                                         track.title, wait, deck.voice.isPlaying ? "playing" : "stopped", deck.voiceLevel * 100, deck.musicStemLevel * 100,
+                                         deck.fileLevel * 100, deck.voicePress * 100, deck.voiceReverb * 100, deck.sweep * 100, deck.volume * 100, deck.rate))
+            }
+        }
+    }
+
     /// Queues the incoming song on the secondary deck from `start`. With a separation ready it
     /// plays as music and voice side by side, then carries on from the original file; the two
     /// parts add up to the original exactly, so there is no seam. Returns true in that case.

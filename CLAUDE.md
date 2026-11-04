@@ -285,3 +285,4 @@ Brief, dated record of what was worked on per day, in the `Knob: <summary>` form
 ### 2026-11-04
 - Knob: the GitHub page is ready for new visitors: clear description and search topics, a share banner, Discussions, a Sponsor button, guides for contributors and bug report forms
 - Knob: a 15 second demo video at the top of the README, recorded from the real app and re-recordable with one command
+- Knob: KnobMix rebuilt around the last hook; iPhone sync shows live Mac status and real song failures; two songs prepare at once on the Mac; optional browser sign in when YouTube blocks downloads; 4.0 release notes and a README told through animation

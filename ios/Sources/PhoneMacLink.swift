@@ -62,23 +62,52 @@ final class PhoneMacLink: ObservableObject {
 
     // MARK: Finding the Mac
 
-    /// The first Knob found on the local network. iOS asks for Local Network access the first
-    /// time; while that is unanswered, or if it was turned down, the Mac cannot be seen.
+    /// The Knob to talk to. One Mac can run two (an installed copy and a dev copy), and one left
+    /// running for hours has an old list, so the one offering the most songs wins, not whichever
+    /// answered first.
     private func findMac(within seconds: Double = 6) async throws -> (NWEndpoint, String) {
+        let macs = try await findMacs(within: seconds)
+        guard macs.count > 1 else { return macs[0] }
+        var best = macs[0]
+        var most = -1
+        for mac in macs {
+            let client = KnobShiftLinkClient(endpoint: mac.0)
+            client.idleLimit = 3
+            guard let data = try? await client.get("/v1/library"),
+                  let library = try? KnobShiftLink.decoder().decode(KnobShiftLink.Library.self, from: data) else { continue }
+            let songs = library.playlists.reduce(0) { $0 + $1.songs.count }
+            if songs > most {
+                most = songs
+                best = mac
+            }
+        }
+        return best
+    }
+
+    /// Every Knob on the local network, a moment after the first answers. iOS asks for Local
+    /// Network access the first time; while that is unanswered, or if it was turned down, the Mac
+    /// cannot be seen.
+    private func findMacs(within seconds: Double) async throws -> [(NWEndpoint, String)] {
         let browser = NWBrowser(for: .bonjour(type: KnobShiftLink.service, domain: nil), using: .tcp)
         defer { browser.cancel() }
         return try await withCheckedThrowingContinuation { continuation in
             // Every callback runs on the main queue, so the first answer wins without a lock.
             let done = Box()
-            let finish: @Sendable (Result<(NWEndpoint, String), Error>) -> Void = { result in
+            let settling = Box()
+            let seen = Macs()
+            let finish: @Sendable (Result<[(NWEndpoint, String)], Error>) -> Void = { result in
                 guard !done.value else { return }
                 done.value = true
                 continuation.resume(with: result)
             }
             browser.browseResultsChangedHandler = { results, _ in
-                guard let found = results.first(where: { if case .service = $0.endpoint { return true }; return false }),
-                      case .service(let name, _, _, _) = found.endpoint else { return }
-                finish(.success((found.endpoint, name)))
+                seen.list = results.compactMap { result in
+                    if case .service(let name, _, _, _) = result.endpoint { return (result.endpoint, name) }
+                    return nil
+                }
+                guard !seen.list.isEmpty, !settling.value else { return }
+                settling.value = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { finish(.success(seen.list)) }
             }
             browser.stateUpdateHandler = { state in
                 switch state {
@@ -134,7 +163,7 @@ final class PhoneMacLink: ObservableObject {
             return
         }
         giveUp?.cancel()
-        macName = name
+        if macName == nil { macName = name }
         presence = .found
         // "Not found" from before is out of date now.
         if failed, !busy { status = nil; failed = false }
@@ -147,6 +176,16 @@ final class PhoneMacLink: ObservableObject {
             if case .dns(let code) = error, code == -65570 { presence = .blocked }
         default: break
         }
+    }
+
+    /// Reads the Mac's playlists for the sheet, so it never shows the list from the last sync.
+    func refreshLibrary() async {
+        guard !busy, let (endpoint, name) = try? await findMac(within: 3),
+              let data = try? await KnobShiftLinkClient(endpoint: endpoint).get("/v1/library"),
+              let library = try? KnobShiftLink.decoder().decode(KnobShiftLink.Library.self, from: data),
+              library.version == KnobShiftLink.version else { return }
+        macName = name
+        self.library = library
     }
 
     // MARK: Adding a link
@@ -463,4 +502,5 @@ final class PhoneMacLink: ObservableObject {
     }
 
     private final class Box: @unchecked Sendable { var value = false }
+    private final class Macs: @unchecked Sendable { var list: [(NWEndpoint, String)] = [] }
 }

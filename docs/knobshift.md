@@ -504,7 +504,9 @@ yt-dlp (bundled in `Contents/Resources/yt-dlp`, fetched and pinned by `packaging
 
 ### Signing in and the dashboard
 
-Knob signs in the way TV apps do, with Google's device flow (`State/KnobShiftGoogleAuth.swift`). Nothing is read from any browser.
+Knob signs in the way TV apps do, with Google's device flow (`State/KnobShiftGoogleAuth.swift`). That sign in never reads a browser.
+
+**Browser sign in for blocked downloads** (`State/KnobShiftYouTubeBrowser.swift`) is separate and off by default. The person picks a browser in the Add sheets. Downloads ignore it until YouTube's bot check blocks one; then it turns on for that session and the blocked songs are tried once more. yt-dlp reads the browser itself, and for those runs the helpers get the real home folder so it can find the browser. Knob never sees or stores the sign in, and it risks the person's YouTube account being flagged, which the choice says.
 
 1. **Google key.** The person adds their own Google key in the YouTube sheet: an OAuth client of the type "TVs and Limited Input devices", with YouTube Data API v3 turned on and their account added as a test user. A key made for a TV launcher works as it is. Saving it asks Google for a code first, so a wrong key or key type is refused straight away.
 2. **Code.** SIGN IN WITH GOOGLE shows a short code, copies it and opens google.com/device. Knob asks Google every few seconds until the code is entered. The scope is `youtube.readonly`.

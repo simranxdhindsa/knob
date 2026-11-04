@@ -79,6 +79,7 @@ struct KnobShiftYouTubeSheet: View {
             } else {
                 account
             }
+            KnobShiftBrowserChoice()
             KnobShiftDownloadsCard(model: model)
             KnobShiftImportStatus(model: model)
         }

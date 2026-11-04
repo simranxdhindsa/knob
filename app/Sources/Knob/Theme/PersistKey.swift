@@ -27,4 +27,6 @@ enum PersistKey: String {
     case knobShiftYouTubeNoticeAccepted = "knob.shift.youtube.noticeAccepted"
     /// The YouTube dashboard shows only music (category 10); on by default.
     case knobShiftYouTubeMusicOnly = "knob.shift.youtube.musicOnly"
+    /// The browser whose YouTube sign in downloads may use once YouTube blocks them; off by default.
+    case knobShiftYouTubeBrowser = "knob.shift.youtube.browser"
 }

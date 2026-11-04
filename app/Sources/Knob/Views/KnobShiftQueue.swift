@@ -171,14 +171,21 @@ struct KnobShiftQueue: View {
     private func row(_ track: KnobShiftModel.Track) -> some View {
         let playing = model.nowPlaying == track
         return HStack(spacing: 10) {
-            AlbumArtwork(url: track.url, size: 34, lit: playing)
+            AlbumArtwork(url: track.url, size: 34, lit: playing, reveal: model.justPrepared.contains(track.id))
             VStack(alignment: .leading, spacing: 2) {
                 Text(track.name).font(.system(size: 12, weight: playing ? .bold : .medium))
                     .foregroundStyle(playing ? Palette.accent : surface.text).lineLimit(1)
-                Text([track.artist, track.analysis.tempo.map { String(format: "%.0f BPM", $0) }].compactMap { $0 }.joined(separator: "  ·  "))
+                Text(voiceNote(track) ?? [track.artist, track.analysis.tempo.map { String(format: "%.0f BPM", $0) }].compactMap { $0 }.joined(separator: "  ·  "))
                     .font(.system(size: 10)).foregroundStyle(surface.tertiary).lineLimit(1)
             }
             Spacer(minLength: 4)
+            if offersVoiceRetry(track) {
+                Button("Retry") { model.rereadVoice(track) }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Palette.accent)
+                    .accessibilityLabel("Read the voice of \(track.name) again")
+            }
             Text(KnobShiftNowPlaying.clock(track.duration))
                 .font(.system(size: 10, weight: .medium).monospacedDigit()).foregroundStyle(surface.tertiary)
             Button { model.remove(track) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .bold)) }
@@ -189,6 +196,16 @@ struct KnobShiftQueue: View {
         .padding(.vertical, 6)
         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(playing ? Palette.accent.opacity(0.10) : .clear))
         .contentShape(Rectangle())
+    }
+
+    /// The quiet second try shows nothing; only a song that missed twice says so.
+    private func offersVoiceRetry(_ track: KnobShiftModel.Track) -> Bool {
+        track.voiceUnread && track.voiceRetried && !model.rereading.contains(track.id)
+    }
+
+    private func voiceNote(_ track: KnobShiftModel.Track) -> String? {
+        guard track.voiceUnread, track.voiceRetried else { return nil }
+        return model.rereading.contains(track.id) ? "Reading voice" : "Voice not read"
     }
 
     private func removeSelection() {
@@ -203,6 +220,7 @@ struct KnobShiftQueue: View {
         HStack(spacing: 10) {
             ZStack {
                 RoundedRectangle(cornerRadius: 5, style: .continuous).fill(surface.grid)
+                if !song.waitingForDownload, song.failure == nil { AlbumArtwork(url: song.url, size: 34, greyed: true) }
                 if song.failure != nil {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 13)).foregroundStyle(Palette.accent)

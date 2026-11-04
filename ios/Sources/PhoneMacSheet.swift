@@ -43,6 +43,8 @@ struct PhoneMacSheet: View {
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .onAppear { link.startWatching() }
+        // Each time the sheet opens, and whenever the Mac appears.
+        .task(id: link.connected) { if link.connected { await link.refreshLibrary() } }
         .onDisappear { link.stopWatching() }
         .onChange(of: phase) { _, now in
             // iOS stops the watching in the background, so it starts afresh on return.

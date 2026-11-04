@@ -26,7 +26,7 @@ final class KnobShiftSpotDL: @unchecked Sendable {
     }
 
     enum Failure: Error, Equatable {
-        case unavailable, privateList, offline, rateLimited, nothingFound, failed, stalled, noSpace, paused, youtubeBlocked
+        case unavailable, privateList, offline, rateLimited, nothingFound, failed, stalled, noSpace, paused, youtubeBlocked, browserSignIn
 
         /// Plain sentences for the player; no dashes.
         var message: String {
@@ -41,6 +41,7 @@ final class KnobShiftSpotDL: @unchecked Sendable {
             case .noSpace: return "Not enough space on this Mac for these songs."
             case .paused: return KnobShiftSpotifyAccount.pausedMessage
             case .youtubeBlocked: return "YouTube is pausing downloads from this Mac for now. Try again in a few hours."
+            case .browserSignIn: return KnobShiftYouTubeParsing.Failure.browserSignIn.message
             }
         }
     }
@@ -150,7 +151,7 @@ final class KnobShiftSpotDL: @unchecked Sendable {
     /// Downloads the songs of a save file into `folder`. Songs already there are skipped, so
     /// running it again only fetches what is missing. Each line of spotDL's output goes to
     /// `onLine` as it arrives.
-    func download(saveFile: URL, into folder: URL, userAuth: Bool, id: UUID,
+    func download(saveFile: URL, into folder: URL, userAuth: Bool, id: UUID, browser: KnobShiftYouTubeBrowser? = nil,
                   onLine: @escaping @Sendable (String) -> Void) async -> RunResult {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         // A save file carries everything spotDL needs, so downloading asks Spotify nothing: no
@@ -159,7 +160,12 @@ final class KnobShiftSpotDL: @unchecked Sendable {
                          "--format", "m4a", "--bitrate", "disable",
                          "--output", folder.appendingPathComponent("{list-position} {title} - {artists} [{track-id}].{output-ext}").path,
                          "--threads", "\(KnobShiftImport.Progress.threads)", "--print-errors"]
-        return await run(arguments, id: id, onLine: onLine)
+        return await run(arguments + Self.browserArguments(browser), id: id, browser: browser, onLine: onLine)
+    }
+
+    /// What tells spotDL's YouTube downloader to use a browser's sign in; nothing without one.
+    static func browserArguments(_ browser: KnobShiftYouTubeBrowser?) -> [String] {
+        browser.map { ["--yt-dlp-args", "--cookies-from-browser \($0.rawValue)"] } ?? []
     }
 
     /// Logs in through Spotify's page in the browser. spotDL saves the token as soon as the user
@@ -198,7 +204,7 @@ final class KnobShiftSpotDL: @unchecked Sendable {
 
     /// Runs spotDL through the shared runner, with its own home, FFmpeg and unpacked libraries.
     /// Reading a few thousand Liked Songs prints nothing for minutes, so the idle limit is generous.
-    private func run(_ arguments: [String], id: UUID, idleLimit: TimeInterval? = 900,
+    private func run(_ arguments: [String], id: UUID, idleLimit: TimeInterval? = 900, browser: KnobShiftYouTubeBrowser? = nil,
                      onLine: @escaping @Sendable (String) -> Void) async -> RunResult {
         guard let helper = Self.helper, let ffmpeg = Self.ffmpeg else {
             return RunResult(status: -1, lines: [], cancelled: false, stalled: false)
@@ -206,6 +212,13 @@ final class KnobShiftSpotDL: @unchecked Sendable {
         try? FileManager.default.createDirectory(at: Self.home, withIntermediateDirectories: true)
         var environment = ProcessInfo.processInfo.environment
         environment["HOME"] = Self.home.path
+        if browser != nil {
+            // The browser is found under the real home; spotDL's own files still stay in Knob's.
+            environment["HOME"] = KnobShiftYouTubeBrowser.realHome
+            environment["XDG_CACHE_HOME"] = Self.home.appendingPathComponent(".cache").path
+            environment["XDG_DATA_HOME"] = Self.home.appendingPathComponent(".local/share").path
+            environment["XDG_CONFIG_HOME"] = Self.home.appendingPathComponent(".config").path
+        }
         environment["PATH"] = "\(ffmpeg.deletingLastPathComponent().path):/usr/bin:/bin"
         environment["PYTHONUNBUFFERED"] = "1"
         // spotDL's display wraps at 80 columns when not in a terminal, which would split song
@@ -231,6 +244,7 @@ final class KnobShiftSpotDL: @unchecked Sendable {
     /// What went wrong, read from spotDL's messages.
     static func classify(_ lines: [String]) -> Failure? {
         let text = lines.joined(separator: "\n").lowercased()
+        if KnobShiftYouTubeParsing.isBrowserFailure(text) { return .browserSignIn }
         if text.contains("youtube_bot_check") { return .youtubeBlocked }
         if text.contains("quota_exceeded") { return .paused }
         if text.contains("429") || text.contains("rate limit") || text.contains("too many requests") { return .rateLimited }

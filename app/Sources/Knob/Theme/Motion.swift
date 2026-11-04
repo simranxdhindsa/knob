@@ -19,6 +19,9 @@ enum Motion {
     /// The slow drift of a generated cover's shapes while its song plays.
     static let artworkDrift = Animation.easeInOut(duration: 9).repeatForever(autoreverses: true)
 
+    /// A song's cover coming up from grey to full colour once it is ready.
+    static let artworkReveal = Animation.easeOut(duration: 0.4)
+
     /// The iPhone player's blurred background fading from one song's cover to the next.
     static let ambient = Animation.easeInOut(duration: 0.8)
 

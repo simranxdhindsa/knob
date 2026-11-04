@@ -617,6 +617,7 @@ extension KnobShiftModel {
         playbackStartedAt = Date().addingTimeInterval(-incomingPlayed)
         log("KNOBMIX", "Completed. \(secondaryDeck.name) stopped, \(primaryDeck.name) is primary with \(next.title) at normal speed, full bass, volume 1.")
         log("TIMING", "\(next.title) continues from \(Self.seconds(incomingPlayed)), where its deck really is.")
+        traceVoice(of: next, on: primaryDeck)
         startProgressUpdates()
         scheduleNext()
     }

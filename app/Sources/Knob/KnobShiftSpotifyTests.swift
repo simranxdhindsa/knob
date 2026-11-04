@@ -82,6 +82,11 @@ extension KnobShiftSpotifyCheck {
         expect(KnobShiftSpotDL.classify(["requests.exceptions.ConnectionError: Max retries exceeded"]) == .offline, "offline")
         expect(KnobShiftSpotDL.classify(["OSError: [Errno 28] No space left on device"]) == .noSpace, "disk full")
         expect(KnobShiftSpotDL.classify(["Saved 3 songs"]) == nil, "a normal run is no failure")
+        // YouTube says this once, early in a long run, and hundreds of lines follow it.
+        let long = KnobShiftHelperProcess.LineCollector { _ in }
+        long.append(Data("Sign in to confirm you're not a bot\n".utf8))
+        for number in 0..<400 { long.append(Data("403 line \(number)\n".utf8)) }
+        expect(KnobShiftSpotDL.classify(long.lines) == .youtubeBlocked, "a bot check early in a long run still counts")
 
         await laneTests()
         await processTests()

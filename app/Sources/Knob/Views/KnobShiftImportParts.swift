@@ -28,6 +28,31 @@ struct KnobShiftDownloadsCard: View {
     }
 }
 
+/// Whether downloads may use a browser's YouTube sign in once YouTube blocks them. Off by default,
+/// and the risk is said where the choice is made.
+struct KnobShiftBrowserChoice: View {
+    @AppStorage(PersistKey.knobShiftYouTubeBrowser.rawValue) private var chosen = KnobShiftYouTubeBrowser.off.rawValue
+
+    private var browser: KnobShiftYouTubeBrowser { KnobShiftYouTubeBrowser(rawValue: chosen) ?? .off }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Text("If YouTube blocks downloads, use my sign in from")
+                    .font(.system(size: 11, weight: .medium)).foregroundStyle(Screen.textSecondary)
+                Spacer(minLength: 4)
+                PillMenu(items: KnobShiftYouTubeBrowser.allCases, selection: browser, title: \.title, placeholder: "Off") { chosen = $0.rawValue }
+                    .frame(width: 100)
+            }
+            if browser != .off {
+                Text("Blocked songs then download with your YouTube account, which YouTube could flag. A spare account is safer. \(browser.title) may ask for permission.")
+                    .font(.system(size: 10)).foregroundStyle(Screen.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
 /// The import's status line. Always present at the same height, empty or not, so the sheet never
 /// jumps; a breathing dot shows while something works, and Cancel stops a list being read.
 struct KnobShiftImportStatus: View {

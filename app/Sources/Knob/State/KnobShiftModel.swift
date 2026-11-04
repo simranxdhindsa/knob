@@ -72,7 +72,11 @@ final class KnobShiftModel: ObservableObject {
         let title: String
         let duration: TimeInterval
         let tailSilence: TimeInterval
-        let analysis: Analysis
+        var analysis: Analysis
+        /// Its voice could not be read, so KnobMix knows less about it. It is read once more
+        /// quietly (`voiceRetried`); only after that does the queue offer Retry.
+        var voiceUnread = false
+        var voiceRetried = false
         /// The file's own title and artists, when it has tags (KnobShiftTags).
         var tags: KnobShiftTags.Tags? = nil
         /// Set for songs that came from a Spotify playlist (KnobShiftModel+Spotify.swift).
@@ -159,7 +163,13 @@ final class KnobShiftModel: ObservableObject {
     @Published internal(set) var nowPlaying: Track?
     /// For the log and checks only; nothing on screen shows it, so it never redraws the player.
     internal(set) var transitionDescription = "Add local music to begin."
-    @Published private(set) var isPreparing = false
+    @Published internal(set) var isPreparing = false
+    /// Songs that have just finished preparing, whose covers fade in.
+    @Published internal(set) var justPrepared: Set<UUID> = []
+    /// Covers being read while their songs are measured, so they are ready when the song is.
+    var coverLoads: [UUID: Task<Void, Never>] = [:]
+    /// Songs whose voice is being read again.
+    @Published internal(set) var rereading: Set<UUID> = []
     @Published private(set) var isPlaying = false
     @Published internal(set) var notice: String?
     /// Where the song is, ten times a second. It lives in its own object so only the timelines
@@ -195,6 +205,8 @@ final class KnobShiftModel: ObservableObject {
     @Published internal(set) var spotifyBusy = false
     /// Running downloads by playlist id.
     var spotifyJobs: [String: UUID] = [:]
+    /// YouTube blocked a download this session and a browser is chosen, so downloads now use it.
+    var youtubeBrowserInUse = false
     /// The browser login waiting for Spotify, so LOG IN can turn into CANCEL.
     @Published internal(set) var spotifyLoginJob: UUID?
     /// Reading a list from Spotify, so the sheet can offer Cancel.
@@ -220,7 +232,8 @@ final class KnobShiftModel: ObservableObject {
     @Published internal(set) var spotifyAccountLoading = false
     #endif
 
-    private let analyser = KnobShiftAnalyser()
+    /// One per song being prepared at once: an analyser works on one song at a time.
+    let analysers = [KnobShiftAnalyser(), KnobShiftAnalyser()]
     private let audioEngine = AVAudioEngine()
     private let deckOne: KnobShiftDeck
     private let deckTwo: KnobShiftDeck
@@ -255,7 +268,7 @@ final class KnobShiftModel: ObservableObject {
     private var configurationObserver: NSObjectProtocol?
     /// The song the current plan or blend leads into, for the log when it is called off.
     var plannedNext: Track?
-    private var isProcessing = false
+    var isProcessing = false
 
     private var outputFormatDescription: String {
         let format = audioEngine.outputNode.outputFormat(forBus: 0)
@@ -357,81 +370,6 @@ final class KnobShiftModel: ObservableObject {
     func isQueued(_ url: URL) -> Bool {
         let path = url.standardizedFileURL
         return tracks.contains { $0.url.standardizedFileURL == path } || pending.contains { $0.url.standardizedFileURL == path }
-    }
-
-    /// Prepares waiting songs in order. A second call while this runs returns at once; the
-    /// running loop picks up anything added meanwhile.
-    func processPending() async {
-        guard !isProcessing else { return }
-        isProcessing = true
-        isPreparing = true
-        if !isPlaying { mixState = .analyzing }
-        defer {
-            isProcessing = false
-            isPreparing = false
-        }
-        while let index = pending.firstIndex(where: { $0.failure == nil && !$0.waitingForDownload }) {
-            let song = pending[index]
-            pending[index].isActive = true
-            pending[index].progress = 0.02
-            log("ANALYSIS", "Analysing \(song.url.lastPathComponent).")
-            do {
-                let id = song.id
-                let result = try await analyser.analyse(song.url) { [weak self] value in
-                    Task { @MainActor [weak self] in self?.setProgress(value, for: id) }
-                }
-                var track = result.track
-                track.tags = await KnobShiftTags.read(song.url)
-                // Removed from the queue (or its playlist removed) while it was being prepared.
-                guard pending.contains(where: { $0.id == song.id }) else { continue }
-                let origin = KnobShiftPlaylists.origin(of: song.url, in: playlists)
-                track.spotifyId = song.spotifyId ?? origin?.spotifyId
-                track.playlistId = song.playlistId ?? origin?.playlistId
-                pending.removeAll { $0.id == song.id }
-                place(track, at: song.placement)
-                logAnalysis(result)
-                refreshPlanIfNeeded()
-            } catch {
-                if let failed = pending.firstIndex(where: { $0.id == song.id }) {
-                    pending[failed].isActive = false
-                    pending[failed].failure = "Could not read this file"
-                    // A Spotify or YouTube download that broke off: delete it, so Retry downloads it again.
-                    if song.spotifyId != nil, KnobShiftPlaylists.isDownload(song.url) {
-                        try? FileManager.default.removeItem(at: song.url)
-                        pending[failed].waitingForDownload = true
-                        pending[failed].failure = "Download broke"
-                    }
-                }
-                log("ERROR", "Analysis failed for \(song.url.lastPathComponent): \(error.localizedDescription)")
-            }
-            persistQueue()
-        }
-        if !tracks.isEmpty, !isPlaying {
-            mixState = .ready
-            transitionDescription = "Ready. Choose a song to begin."
-            log("READY", "Prepared \(tracks.count) song(s).")
-        }
-    }
-
-    /// Adds a prepared song where it was planned to go: next to a song of its playlist, or last.
-    private func place(_ track: Track, at placement: KnobShiftSyncPlan.Placement?) {
-        func index(in list: [Track]) -> Int {
-            switch placement {
-            case .after(let id)?: return list.lastIndex { $0.spotifyId == id }.map { $0 + 1 } ?? list.count
-            case .before(let id)?: return list.firstIndex { $0.spotifyId == id } ?? list.count
-            default: return list.count
-            }
-        }
-        let at = index(in: tracks)
-        // The song playing keeps its place in the order: one added before it moves it along.
-        if at <= currentIndex, !tracks.isEmpty, nowPlaying != nil { currentIndex += 1 }
-        tracks.insert(track, at: at)
-        if isShuffled { unshuffled.insert(track, at: index(in: unshuffled)) }
-    }
-
-    private func setProgress(_ value: Double, for id: UUID) {
-        guard let index = pending.firstIndex(where: { $0.id == id }) else { return }
-        pending[index].progress = max(pending[index].progress, value)
     }
 
     /// When a newly ready song becomes the next one while music plays, plan the mix into it.
@@ -743,7 +681,7 @@ final class KnobShiftModel: ObservableObject {
         log("SECTION", title)
     }
 
-    private func logAnalysis(_ result: KnobShiftAnalyser.Result) {
+    func logAnalysis(_ result: KnobShiftAnalyser.Result) {
         logSection("Analysis • \(result.track.title)")
         for step in result.steps { log("ANALYSIS", step) }
         log("ANALYSIS", "Result: \(result.track.analysis.summary).")

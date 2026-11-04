@@ -73,6 +73,7 @@ struct KnobShiftSpotifySheet: View {
             linkField
             account
             KnobShiftSpotifyKey(model: model)
+            KnobShiftBrowserChoice()
             KnobShiftDownloadsCard(model: model)
             KnobShiftImportStatus(model: model)
         }

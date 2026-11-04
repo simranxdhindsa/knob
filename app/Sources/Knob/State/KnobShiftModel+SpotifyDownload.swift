@@ -73,9 +73,26 @@ extension KnobShiftModel {
             Task { @MainActor in self?.spotifyLine(line, playlistId: playlistId, job: job) }
         }
         let result = await KnobShiftSpotDL.shared.download(saveFile: saveFile, into: folder, userAuth: spotifyLoggedIn,
-                                                            id: job, onLine: onLine)
+                                                            id: job, browser: downloadBrowser, onLine: onLine)
         try? FileManager.default.removeItem(at: saveFile)
         await downloadFinished(playlist, job: job, fetched: fetch, result: result)
+    }
+
+    // MARK: Using a browser's sign in
+
+    /// The browser to use for downloads now: none until YouTube has blocked one.
+    var downloadBrowser: KnobShiftYouTubeBrowser? {
+        youtubeBrowserInUse && KnobShiftYouTubeBrowser.chosen != .off ? KnobShiftYouTubeBrowser.chosen : nil
+    }
+
+    /// YouTube blocked a download: turns the chosen browser on, once a session. True means try the
+    /// blocked songs again, so a block that goes on anyway does not repeat for ever.
+    func useBrowserAfterBlock() -> Bool {
+        let chosen = KnobShiftYouTubeBrowser.chosen
+        guard !youtubeBrowserInUse, chosen != .off else { return false }
+        youtubeBrowserInUse = true
+        log("SPOTIFY", "YouTube blocked a download; using the YouTube sign in from \(chosen.title).")
+        return true
     }
 
     // MARK: Following spotDL
@@ -151,6 +168,7 @@ extension KnobShiftModel {
         case .rateLimited: rowText = "Spotify busy"
         case .paused: rowText = "Spotify paused"
         case .youtubeBlocked: rowText = "YouTube paused"
+        case .browserSignIn: rowText = "Browser sign in failed"
         case .noSpace: rowText = "No space"
         case .stalled: rowText = "Stopped"
         default: rowText = "Not found"
@@ -160,6 +178,10 @@ extension KnobShiftModel {
             && fetchedIds.contains($0.spotifyId ?? "") }.count
         markRows(of: playlist.id, ids: fetchedIds, failure: rowText)
         finishProgress(playlist.id)
+        if problem == .youtubeBlocked, missing > 0, useBrowserAfterBlock() {
+            retryFailed(playlist)
+            return
+        }
         if let problem, missing > 0, problem != .privateList {
             spotifyStatus = "\(playlist.name) stopped early: \(problem.message)"
         } else {
@@ -266,12 +288,13 @@ extension KnobShiftModel {
             Task { @MainActor in self?.log("SPOTIFY", line) }
         }
         let result = await KnobShiftSpotDL.shared.download(saveFile: saveFile, into: folder, userAuth: spotifyLoggedIn,
-                                                            id: job, onLine: onLine)
+                                                            id: job, browser: downloadBrowser, onLine: onLine)
         try? FileManager.default.removeItem(at: saveFile)
         await collectDownloads(playlist.id, finishedOnly: false)
         let problem = result.stalled ? .stalled : KnobShiftSpotDL.classify(result.lines)
         markRows(of: playlist.id, ids: [spotifyId], failure: problem == .offline ? "No internet" : problem == .paused ? "Spotify paused"
-                    : problem == .youtubeBlocked ? "YouTube paused" : "Not found")
+                    : problem == .youtubeBlocked ? "YouTube paused"
+                    : problem == .browserSignIn ? "Browser sign in failed" : "Not found")
     }
 
     /// Retries every song of a playlist that failed, as one download.

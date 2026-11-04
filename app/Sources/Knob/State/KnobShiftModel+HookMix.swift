@@ -116,9 +116,10 @@ extension KnobShiftModel {
         let tenth = Int(p * 10 + 0.0001)
         if !effectsLogged.contains("hook \(tenth)") {
             effectsLogged.insert("hook \(tenth)")
-            log("KNOBMIX", String(format: "+%.1fs %3.0f%% • old beats %3.0f%% • old voice %3.0f%%, pressed %3.0f%% • new song %3.0f%% • speeds %.3f / %.3f",
+            log("KNOBMIX", String(format: "+%.1fs %3.0f%% • old beats %3.0f%% • old voice %3.0f%%, pressed %3.0f%% • new song %3.0f%%, its voice %3.0f%% (%@) • speeds %.3f / %.3f",
                                   p * length, p * 100, music * 100, (outgoingOnStems ? voice : min(music, voice)) * 100, press * 100,
-                                  incoming * 100, primaryDeck.rate, secondaryDeck.rate))
+                                  incoming * 100, secondaryDeck.voiceLevel * 100, blendHasStems ? (secondaryDeck.voice.isPlaying ? "playing" : "NOT PLAYING") : "in the file",
+                                  primaryDeck.rate, secondaryDeck.rate))
         }
     }
 }
