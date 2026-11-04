@@ -40,6 +40,20 @@ enum Platform {
         #endif
     }
 
+    /// A file path that stays the same across installs, for keys saved with a file. On the iPhone
+    /// the app's own folders move on every install or update, so the part before them is left
+    /// out ("~/Documents/KnobShift/..."); `relocated` finds the file again from either form. On
+    /// the Mac paths never move and stay as they are.
+    static func portable(_ path: String) -> String {
+        #if os(macOS)
+        path
+        #else
+        let inApp = ["/Documents/", "/Library/", "/tmp/"].compactMap { path.range(of: $0) }.min { $0.lowerBound < $1.lowerBound }
+        guard let inApp else { return path }
+        return "~" + path[inApp.lowerBound...]
+        #endif
+    }
+
     /// What people call this device, for sentences like "the files stay on your Mac".
     static var deviceName: String {
         #if os(macOS)
