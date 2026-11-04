@@ -33,6 +33,8 @@ for source in "$repo_dir"/engine/dsp-controller.cpp "$repo_dir"/engine/dsp-contr
     -c "$source" -o "$objects/$(basename "$source" .cpp).o"
 done
 
+"$repo_dir/ios/check-theme.sh"
+
 # 3. Swift: the shared code, without what only the Mac can do (system wide sound, Spotify and
 #    YouTube downloads, windows, updates), plus the iPhone's own files.
 shared="$repo_dir/app/Sources/Knob"

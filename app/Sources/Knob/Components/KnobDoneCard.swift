@@ -15,6 +15,8 @@ struct KnobDoneCard: View {
     var onFinished: () -> Void = {}
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.surface) private var surface
+    @Environment(\.colorScheme) private var scheme
     @State private var started: Date?
     @State private var lastMark = 0
     @State private var leaving = false
@@ -50,8 +52,8 @@ struct KnobDoneCard: View {
                 .frame(width: Self.knobSize * 1.8, height: Self.knobSize * 1.8)
                 .padding(-8)
                 VStack(spacing: 4) {
-                    Text(title).font(.system(size: 15, weight: .bold)).foregroundStyle(Screen.text)
-                    Text(detail).font(.system(size: 12)).foregroundStyle(Screen.textSecondary)
+                    Text(title).font(.system(size: 15, weight: .bold)).foregroundStyle(surface.text)
+                    Text(detail).font(.system(size: 12)).foregroundStyle(surface.secondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -67,15 +69,12 @@ struct KnobDoneCard: View {
         .padding(.horizontal, 26).padding(.vertical, 22)
         .frame(maxWidth: 290)
         .background {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(LinearGradient(colors: [Screen.top, Screen.bottom], startPoint: .top, endPoint: .bottom))
-                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Screen.highlight, lineWidth: 1))
-                .shadow(color: .black.opacity(0.45), radius: 30, y: 12)
+            SurfaceBackground(radius: 24).shadow(color: .black.opacity(0.45), radius: 30, y: 12)
         }
         .scaleEffect(reduceMotion ? 1 : (leaving ? 0.9 : (started == nil ? 0.85 : 1)))
         .offset(y: reduceMotion ? 0 : (leaving ? -16 : (started == nil ? 18 : 0)))
         .opacity(leaving || started == nil ? 0 : 1)
-        .environment(\.colorScheme, .dark)
+        .environment(\.colorScheme, surface.scheme(scheme))
         .accessibilityElement(children: .combine)
         .task { await play() }
     }

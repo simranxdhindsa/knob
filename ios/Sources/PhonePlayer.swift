@@ -47,7 +47,6 @@ struct PhonePlayer: View {
             .animation(reduceMotion ? .easeOut(duration: 0.2) : Motion.gentle, value: sheets.queue)
         }
         .background { PhoneAmbient(url: (model.mixingInto ?? model.nowPlaying)?.url).ignoresSafeArea() }
-        .environment(\.glassCards, true)
         .sheet(item: $sheets.mac) { PhoneMacSheet(model: model, source: $0) }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result else { return }
@@ -198,8 +197,11 @@ struct PhoneAmbient: View {
             LinearGradient(colors: [p.panelTop, p.panelBottom], startPoint: .top, endPoint: .bottom)
             if let previous { blurred(previous) }
             if let wash { blurred(wash).opacity(shown) }
-            Glass.scrim
+            // Light keeps its own brightness and takes only the cover's colour, so the colour
+            // reaches every edge and a dark cover cannot grey the screen out.
+            if scheme == .dark { Glass.scrim }
         }
+        .compositingGroup()
         .task(id: url) {
             guard let url, let image = await KnobShiftArtwork.load(url) else {
                 previous = nil
@@ -221,9 +223,10 @@ struct PhoneAmbient: View {
         Color.clear
             .overlay {
                 Image(uiImage: image).resizable().scaledToFill()
-                    .blur(radius: 40).saturation(1.5).scaleEffect(1.3)
+                    .blur(radius: 40).saturation(scheme == .dark ? 1.5 : 2.4).scaleEffect(1.3)
             }
             .clipped()
+            .blendMode(scheme == .dark ? .normal : .color)
     }
 }
 

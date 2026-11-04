@@ -10,7 +10,7 @@ struct SegmentedTabs<Option: Hashable>: View {
 
     @Namespace private var thumb
     @FocusState private var focused: Bool
-    @Environment(\.glassCards) private var glass
+    @Environment(\.surface) private var surface
 
     var body: some View {
         HStack(spacing: 0) {
@@ -19,15 +19,15 @@ struct SegmentedTabs<Option: Hashable>: View {
                 Text(title(option))
                     .font(.system(size: 10.5, weight: selected ? .semibold : .medium))
                     .tracking(1.1)
-                    .foregroundStyle(glass ? (selected ? Glass.text : Glass.secondary) : (selected ? Screen.text : Screen.textTertiary))
+                    .foregroundStyle(selected ? surface.text : surface.tertiary)
                     .padding(.vertical, 6)
                     .frame(maxWidth: .infinity)
                     .background {
                         if selected {
                             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .fill(glass ? Glass.fill : Screen.tabThumb)
+                                .fill(surface.thumb)
                                 .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                    .stroke(glass ? Glass.stroke : Color.white.opacity(0.55), lineWidth: 1))
+                                    .stroke(surface.thumbStroke, lineWidth: 1))
                                 .shadow(color: .black.opacity(0.2), radius: 1.5, y: 1)
                                 .matchedGeometryEffect(id: "thumb", in: thumb)
                         }
@@ -40,7 +40,7 @@ struct SegmentedTabs<Option: Hashable>: View {
             }
         }
         .padding(3)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(glass ? Glass.fill : Screen.tabTrack))
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(surface.fill))
         .focusable()
         .focused($focused)
         .focusEffectDisabled()

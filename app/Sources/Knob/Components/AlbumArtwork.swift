@@ -11,7 +11,7 @@ struct AlbumArtwork: View {
     /// How round the corners are, as a share of the size.
     var corner: CGFloat = 0.14
 
-    @Environment(\.glassCards) private var glass
+    @Environment(\.surface) private var surface
     @State private var image: PlatformImage?
 
     var body: some View {
@@ -22,11 +22,7 @@ struct AlbumArtwork: View {
             } else if let url {
                 GeneratedArtwork(seed: url.deletingPathExtension().lastPathComponent, animated: animated)
             } else {
-                if glass {
-                    Glass.fill
-                } else {
-                    LinearGradient(colors: [Screen.top, Screen.bottom], startPoint: .topLeading, endPoint: .bottomTrailing)
-                }
+                LinearGradient(colors: surface.backdrop, startPoint: .topLeading, endPoint: .bottomTrailing)
                 Image(systemName: "music.note")
                     .font(.system(size: size * 0.34, weight: .semibold))
                     .foregroundStyle(Palette.accent.opacity(0.85))
@@ -34,7 +30,7 @@ struct AlbumArtwork: View {
         }
         .frame(width: size, height: size)
         .clipShape(shape)
-        .overlay(shape.stroke(Screen.highlight, lineWidth: 1))
+        .overlay(shape.stroke(surface.stroke, lineWidth: 1))
         .shadow(color: lit ? Palette.accentGlow.opacity(0.45) : .black.opacity(0.35), radius: lit ? size * 0.12 : size * 0.06, y: 2)
         .task(id: url) {
             guard let url else { image = nil; return }

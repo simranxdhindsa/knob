@@ -9,6 +9,7 @@ struct InsetScreen<Content: View>: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
         content
+            .environment(\.surface, .screen)
             .padding(10)
             .frame(maxWidth: .infinity)
             .background {

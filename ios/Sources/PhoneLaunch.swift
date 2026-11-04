@@ -68,7 +68,7 @@ struct PhoneLaunch: View {
                 let diameter = Self.knobSize * Self.bodyShare * spot.scale
                 Image(systemName: "play.fill")
                     .font(.system(size: 19 * diameter / 46, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Glass.onAccent)
                     .opacity(Self.clamp((u - 0.75) / 0.25))
                     .frame(width: diameter, height: diameter)
                     .background(Circle().fill(Palette.accent))

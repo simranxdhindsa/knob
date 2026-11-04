@@ -13,17 +13,17 @@ struct LinkField: View {
     var onPaste: () -> Void
     var onAdd: () -> Void
 
-    @Environment(\.glassCards) private var glass
+    @Environment(\.surface) private var surface
 
     private var isEmpty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "link").font(.system(size: 11, weight: .semibold)).foregroundStyle(glass ? Glass.secondary : Screen.textTertiary)
+            Image(systemName: "link").font(.system(size: 11, weight: .semibold)).foregroundStyle(surface.tertiary)
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
-                .foregroundStyle(glass ? Glass.text : Screen.text)
+                .foregroundStyle(surface.text)
                 .tint(Palette.accent)
                 .autocorrectionDisabled()
                 .onSubmit(onAdd)
@@ -31,7 +31,7 @@ struct LinkField: View {
                 Label(isEmpty ? "PASTE" : "ADD", systemImage: isEmpty ? "doc.on.clipboard" : "plus")
                     .font(.system(size: 10, weight: .bold)).tracking(0.7).foregroundStyle(.white)
                     .padding(.horizontal, 14).frame(height: 26)
-                    .background(Capsule().fill(enabled ? Palette.accent : Screen.textTertiary.opacity(0.4)))
+                    .background(Capsule().fill(enabled ? Palette.accent : surface.tertiary.opacity(0.4)))
                     .contentTransition(.opacity)
                     .animation(Motion.snappy, value: isEmpty)
             }
@@ -41,7 +41,7 @@ struct LinkField: View {
         }
         .padding(.leading, 12).padding(.trailing, 4)
         .frame(height: 34)
-        .background(Capsule().fill(glass ? Glass.fill : Screen.tabTrack))
-        .overlay(Capsule().strokeBorder(glass ? Glass.stroke : Screen.highlight, lineWidth: 1))
+        .background(Capsule().fill(surface.fill))
+        .overlay(Capsule().strokeBorder(surface.stroke, lineWidth: 1))
     }
 }

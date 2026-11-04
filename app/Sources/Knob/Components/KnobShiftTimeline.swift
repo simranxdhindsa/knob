@@ -4,6 +4,7 @@ import SwiftUI
 /// move through the song. It watches only the playback clock, so its ten updates a second never
 /// redraw the rest of the player. Used by the full player and the panel's mini player.
 struct KnobShiftTimeline: View {
+    @Environment(\.surface) private var surface
     let model: KnobShiftModel
     @ObservedObject var clock: KnobShiftClock
     var mini = false
@@ -17,7 +18,7 @@ struct KnobShiftTimeline: View {
             #if os(iOS)
             // The iPhone's slider shows a large handle even with nothing to move, so until a
             // song plays it is an empty track.
-            if playing { slider } else { Capsule().fill(Screen.tabTrack).frame(height: 4).frame(height: 30) }
+            if playing { slider } else { Capsule().fill(surface.fill).frame(height: 4).frame(height: 30) }
             #else
             slider
             #endif
@@ -27,7 +28,7 @@ struct KnobShiftTimeline: View {
                 Text(playing ? KnobShiftNowPlaying.clock(max(0, clock.duration - position)) + " left" : "0:00")
             }
             .font(.system(size: mini ? 9 : 10, weight: .semibold).monospacedDigit())
-            .foregroundStyle(Screen.textTertiary)
+            .foregroundStyle(surface.tertiary)
         }
         .onAppear { position = clock.time }
         .onChange(of: clock.time) { _, time in if !isScrubbing { position = time } }

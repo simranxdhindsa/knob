@@ -221,6 +221,7 @@ If the same UI pattern is needed in 2+ places, extract it into `Components/`; ne
 | `LevelMeter` | L/R meters on a -48...0 dB scale |
 | `KnobGroove`, `GrooveCap` | Thin flat slider with an orange fill for the iPhone player, thickens under the finger, relative drag, and its round white handle |
 | `VUMeter` | Analog VU needle meter beside the level meters, in the knobs' finish (light/dark); needle shape and spring from **Analog UI Needle Gauge** (TechSquidTV, MIT). 0 VU = -6 dBFS peak |
+| `Surface`, `SurfaceBackground` | What a view sits on (`Theme/Surface.swift`): views read `surface.text`, `surface.fill` and so on, never choose dark or light themselves. Glass that follows the theme on iPhone, the dark screen on Mac and inside `InsetScreen`. `ios/check-theme.sh` fails the iPhone build on fixed dark colours |
 | `Grain` | Deterministic panel speckle |
 | `UpdateStatusLabel` | Updater state beside the version in the header: short text ("Downloading…"), full sentence as tooltip |
 | `EngravedLabel` | Uppercase control label (in `Views/PanelView.swift`) |

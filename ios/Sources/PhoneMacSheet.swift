@@ -38,7 +38,6 @@ struct PhoneMacSheet: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .background(LinearGradient(colors: [Palette.of(scheme).panelTop, Palette.of(scheme).panelBottom], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
-        .environment(\.glassCards, true)
         .tint(Palette.accent)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
@@ -108,7 +107,7 @@ struct PhoneMacSheet: View {
                     Text(syncLabel)
                 }
                 .transaction { $0.animation = nil }
-                .font(.system(size: 12, weight: .bold)).tracking(0.8).foregroundStyle(.white)
+                .font(.system(size: 12, weight: .bold)).tracking(0.8).foregroundStyle(Glass.onAccent)
                 .frame(maxWidth: .infinity).frame(height: 44)
                 .background(Capsule().fill(link.busy ? Glass.secondary.opacity(0.5) : Palette.accent))
                 .shadow(color: Palette.accentGlow.opacity(link.busy ? 0 : 0.35), radius: 8)
