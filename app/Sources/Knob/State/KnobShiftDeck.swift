@@ -182,12 +182,17 @@ final class KnobShiftDeck {
         }
     }
 
+    /// File position where the separated parts this song arrived on run out; until then
+    /// `player` holds its music alone and `voice` its voice.
+    var arrivalStemsEnd: TimeInterval = 0
+
     /// A moment `seconds` from now that every part of every deck agrees on.
     static func startTime(after seconds: TimeInterval) -> AVAudioTime {
         AVAudioTime(hostTime: mach_absolute_time() + AVAudioTime.hostTime(forSeconds: seconds))
     }
 
     func stop() {
+        arrivalStemsEnd = 0
         player.stop()
         voice.stop()
         musicStem.stop()

@@ -83,7 +83,9 @@ extension KnobShiftModel {
             old.musicStemLevel = Float(music)
             old.voiceLevel = Float(voice * (1 - 0.15 * press) * (1 - sink))
             old.voicePress = press
-            old.throwVoice(speed: 1)
+            // The voice follows its deck's speed like its music, at natural pitch. Held at normal
+            // speed, the trace of it left in the music sang the same line seconds apart from it.
+            old.voiceTape = 0
             old.voiceReverb = 0.8 * press * hall
             // The leaving beats lose some treble and wash into a hall as they go.
             old.sweep = 0.6 * (1 - music)
