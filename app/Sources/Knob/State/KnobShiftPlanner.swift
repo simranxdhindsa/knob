@@ -42,8 +42,19 @@ struct KnobShiftPlan {
     static let longestMix: TimeInterval = 16
     /// In a sung mix the new voice comes in this long before the old voice's last words end,
     /// so they overlap on the old song's last two or three words.
-    /// (3 seconds: a song's first singing is measured up to about a second and a half early.)
-    static let handover: TimeInterval = 3
+    /// Half a second; when the mix starts the real overlap is measured and kept between
+    /// `leastOverlap` and `mostOverlap`.
+    static let handover: TimeInterval = 0.5
+    /// The least and most the old and new voices sing together, checked when the mix starts.
+    static let leastOverlap: TimeInterval = 0.25
+    static let mostOverlap: TimeInterval = 1
+    /// The least time the old voice is given to finish once the mix starts.
+    static let shortestWords: TimeInterval = 4
+    /// The song analysis finds singing in steps of about a second and a half: its first words
+    /// come out about this much early and its last words about this much late.
+    static let analysisSlack: TimeInterval = 1.25
+    /// How long before its first words a sung mix starts the new song.
+    static let voiceLead: TimeInterval = 0.3
     /// How much of the new song's own intro plays before its voice comes in.
     static let introLead: TimeInterval = 2
     /// How long the old song carries on after its last words (its pressed voice ringing out).
@@ -130,8 +141,8 @@ struct KnobShiftPlan {
                 start = max(0, min(voiceEnd - 0.6 * target, audibleEnd - target))
                 reasoning.append("\(current.title): no last hook found, so the mix starts at \(clock(start)), over its last words.")
             }
-            // The old voice's last words end at `lastWords`. The new voice comes in on them, 3
-            // seconds before, while the old voice is pressed down and fading, so the two voices
+            // The old voice's last words end at `lastWords`. The new voice comes in on them, half
+            // a second before, while the old voice is pressed down and fading, so the two voices
             // hand over smoothly instead of leaving a gap. The new song itself starts a little
             // earlier, so a moment of its own intro plays before its voice.
             // A hook far ahead of the last words would press the voice for too long: at most 10
@@ -140,7 +151,7 @@ struct KnobShiftPlan {
                 start = voiceEnd - Self.longestPress
                 reasoning.append("That is more than \(Int(Self.longestPress)) seconds before its last words, so the mix starts at \(clock(start)) instead.")
             }
-            let lastWords = min(max(voiceEnd, start + Self.handover + 1), audibleEnd)
+            let lastWords = min(max(voiceEnd, start + Self.shortestWords), audibleEnd)
             let newVoiceAt = lastWords - Self.handover
             let firstVoice = [incoming.vocalOnset, incoming.mainVocalOnset].compactMap { $0 }.min()
             let introLead = firstVoice.map { min(Self.introLead, max(0, $0 - leadIn)) } ?? Self.introLead

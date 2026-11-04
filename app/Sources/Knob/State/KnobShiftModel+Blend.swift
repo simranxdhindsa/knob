@@ -144,10 +144,22 @@ extension KnobShiftModel {
     private func beginBlend(from current: Track, to next: Track, endingAt end: TimeInterval, handoff: TimeInterval,
                             voiceEnd: TimeInterval, offset: TimeInterval, sync: KnobShiftSync, voiceThrow: Bool = false) {
         do {
-            let lock = beatLock(from: current, to: next, offset: offset, sync: sync)
+            // A sung mix starts the new song right where it starts singing, not from its intro:
+            // a moment before, plus up to two of its beats for the beat lock, which moves forward
+            // to its next strong beat. The analysis finds singing about 1.25 seconds early, so
+            // its real first words are taken that much later.
+            var entryOffset = offset
+            let analysedFirst = [next.analysis.vocalOnset, next.analysis.mainVocalOnset].compactMap { $0 }.min()
+            let firstWords = analysedFirst.map { $0 + ($0 >= KnobShiftPlan.analysisSlack ? KnobShiftPlan.analysisSlack : 0) }
+            if voiceThrow, let firstWords {
+                let lockRoom = sync.isOn ? 2 * 60 / max(sync.incomingTempo, 1) : 0
+                entryOffset = max(min(next.analysis.leadingSilence, firstWords), firstWords - KnobShiftPlan.voiceLead - lockRoom)
+                log("KNOBMIX", String(format: "%@ sings from about %.2fs, so it starts from %.2fs, not from its intro.", next.title, firstWords, entryOffset))
+            }
+            let lock = beatLock(from: current, to: next, offset: entryOffset, sync: sync)
             // When no beat could be lined up, the beats are treated as unlocked: never stretched
             // and never played together, rather than stretched at a random phase.
-            let lined = !sync.isOn || lock.delay > 0 || lock.incomingStart != offset
+            let lined = !sync.isOn || lock.delay > 0 || lock.incomingStart != entryOffset
             let mixSync = voiceThrow && !lined
                 ? KnobShiftSync(isOn: false, outgoingTempo: sync.outgoingTempo, incomingTempo: sync.incomingTempo,
                                 meetingTempo: sync.outgoingTempo, notes: sync.notes)
@@ -228,19 +240,57 @@ extension KnobShiftModel {
             // In a sung mix the new song only starts where its beats come in, so none of its
             // intro is used up while it would be silent. Locked, that wait is a whole number of
             // the old song's strong beats, so the beat lock holds.
-            let entryWait: TimeInterval = {
+            let strongBeat = 2 * 60 / max(sync.meetingTempo, 1)
+            var entryWait: TimeInterval = {
                 guard voiceThrow, pivot > 0.02 else { return 0 }
                 let wanted = pivot * duration
                 guard mixSync.isOn else { return wanted }
-                let strong = 2 * 60 / max(sync.meetingTempo, 1)
-                return (wanted / strong).rounded() * strong
+                return (wanted / strongBeat).rounded() * strongBeat
             }()
+            // The two voices always overlap: the new voice starts while the old one is still
+            // singing, by a quarter of a second to a second, about half a second when it fits.
+            // The analysis places the old voice's last words about 1.25 seconds late and the new
+            // first words about 1.25 seconds early, so both are corrected first. The new song's
+            // start is then moved either way, in whole beats when the beats lock.
+            var wordsShare = voiceDone
+            // How long the new song takes to rise: over the moment before its voice, so its first
+            // words are already at full level.
+            var riseTime: TimeInterval? = nil
+            if voiceThrow, let firstWords {
+                let oldEnd = max(voiceEnd - KnobShiftPlan.analysisSlack, outgoingAt + 1)
+                wordsShare = min(max((oldEnd - outgoingAt) / music, 0), 1)
+                let wordsEnd = wordsShare * duration
+                let lead = max(0, firstWords - lock.incomingStart) / max(Double(secondaryDeck.rate), 0.1)
+                let overlap = { (wait: TimeInterval) in wordsEnd - (wait + lead) }
+                let latest = duration * 0.97
+                var chosen = min(max(wordsEnd - KnobShiftPlan.handover - lead, 0), latest)
+                if mixSync.isOn {
+                    // Whole beats keep the lock; of the nearest few, the one closest to half a
+                    // second of overlap that stays within the quarter to one second.
+                    let beat = 60 / max(sync.meetingTempo, 1)
+                    let nearest = (chosen / beat).rounded()
+                    let options = (-2...2).map { (nearest + Double($0)) * beat }.filter { $0 >= 0 && $0 <= latest }
+                    let fitting = options.filter { (KnobShiftPlan.leastOverlap...KnobShiftPlan.mostOverlap).contains(overlap($0)) }
+                    // Never a gap: when none fits, the closest one that still overlaps.
+                    let overlapping = options.filter { overlap($0) >= KnobShiftPlan.leastOverlap }
+                    let pool = !fitting.isEmpty ? fitting : (!overlapping.isEmpty ? overlapping : options)
+                    chosen = pool.min { abs(overlap($0) - KnobShiftPlan.handover) < abs(overlap($1) - KnobShiftPlan.handover) } ?? chosen
+                }
+                riseTime = min(1, max(lead, 0.15))
+                let moved = chosen - entryWait
+                entryWait = chosen
+                log("KNOBMIX", String(format: "Voices: %@'s first words at about %.2fs into the mix, %@'s last words end at about %.2fs: they sing together for %.2fs%@.",
+                                      next.title, entryWait + lead, current.title, wordsEnd, overlap(entryWait),
+                                      abs(moved) > 0.01 ? String(format: " (the new song moved %.2fs %@)", abs(moved), moved > 0 ? "later" : "earlier") : ""))
+            }
+            // Where the new song comes in, as a share of the mix.
+            let entryShare = voiceThrow ? min(entryWait / max(duration, 0.1), 1) : pivot
             let wait = lock.delay + entryWait
             // Where the new song's own drums come in, as a share of the mix: an intro without
             // drums can play over the old beats, its drums cannot when the tempos are apart.
             let newBeats: Double = {
-                guard let drums = next.analysis.beatEntry else { return pivot }
-                return min(max((entryWait + max(0, drums - lock.incomingStart)) / max(duration, 0.1), pivot), 1)
+                guard let drums = next.analysis.beatEntry else { return entryShare }
+                return min(max((entryWait + max(0, drums - lock.incomingStart)) / max(duration, 0.1), entryShare), 1)
             }()
             if wait > 0, let now = primaryDeck.player.lastRenderTime, now.isSampleTimeValid {
                 let renderRate = now.sampleRate
@@ -253,12 +303,12 @@ extension KnobShiftModel {
             }
             log("DECK", "\(secondaryDeck.name) loaded \(next.title) from \(Self.seconds(lock.incomingStart)) at volume 0, speed \(String(format: "%.3f", secondaryDeck.rate)), bass and melody held back so only its beats come in.")
 
-                        let started = Date().addingTimeInterval(lock.delay)
+            let started = Date().addingTimeInterval(lock.delay)
             // About 20 updates a second keep the volume, tempo and EQ curves smooth.
             let steps = max(1, Int((duration * 20).rounded()))
             transitionTask = Task { [weak self] in
                 var lastLogged = -1
-                var handedOver = pivot <= 0.02
+                var handedOver = entryShare <= 0.02
                 for step in 0...steps {
                     // Each step waits for its own deadline from the blend start, so small sleep
                     // overshoots never add up and the handoff lands on the planned end.
@@ -266,10 +316,10 @@ extension KnobShiftModel {
                     if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
                     guard let self, !Task.isCancelled else { return }
                     let progress = Double(step) / Double(steps)
-                    self.applyBlend(progress, pivot: pivot, voiceDone: voiceDone, keyframes: keyframes, length: duration, sync: mixSync,
-                                    voiceThrow: voiceThrow, tempoAt: tempoAt, newBeats: newBeats)
+                    self.applyBlend(progress, pivot: entryShare, voiceDone: wordsShare, keyframes: keyframes, length: duration, sync: mixSync,
+                                    voiceThrow: voiceThrow, tempoAt: tempoAt, newBeats: newBeats, riseTime: riseTime)
                     self.blendProgress = progress
-                    if !handedOver, progress >= pivot {
+                    if !handedOver, progress >= entryShare {
                         handedOver = true
                         if voiceThrow {
                             self.log("KNOBMIX", "\(next.title) comes in.")
@@ -352,9 +402,9 @@ extension KnobShiftModel {
     /// Without a handoff it is one equal-power crossfade.
     private func applyBlend(_ progress: Double, pivot: Double, voiceDone: Double,
                             keyframes: (start: Double, peak: Double, end: Double), length: TimeInterval, sync: KnobShiftSync,
-                            voiceThrow: Bool = false, tempoAt: Double? = nil, newBeats: Double = 0) {
+                            voiceThrow: Bool = false, tempoAt: Double? = nil, newBeats: Double = 0, riseTime: TimeInterval? = nil) {
         if voiceThrow {
-            applyHookMix(progress, entry: pivot, wordsEnd: voiceDone, beatsIn: newBeats, length: length, sync: sync)
+            applyHookMix(progress, entry: pivot, wordsEnd: voiceDone, beatsIn: newBeats, length: length, sync: sync, rise: riseTime)
             return
         }
         var outgoing: Double, incoming: Double, swap: Double, sweep: Double, beatsOnly: Double, voice: Double

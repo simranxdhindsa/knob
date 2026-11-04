@@ -12,7 +12,8 @@ import Foundation
 extension KnobShiftModel {
     /// One step of the mix. `progress` runs 0...1 over the mix, `entry` is where the new song
     /// comes in (the plan's handoff) and `wordsEnd` where the old voice's last words end.
-    func applyHookMix(_ progress: Double, entry: Double, wordsEnd: Double, beatsIn: Double, length: TimeInterval, sync: KnobShiftSync) {
+    func applyHookMix(_ progress: Double, entry: Double, wordsEnd: Double, beatsIn: Double, length: TimeInterval, sync: KnobShiftSync,
+                      rise riseTime: TimeInterval? = nil) {
         let p = min(max(progress, 0), 1)
         let locked = sync.isOn
         let second = 1 / max(length, 0.1)
@@ -31,9 +32,10 @@ extension KnobShiftModel {
         let musicFrom = clash ? max(min(beatsIn - second, wordsEnd), 0) : wordsEnd
         let musicTo = clash ? max(beatsIn, musicFrom + 0.01) : 1
         let music = p <= musicFrom ? 1 : cos(Self.shape(min((p - musicFrom) / max(musicTo - musicFrom, 0.01), 1)) * .pi / 2)
-        // The new song rises over a second; locked it sits a little under the old beats until
-        // they leave.
-        let rise = p < entry ? 0 : Self.shape(min((p - entry) / second, 1))
+        // The new song rises over the moment before its voice (a second when not measured);
+        // locked it sits a little under the old beats until they leave.
+        let riseShare = (riseTime ?? 1) / max(length, 0.1)
+        let rise = p < entry ? 0 : Self.shape(min((p - entry) / max(riseShare, 0.001), 1))
         let incoming = locked ? min(1, 0.75 * rise + 0.25 * rise * (1 - music)) : rise
 
         // Tempo: while the old beats play, both songs hold the meeting tempo so they stay
