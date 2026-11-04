@@ -13,6 +13,8 @@ enum KnobShiftWindow {
 final class PhoneSheets: ObservableObject {
     static let shared = PhoneSheets()
     @Published var sound = false
+    /// The queue, open in the player where the cover was.
+    @Published var queue = false
     /// Add from Spotify, YouTube or Sync (PhoneMacSheet).
     @Published var mac: PhoneMacSheet.Source?
 }

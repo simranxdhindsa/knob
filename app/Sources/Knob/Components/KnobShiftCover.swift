@@ -9,13 +9,14 @@ struct KnobShiftCover: View {
     var size: CGFloat
     var lit = false
     var animated = false
+    var corner: CGFloat = 0.14
 
     var body: some View {
         ZStack {
-            AlbumArtwork(url: model.nowPlaying?.url, size: size, lit: lit, animated: animated)
+            AlbumArtwork(url: model.nowPlaying?.url, size: size, lit: lit, animated: animated, corner: corner)
             if let next = model.mixingInto {
                 let share = Self.share(clock.blend)
-                AlbumArtwork(url: next.url, size: size, lit: lit, animated: animated)
+                AlbumArtwork(url: next.url, size: size, lit: lit, animated: animated, corner: corner)
                     .opacity(share)
                     .scaleEffect(1.04 - 0.04 * share)
             }

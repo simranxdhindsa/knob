@@ -8,11 +8,13 @@ struct AlbumArtwork: View {
     var size: CGFloat
     var lit = false
     var animated = false
+    /// How round the corners are, as a share of the size.
+    var corner: CGFloat = 0.14
 
     @State private var image: PlatformImage?
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: size * 0.14, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: size * corner, style: .continuous)
         ZStack {
             if let image {
                 Image(platformImage: image).resizable().scaledToFill()

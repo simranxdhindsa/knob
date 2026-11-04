@@ -51,7 +51,7 @@ xcrun --sdk "$sdk" swiftc -target "$target" -sdk "$sysroot" -swift-version 5 -On
   -module-name Knob -import-objc-header "$repo_dir/ios/Bridge/KnobPhone-Bridging.h" \
   "${swift_sources[@]}" "$repo_dir"/ios/Sources/*.swift \
   "$objects"/*.o "$out/dsp/libknob-dsp.a" -lc++ \
-  -framework AVFoundation -framework AudioToolbox -framework MediaPlayer -framework SwiftUI -framework UIKit \
+  -framework AVFoundation -framework AVKit -framework AudioToolbox -framework MediaPlayer -framework SwiftUI -framework UIKit \
   -o "$out/Knob"
 
 # 4. The app: binary, Info.plist, factory presets and icon.
