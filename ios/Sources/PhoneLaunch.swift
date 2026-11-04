@@ -19,6 +19,7 @@ struct PhoneLaunch: View {
     var onFinished: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var scheme
     @State private var sweepStarted: Date?
     /// The turn has reached the eleventh indicator; the clock stops driving the knob.
     @State private var turned = false
@@ -30,8 +31,8 @@ struct PhoneLaunch: View {
     @State private var endStop = false
 
     static let knobSize: CGFloat = 220
-    /// The launch screen's colour (Assets.xcassets/LaunchBackground).
-    static let background = Color(hex: 0x2F3235)
+    /// The launch screen's colour, light or dark with the iPhone's theme.
+    static let background = Color("LaunchBackground")
     /// Where the app icon shows the knob: its seventh indicator.
     static let iconValue = 0.68
     /// The turn, in seconds from its start: rest on the icon's pose, wind back to the first
@@ -61,7 +62,7 @@ struct PhoneLaunch: View {
                 LaunchKnobPose(value: value, size: Self.knobSize,
                                knobScale: spot.scale * (endStop ? 1.035 : 1),
                                knobOpacity: 1 - Self.clamp((u - 0.45) / 0.35),
-                               overshoot: strainDegrees(at: timeline.date))
+                               overshoot: strainDegrees(at: timeline.date), scheme: scheme)
                     .position(spot.center)
                 // The Play button it becomes: orange from halfway, its triangle for the last quarter.
                 let diameter = Self.knobSize * Self.bodyShare * spot.scale
@@ -91,7 +92,6 @@ struct PhoneLaunch: View {
         }
         }
         .ignoresSafeArea()
-        .environment(\.colorScheme, .dark)
         .accessibilityHidden(true)
         .task { await play() }
     }
