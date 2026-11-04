@@ -128,6 +128,9 @@ struct KnobShiftQueue: View {
                 // Shuffle animates; mapping every song's id on each change was slow with
                 // thousands of songs.
                 .animation(Motion.gentle, value: model.isShuffled)
+                #if os(iOS)
+                .padding(.leading, -8)
+                #endif
             }
             if let notice = model.notice {
                 Text(notice).font(.system(size: 10)).foregroundStyle(Palette.accent).lineLimit(2)
@@ -146,11 +149,19 @@ struct KnobShiftQueue: View {
         #endif
     }
 
+    /// The rows sit flush with the card's header. The iPhone's list cuts off anything drawn past
+    /// its edge, which squared off the playing row's left corners, so there the list itself moves.
+    #if os(macOS)
+    private static let rowLeading: CGFloat = -8
+    #else
+    private static let rowLeading: CGFloat = 0
+    #endif
+
     /// Strips the list's own look, and leaves room on the right for the scroll bar so it never
     /// sits on top of the remove buttons.
     private func queueRow<Content: View>(_ content: Content) -> some View {
         content
-            .listRowInsets(EdgeInsets(top: 2, leading: -8, bottom: 2, trailing: 6))
+            .listRowInsets(EdgeInsets(top: 2, leading: Self.rowLeading, bottom: 2, trailing: 6))
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
     }
