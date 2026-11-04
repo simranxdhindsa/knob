@@ -67,6 +67,8 @@ struct KnobShiftAddMusic: View {
 /// The dropdown card itself, also drawn on its own for snapshots. Always dark, like the
 /// KnobShift screen it opens from.
 struct KnobShiftAddMusicCard: View {
+    @Environment(\.surface) private var surface
+    @Environment(\.colorScheme) private var scheme
     var spotify = true
     var youtube = true
     var sync = false
@@ -102,7 +104,7 @@ struct KnobShiftAddMusicCard: View {
                 }
             }
         }
-        .environment(\.colorScheme, .dark)
+        .environment(\.colorScheme, surface.scheme(scheme))
     }
 }
 

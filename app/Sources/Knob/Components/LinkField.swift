@@ -29,7 +29,7 @@ struct LinkField: View {
                 .onSubmit(onAdd)
             Button(action: isEmpty ? onPaste : onAdd) {
                 Label(isEmpty ? "PASTE" : "ADD", systemImage: isEmpty ? "doc.on.clipboard" : "plus")
-                    .font(.system(size: 10, weight: .bold)).tracking(0.7).foregroundStyle(.white)
+                    .font(.system(size: 10, weight: .bold)).tracking(0.7).foregroundStyle(Glass.onAccent)
                     .padding(.horizontal, 14).frame(height: 26)
                     .background(Capsule().fill(enabled ? Palette.accent : surface.tertiary.opacity(0.4)))
                     .contentTransition(.opacity)

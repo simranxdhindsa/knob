@@ -82,7 +82,7 @@ struct KnobShiftNowPlaying: View {
             Button { model.pauseOrResume() } label: {
                 Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: compact ? 19 : 22, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Glass.onAccent)
                     .frame(width: compact ? 46 : 54, height: compact ? 46 : 54)
                     .background(Circle().fill(Palette.accent))
                     .shadow(color: Palette.accentGlow.opacity(0.55), radius: 9)

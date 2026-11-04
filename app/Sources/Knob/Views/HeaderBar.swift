@@ -118,7 +118,7 @@ struct PresetBar: View {
                 } label: {
                     Text("DELETE")
                         .font(.system(size: 9.5, weight: .bold)).tracking(0.8)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Glass.onAccent)
                         .padding(.horizontal, 10)
                         .frame(height: 24)
                         .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Palette.accent))
