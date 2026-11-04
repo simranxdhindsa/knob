@@ -1,7 +1,9 @@
 {
   "images" : [
-    { "filename" : "launch-knob@2x.png", "idiom" : "universal", "scale" : "2x" },
-    { "filename" : "launch-knob@3x.png", "idiom" : "universal", "scale" : "3x" }
+    { "filename" : "launch-knob-light@2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "filename" : "launch-knob-light@3x.png", "idiom" : "universal", "scale" : "3x" },
+    { "appearances" : [ { "appearance" : "luminosity", "value" : "dark" } ], "filename" : "launch-knob@2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "appearances" : [ { "appearance" : "luminosity", "value" : "dark" } ], "filename" : "launch-knob@3x.png", "idiom" : "universal", "scale" : "3x" }
   ],
   "info" : { "author" : "xcode", "version" : 1 }
 }

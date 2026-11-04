@@ -19,8 +19,6 @@ struct ScreenCard: ViewModifier {
                     shape.fill(Glass.scrim)
                 }
                 .overlay(shape.stroke(Glass.stroke, lineWidth: 0.5))
-                // Its content is drawn for the dark screen, in both themes.
-                .environment(\.colorScheme, .dark)
         } else {
             content
                 .padding(padding)

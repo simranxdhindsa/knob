@@ -18,15 +18,32 @@ struct KnobShiftAddMusic: View {
 
     private var hasChoices: Bool { spotify || youtube || sync }
 
+    private var label: some View {
+        Label("ADD MUSIC", systemImage: "plus")
+            .font(.system(size: 9, weight: .bold)).tracking(0.6)
+            .foregroundStyle(Palette.accent)
+            .frame(height: 20)
+            .contentShape(Rectangle())
+    }
+
+    #if os(iOS)
+    /// The iPhone's own menu: a popover near the top of the screen had no room and cut off its rows.
+    var body: some View {
+        Menu {
+            Button(action: onMac) { Label("Songs on your iPhone", systemImage: "folder") }
+            if spotify { Button(action: onSpotify) { Label("Spotify playlist", systemImage: "link") } }
+            if youtube { Button(action: onYouTube) { Label("YouTube", systemImage: "play.rectangle") } }
+            if sync { Button(action: onSync) { Label("Sync from your Mac", systemImage: "laptopcomputer.and.iphone") } }
+        } label: {
+            label
+        }
+    }
+    #else
     var body: some View {
         Button {
             if hasChoices { open.toggle() } else { onMac() }
         } label: {
-            Label("ADD MUSIC", systemImage: "plus")
-                .font(.system(size: 9, weight: .bold)).tracking(0.6)
-                .foregroundStyle(Palette.accent)
-                .frame(height: 20)
-                .contentShape(Rectangle())
+            label
         }
         .buttonStyle(.plain)
         .focusEffectDisabled()
@@ -35,7 +52,6 @@ struct KnobShiftAddMusic: View {
             KnobShiftAddMusicCard(spotify: spotify, youtube: youtube, sync: sync,
                                   onMac: { pick(onMac) }, onSpotify: { pick(onSpotify) }, onYouTube: { pick(onYouTube) },
                                   onSync: { pick(onSync) })
-                .presentationCompactAdaptation(.popover)
         }
         .onAppear { if startsOpen { open = true } }
     }
@@ -45,6 +61,7 @@ struct KnobShiftAddMusic: View {
         // Lets the popover close before a sheet or the file panel opens.
         DispatchQueue.main.async(execute: action)
     }
+    #endif
 }
 
 /// The dropdown card itself, also drawn on its own for snapshots. Always dark, like the

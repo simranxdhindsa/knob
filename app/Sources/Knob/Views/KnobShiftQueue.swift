@@ -44,19 +44,25 @@ struct KnobShiftQueue: View {
     var onSync: () -> Void = {}
     @State private var selection: Set<UUID> = []
     @State private var confirmingRemoveAll = false
+    @Environment(\.glassCards) private var glass
+
+    /// Text colours: the dark screen's, or the theme's on the iPhone's glass card.
+    private var ink: (text: Color, secondary: Color, tertiary: Color) {
+        glass ? (Glass.text, Glass.secondary, Glass.secondary) : (Screen.text, Screen.textSecondary, Screen.textTertiary)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("QUEUE").font(.system(size: 9, weight: .bold)).tracking(0.9).foregroundStyle(Screen.textTertiary)
+                Text("QUEUE").font(.system(size: 9, weight: .bold)).tracking(0.9).foregroundStyle(ink.tertiary)
                 if !model.tracks.isEmpty || !model.pending.isEmpty {
-                    Text("\(model.tracks.count + model.pending.count)").font(.system(size: 9, weight: .bold)).foregroundStyle(Screen.textTertiary)
+                    Text("\(model.tracks.count + model.pending.count)").font(.system(size: 9, weight: .bold)).foregroundStyle(ink.tertiary)
                 }
                 Spacer()
                 Button { model.toggleShuffle() } label: {
                     Image(systemName: "shuffle")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(model.isShuffled ? Palette.accent : Screen.textTertiary)
+                        .foregroundStyle(model.isShuffled ? Palette.accent : ink.tertiary)
                         .frame(width: 24, height: 20)
                         .background(Capsule().fill(model.isShuffled ? Palette.accent.opacity(0.14) : .clear))
                         .shadow(color: model.isShuffled ? Palette.accentGlow.opacity(0.5) : .clear, radius: 4)
@@ -77,7 +83,7 @@ struct KnobShiftQueue: View {
                 } else if !model.tracks.isEmpty || !model.pending.isEmpty {
                     Button { confirmingRemoveAll = true } label: {
                         Image(systemName: "trash").font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(Screen.textTertiary).frame(width: 22, height: 20)
+                            .foregroundStyle(ink.tertiary).frame(width: 22, height: 20)
                     }
                     .buttonStyle(.plain)
                     .help("Remove every song from the queue")
@@ -172,15 +178,15 @@ struct KnobShiftQueue: View {
             AlbumArtwork(url: track.url, size: 34, lit: playing)
             VStack(alignment: .leading, spacing: 2) {
                 Text(track.name).font(.system(size: 12, weight: playing ? .bold : .medium))
-                    .foregroundStyle(playing ? Palette.accent : Screen.text).lineLimit(1)
+                    .foregroundStyle(playing ? Palette.accent : ink.text).lineLimit(1)
                 Text([track.artist, track.analysis.tempo.map { String(format: "%.0f BPM", $0) }].compactMap { $0 }.joined(separator: "  ·  "))
-                    .font(.system(size: 10)).foregroundStyle(Screen.textTertiary).lineLimit(1)
+                    .font(.system(size: 10)).foregroundStyle(ink.tertiary).lineLimit(1)
             }
             Spacer(minLength: 4)
             Text(KnobShiftNowPlaying.clock(track.duration))
-                .font(.system(size: 10, weight: .medium).monospacedDigit()).foregroundStyle(Screen.textTertiary)
+                .font(.system(size: 10, weight: .medium).monospacedDigit()).foregroundStyle(ink.tertiary)
             Button { model.remove(track) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .bold)) }
-                .buttonStyle(.plain).foregroundStyle(Screen.textTertiary)
+                .buttonStyle(.plain).foregroundStyle(ink.tertiary)
                 .accessibilityLabel("Remove \(track.name)")
         }
         .padding(.horizontal, 8)
@@ -200,7 +206,7 @@ struct KnobShiftQueue: View {
     private func pendingRow(_ song: KnobShiftModel.PendingSong) -> some View {
         HStack(spacing: 10) {
             ZStack {
-                RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Screen.grid)
+                RoundedRectangle(cornerRadius: 5, style: .continuous).fill(glass ? Glass.fill : Screen.grid)
                 if song.failure != nil {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 13)).foregroundStyle(Palette.accent)
@@ -211,10 +217,10 @@ struct KnobShiftQueue: View {
             .frame(width: 34, height: 34)
             VStack(alignment: .leading, spacing: 2) {
                 Text(song.name).font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(song.failure == nil ? Screen.textSecondary : Screen.text).lineLimit(1)
+                    .foregroundStyle(song.failure == nil ? ink.secondary : ink.text).lineLimit(1)
                 Text([song.artist, song.failure ?? song.stage ?? (song.isActive ? "Preparing \(Int(song.progress * 100))%" : "Waiting to prepare")]
                         .compactMap { $0 }.joined(separator: "  ·  "))
-                    .font(.system(size: 10)).foregroundStyle(song.failure == nil ? Screen.textTertiary : Palette.accent).lineLimit(1)
+                    .font(.system(size: 10)).foregroundStyle(song.failure == nil ? ink.tertiary : Palette.accent).lineLimit(1)
             }
             Spacer(minLength: 4)
             if song.failure != nil {
@@ -224,7 +230,7 @@ struct KnobShiftQueue: View {
                     .foregroundStyle(Palette.accent)
             }
             Button { model.removePending(song) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .bold)) }
-                .buttonStyle(.plain).foregroundStyle(Screen.textTertiary)
+                .buttonStyle(.plain).foregroundStyle(ink.tertiary)
                 .accessibilityLabel("Remove \(song.name)")
         }
         .padding(.horizontal, 8)
@@ -240,9 +246,9 @@ struct KnobShiftQueue: View {
     private var empty: some View {
         VStack(spacing: 8) {
             Image(systemName: "music.note.list").font(.system(size: 24)).foregroundStyle(Palette.accent.opacity(0.85))
-            Text("Add songs from your \(Platform.deviceName)").font(.system(size: 12, weight: .semibold)).foregroundStyle(Screen.text)
+            Text("Add songs from your \(Platform.deviceName)").font(.system(size: 12, weight: .semibold)).foregroundStyle(ink.text)
             Text(Self.emptyHint)
-                .font(.system(size: 10)).foregroundStyle(Screen.textTertiary)
+                .font(.system(size: 10)).foregroundStyle(ink.tertiary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
