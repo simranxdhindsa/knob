@@ -98,9 +98,9 @@ struct PhoneLaunch: View {
                             playButton: playButton)
             }
             }
-            // One tick as each mark clicks into its place.
+            // A firm tap as each mark clicks into its place.
             .onChange(of: LaunchMarks.landed(at: marksTime)) { _, landed in
-                if landed > 0 { Haptics.tick() }
+                if landed > 0 { Haptics.firm() }
             }
             // The strain is felt with the shake it is seen with: one tap each time the pointer
             // pushes out furthest past the stop, as strong as that push.
@@ -108,11 +108,11 @@ struct PhoneLaunch: View {
                 guard let push else { return }
                 Haptics.strain(strainSwell(push))
             }
-            // A soft tick for each mark going dark on the way back, a firmer one for each mark
-            // lighting on the way up, and the firmest at the end stop.
+            // A soft tick for each mark going dark on the way back, a firm tap for each mark
+            // lighting on the way up, and a hard one at the end stop.
             .onChange(of: Self.mark(value)) { _, mark in
                 defer { lastMark = mark }
-                if mark < lastMark { Haptics.tick() } else if mark == 10 { Haptics.detent() } else if mark > lastMark { Haptics.mark() }
+                if mark < lastMark { Haptics.tick() } else if mark == 10 { Haptics.hard() } else if mark > lastMark { Haptics.firm() }
             }
         }
         }
