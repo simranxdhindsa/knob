@@ -18,23 +18,54 @@ extension KnobShiftModel {
             log("RESTORE", "Skipped \(paths.count - found.count) song(s) whose files are no longer there.")
         }
         enqueueFiles(found)
+        // The song last in the player is prepared first, so it is there behind the iPhone's
+        // opening instead of waiting for the whole queue.
+        if let last = pending.firstIndex(where: { $0.url.path == lastSongPath }) {
+            pending.insert(pending.remove(at: last), at: 0)
+        }
         #if os(macOS)
         // Spotify songs that were still downloading come back and continue.
         resumeDownloads()
         #endif
+        let firstReady = Task { [weak self] in
+            guard let updates = self?.$tracks.values else { return }
+            for await list in updates where !list.isEmpty {
+                self?.restoreNowPlaying()
+                return
+            }
+        }
         await processPending()
+        firstReady.cancel()
+        restoreOrder(of: found)
         restoreNowPlaying()
     }
 
+    private var lastSongPath: String? {
+        UserDefaults.standard.string(forKey: PersistKey.knobShiftLastSong.rawValue).map(Platform.relocated)
+    }
+
+    /// Puts the queue back in its saved order, once the song prepared first has joined it.
+    private func restoreOrder(of files: [URL]) {
+        guard !isShuffled else { return }
+        let rank = Dictionary(files.enumerated().map { ($1.path, $0) }, uniquingKeysWith: { first, _ in first })
+        tracks = tracks.enumerated().sorted {
+            (rank[$0.element.url.path] ?? .max, $0.offset) < (rank[$1.element.url.path] ?? .max, $1.offset)
+        }.map(\.element)
+        if let playing = nowPlaying, let index = tracks.firstIndex(of: playing) { currentIndex = index }
+        refreshPlanIfNeeded()
+        persistQueue()
+    }
+
     /// Puts the song last in the player back in it, paused where it was, so Play carries on
-    /// from there. Nothing happens if something already plays or the song left the queue.
+    /// from there. If that song left the queue, the first song waits ready from its start.
+    /// Nothing happens if something already plays.
     func restoreNowPlaying() {
-        guard nowPlaying == nil, let saved = UserDefaults.standard.string(forKey: PersistKey.knobShiftLastSong.rawValue) else { return }
-        let path = Platform.relocated(saved)
-        guard let index = tracks.firstIndex(where: { $0.url.path == path }) else { return }
+        guard nowPlaying == nil, !tracks.isEmpty else { return }
+        let saved = tracks.firstIndex { $0.url.path == lastSongPath }
+        let index = saved ?? 0
         let track = tracks[index]
         // A song that had (almost) finished starts again from the top.
-        let position = UserDefaults.standard.double(forKey: PersistKey.knobShiftLastPosition.rawValue)
+        let position = saved == nil ? 0 : UserDefaults.standard.double(forKey: PersistKey.knobShiftLastPosition.rawValue)
         let from = position < track.duration - 5 ? max(0, position) : 0
         currentIndex = index
         do {
