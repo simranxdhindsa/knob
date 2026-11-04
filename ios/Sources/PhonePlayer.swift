@@ -245,7 +245,7 @@ struct PhoneTimeline: View {
                 HStack {
                     Text(playing ? KnobShiftNowPlaying.clock(time) : "0:00")
                     Spacer()
-                    Text(playing ? KnobShiftNowPlaying.clock(max(0, clock.duration - time)) + " left" : "0:00")
+                    Text(playing ? "-" + KnobShiftNowPlaying.clock(max(0, clock.duration - time)) : "0:00")
                 }
                 .font(.system(size: 12, weight: .medium).monospacedDigit())
                 .foregroundStyle(Glass.secondary)
