@@ -88,9 +88,9 @@ struct PhoneTransport: View {
 
 /// Play, as Knob's real master knob inside its eleven marks. The marks glow up one by one and the
 /// pointer turns through the song, so a glance tells how far along it is, and turning the ring
-/// moves through the song, with a tap felt at each mark. A tap on the knob plays or pauses: it
-/// melts into the orange button showing what just happened, and a second later melts back. The
-/// opening lands on that same button, which settles into the knob the same way.
+/// moves through the song, with a tap felt at each mark. A tap on the knob plays or pauses: the
+/// pointer slides to the middle and becomes Play or Pause, and a second later goes back to
+/// pointing. The opening lands on an orange button, which then melts into the knob.
 struct PhonePlayDial: View {
     @ObservedObject var model: KnobShiftModel
     @ObservedObject var clock: KnobShiftClock
@@ -101,15 +101,17 @@ struct PhonePlayDial: View {
     @State private var rotary: RotaryDrag?
     /// The orange button is showing instead of the knob, as it is when the opening lands.
     @State private var showingButton = true
-    @State private var symbol = "play.fill"
+    /// How far the pointer has become `glyph`, 0...1.
+    @State private var morph = 0.0
+    @State private var glyph = PhonePointerShape.Glyph.play
     @State private var settling: Task<Void, Never>?
 
     private static let marks = 11, sweep = 270.0
     private static let discShare: CGFloat = 0.64
     /// The size of the volume knob in the panel (VolumeSection).
     private static let panelKnob: CGFloat = 150
-    /// How long the button stays before it turns back into the knob.
-    private static let buttonHold = 1.0
+    /// How long Play or Pause, or the opening's button, stays before going back.
+    private static let hold = 1.0
     /// How lit the next mark is by the time the song is halfway to it.
     private static let faintGlow = 0.15
 
@@ -119,20 +121,24 @@ struct PhonePlayDial: View {
             ring
             // Drawn at the panel's size and scaled as a whole: the knob changes its proportions
             // when drawn small, and this must be exactly the panel's volume knob.
-            RealisticKnob(value: .constant(value), size: Self.panelKnob, showsMinMax: false, showsMarks: false,
-                          accessibilityLabel: "", accessibilityValue: "", springsToChanges: false)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-                .scaleEffect((showingButton ? 0.9 : 1) * size / Self.panelKnob)
-                .frame(width: size, height: size)
-                .opacity(hidesPlayButton ? 0 : 1)
+            ZStack {
+                RealisticKnob(value: .constant(value), size: Self.panelKnob, showsMinMax: false, showsMarks: false, showsPointer: false,
+                              accessibilityLabel: "", accessibilityValue: "", springsToChanges: false)
+                    .scaleEffect(size / Self.panelKnob)
+                    .frame(width: size, height: size)
+                PhonePointer(glyph: glyph, degrees: -Self.sweep / 2 + Self.sweep * value, morph: morph, size: size)
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .scaleEffect(showingButton ? 0.9 : 1)
+            .opacity(hidesPlayButton ? 0 : 1)
             Button(action: tapped) {
                 // The clear circle takes the tap while the button itself is out of sight.
                 Color.clear
                     .frame(width: disc, height: disc)
                     .contentShape(Circle())
                     .overlay {
-                        PhonePlayDisc(symbol: symbol, diameter: disc)
+                        PhonePlayDisc(symbol: "play.fill", diameter: disc)
                             .scaleEffect(showingButton ? 1 : 0.7)
                             .opacity(showingButton ? 1 : 0)
                     }
@@ -152,19 +158,22 @@ struct PhonePlayDial: View {
 
     private func tapped() {
         Haptics.mark()
-        symbol = model.isPlaying ? "pause.fill" : "play.fill"
+        glyph = model.isPlaying ? .pause : .play
         model.pauseOrResume()
-        withAnimation(Motion.snappy) { showingButton = true }
+        withAnimation(Motion.snappy) { morph = 1 }
         settle()
     }
 
-    /// Turns the button back into the knob after a moment; another tap starts the moment again.
+    /// Back to the plain knob after a moment; another tap starts the moment again.
     private func settle() {
         settling?.cancel()
         settling = Task {
-            try? await Task.sleep(for: .seconds(Self.buttonHold))
+            try? await Task.sleep(for: .seconds(Self.hold))
             guard !Task.isCancelled else { return }
-            withAnimation(Motion.gentle) { showingButton = false }
+            withAnimation(Motion.gentle) {
+                showingButton = false
+                morph = 0
+            }
         }
     }
 
@@ -224,8 +233,77 @@ struct PhonePlayDial: View {
     private static func lit(_ value: Double) -> Int { Int((value * Double(marks - 1) + 0.001).rounded(.down)) + 1 }
 }
 
-/// The orange button the knob turns into: a flat disc with Play or Pause, with only a touch of
-/// glass on it, a soft sheen from above and a thin bright rim.
+/// The knob's white pointer, which can become Play or Pause on the cap.
+struct PhonePointer: View {
+    let glyph: PhonePointerShape.Glyph
+    let degrees: Double
+    let morph: Double
+    let size: CGFloat
+
+    var body: some View {
+        let shape = PhonePointerShape(glyph: glyph, degrees: degrees, morph: morph)
+        let ink = Palette.dark.knobIndicator
+        shape.fill(ink)
+            .overlay(shape.stroke(ink, style: StrokeStyle(lineWidth: size * PhonePointerShape.width, lineCap: .round, lineJoin: .round)))
+            .shadow(color: Glass.tertiary, radius: 2)
+            .frame(width: size, height: size)
+    }
+}
+
+/// One shape for the pointer and what it turns into, with `morph` going from the pointer at 0 to
+/// the glyph at 1. Pause is the pointer split in two and stood up either side of the middle; Play
+/// is the pointer opened out into a triangle. At 0 both are a flat line, which the round stroke
+/// draws as the knob's capsule pointer. Sizes are shares of the knob, from RealisticKnob's
+/// pointer at the panel's size.
+struct PhonePointerShape: Shape {
+    enum Glyph { case play, pause }
+    static let width: CGFloat = 0.032
+    private static let inner: CGFloat = 0.138, outer: CGFloat = 0.214
+
+    var glyph: Glyph
+    /// Where it points, in degrees from the top, clockwise.
+    var degrees: Double
+    var morph: Double
+
+    var animatableData: Double {
+        get { morph }
+        set { morph = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let size = rect.width, m = CGFloat(morph)
+        let centre = CGPoint(x: rect.midX, y: rect.midY)
+        let angle = degrees * .pi / 180
+        func along(_ share: CGFloat) -> CGPoint {
+            CGPoint(x: centre.x + size * share * CGFloat(sin(angle)), y: centre.y - size * share * CGFloat(cos(angle)))
+        }
+        func towards(_ from: CGPoint, _ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: from.x + (centre.x + size * x - from.x) * m, y: from.y + (centre.y + size * y - from.y) * m)
+        }
+        // The end that is higher goes to the top of the glyph, so it never turns upside down.
+        let ends = [along(Self.inner), along(Self.outer)].sorted { $0.y < $1.y }
+        let top = ends[0], bottom = ends[1]
+        var path = Path()
+        switch glyph {
+        case .pause:
+            for side in [CGFloat(-1), 1] {
+                let a = towards(top, side * 0.05, -0.1), b = towards(bottom, side * 0.05, 0.1)
+                let half = size * 0.016 * m
+                path.addLines([CGPoint(x: a.x - half, y: a.y), CGPoint(x: a.x + half, y: a.y),
+                               CGPoint(x: b.x + half, y: b.y), CGPoint(x: b.x - half, y: b.y)])
+                path.closeSubpath()
+            }
+        case .play:
+            let tip = CGPoint(x: (top.x + bottom.x) / 2, y: (top.y + bottom.y) / 2)
+            path.addLines([towards(top, -0.07, -0.11), towards(bottom, -0.07, 0.11), towards(tip, 0.12, 0)])
+            path.closeSubpath()
+        }
+        return path
+    }
+}
+
+/// The orange button the opening lands on: a flat disc with Play, with only a touch of glass on
+/// it, a soft sheen from above and a thin bright rim.
 struct PhonePlayDisc: View {
     let symbol: String
     let diameter: CGFloat
