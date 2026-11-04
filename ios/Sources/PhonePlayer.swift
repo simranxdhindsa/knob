@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 import UniformTypeIdentifiers
 
 /// The iPhone's main screen, laid out like Apple Music's player in a modern finish: the cover
@@ -16,7 +15,7 @@ struct PhonePlayer: View {
     var prepareImports: ([URL]) -> [URL]
 
     @ObservedObject private var sheets = PhoneSheets.shared
-    @StateObject private var scrub = PhoneScrub()
+    @StateObject private var scrub = PlayerScrub()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var importing = false
 
@@ -46,7 +45,7 @@ struct PhonePlayer: View {
             }
             .animation(reduceMotion ? .easeOut(duration: 0.2) : Motion.gentle, value: sheets.queue)
         }
-        .background { PhoneAmbient(url: (model.mixingInto ?? model.nowPlaying)?.url).ignoresSafeArea() }
+        .background { PlayerAmbient(url: (model.mixingInto ?? model.nowPlaying)?.url).ignoresSafeArea() }
         .sheet(item: $sheets.mac) { PhoneMacSheet(model: model, source: $0) }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result else { return }
@@ -99,10 +98,11 @@ struct PhonePlayer: View {
             .contentTransition(.opacity)
             .animation(Motion.gentle, value: track?.id)
             Spacer(minLength: 0)
-            PhoneGlassGroup {
+            PlayerGlassGroup {
                 HStack(spacing: 10) {
-                    PhoneMixButton(model: model, clock: model.clock)
-                    PhoneMoreMenu(model: model, onFiles: { importing = true })
+                    MixNowButton(model: model, clock: model.clock)
+                    PlayerMoreMenu(model: model, onFiles: { importing = true }, onSpotify: { sheets.mac = .spotify },
+                                   onYouTube: { sheets.mac = .youtube }, onSync: { sheets.mac = .sync })
                 }
             }
         }
@@ -117,10 +117,10 @@ struct PhonePlayer: View {
 
     private func controls(_ layout: PhonePlayerLayout) -> some View {
         VStack(spacing: 0) {
-            PhoneTimeline(model: model, clock: model.clock, scrub: scrub)
+            PlayerTimeline(model: model, clock: model.clock, scrub: scrub)
                 .frame(height: PhonePlayerLayout.timeline)
             Spacer(minLength: 0)
-            PhoneTransport(model: model, scrub: scrub, dialSize: layout.dial)
+            PlayerTransport(model: model, scrub: scrub, dialSize: layout.dial)
                 .frame(height: layout.dial)
             Spacer(minLength: 0)
             PhoneVolumeRow(knob: knob)
@@ -178,176 +178,6 @@ struct PhonePlayerLayout {
     var titleWidth: CGFloat { width - (queue ? Self.small + 12 : 0) }
     var queueTop: CGFloat { Self.top + Self.small + 12 }
     var queueHeight: CGFloat { controlsTop - queueTop - 6 }
-}
-
-/// The player's background: the cover and its reflection shrunk to a few pixels and blurred, so a
-/// soft wash of its colours fills the screen, and costs almost nothing to draw. Dark mode fades it
-/// towards black. Light mode turns it into bright pastels of the same colours (`pastel`), because
-/// white laid over a cover greys a dark one and bleaches a bright one. It fades from song to song.
-struct PhoneAmbient: View {
-    let url: URL?
-    @State private var wash: UIImage?
-    /// The last song's wash, kept underneath so the next fades in over it with no dark dip.
-    @State private var previous: UIImage?
-    @State private var shown = 0.0
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        let p = Palette.of(scheme)
-        ZStack {
-            LinearGradient(colors: [p.panelTop, p.panelBottom], startPoint: .top, endPoint: .bottom)
-            if let previous { blurred(previous) }
-            if let wash { blurred(wash).opacity(shown) }
-            if scheme == .dark { Glass.scrim }
-        }
-        .task(id: "\(url?.path ?? "")\(scheme)") {
-            guard let url, let image = await KnobShiftArtwork.load(url) else {
-                previous = nil
-                wash = nil
-                return
-            }
-            let side = CGRect(x: 0, y: 0, width: 40, height: 40)
-            previous = wash
-            shown = 0
-            // The whole cover with its reflection under it, so its strongest colours reach the bottom too.
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 1
-            let reflected = UIGraphicsImageRenderer(size: CGSize(width: side.width, height: side.height * 2), format: format).image { context in
-                image.draw(in: side)
-                context.cgContext.translateBy(x: 0, y: side.height * 2)
-                context.cgContext.scaleBy(x: 1, y: -1)
-                image.draw(in: side)
-            }
-            wash = scheme == .dark ? reflected : Self.pastel(reflected)
-            // A frame at nothing first, so the fade has somewhere to start from.
-            try? await Task.sleep(for: .milliseconds(30))
-            withAnimation(Motion.ambient) { shown = 1 }
-        }
-        .accessibilityHidden(true)
-    }
-
-    private func blurred(_ image: UIImage) -> some View {
-        Color.clear
-            .overlay {
-                Image(uiImage: image).resizable().scaledToFill()
-                    .blur(radius: scheme == .dark ? 40 : 90).saturation(scheme == .dark ? 1.5 : 1)
-                    .scaleEffect(scheme == .dark ? 1.3 : 1.7)
-            }
-            .clipped()
-    }
-
-    /// Every pixel keeps its hue at one bright level and a capped strength, so text stays readable.
-    /// Near black has no real colour of its own, so it fades to white instead of a random hue.
-    private static func pastel(_ image: UIImage) -> UIImage {
-        guard let source = image.cgImage else { return image }
-        let width = source.width, height = source.height
-        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
-                                      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue),
-              let data = context.data?.assumingMemoryBound(to: UInt8.self) else { return image }
-        context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
-        for pixel in stride(from: 0, to: width * height * 4, by: 4) {
-            var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0
-            UIColor(red: CGFloat(data[pixel]) / 255, green: CGFloat(data[pixel + 1]) / 255, blue: CGFloat(data[pixel + 2]) / 255, alpha: 1)
-                .getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: nil)
-            let strength = min(saturation * 1.5, 0.5) * min(brightness / 0.2, 1)
-            var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0
-            UIColor(hue: hue, saturation: strength, brightness: 0.96, alpha: 1).getRed(&red, green: &green, blue: &blue, alpha: nil)
-            data[pixel] = UInt8(red * 255)
-            data[pixel + 1] = UInt8(green * 255)
-            data[pixel + 2] = UInt8(blue * 255)
-        }
-        return context.makeImage().map { UIImage(cgImage: $0) } ?? image
-    }
-}
-
-/// A move through the song while the finger is down: the slider and the Play dial both show it,
-/// and it is only played once the finger lifts.
-@MainActor
-final class PhoneScrub: ObservableObject {
-    @Published var position: TimeInterval?
-}
-
-/// The song's position: the slider, the times, and what
-/// KnobShift is doing between them, where Apple Music shows the audio quality. It alone watches
-/// the playback clock, so ten updates a second redraw nothing else.
-struct PhoneTimeline: View {
-    @ObservedObject var model: KnobShiftModel
-    @ObservedObject var clock: KnobShiftClock
-    @ObservedObject var scrub: PhoneScrub
-
-    /// How many seconds ahead a planned mix is announced.
-    private static let warning = 5
-
-    var body: some View {
-        let playing = model.nowPlaying != nil
-        let duration = max(clock.duration, 1)
-        let time = scrub.position ?? clock.time
-        VStack(spacing: 0) {
-            slider(playing: playing, time: time, duration: duration)
-            ZStack {
-                HStack {
-                    Text(playing ? KnobShiftNowPlaying.clock(time) : "0:00")
-                    Spacer()
-                    Text(playing ? "-" + KnobShiftNowPlaying.clock(max(0, clock.duration - time)) : "0:00")
-                }
-                .font(.system(size: 12, weight: .medium).monospacedDigit())
-                .foregroundStyle(Glass.secondary)
-                chip
-            }
-        }
-    }
-
-    /// The iPhone's own slider. With nothing playing it is an empty line, since the slider
-    /// shows its handle even with nothing to move.
-    @ViewBuilder private func slider(playing: Bool, time: TimeInterval, duration: TimeInterval) -> some View {
-        if playing {
-            Slider(value: Binding(get: { min(time, duration) }, set: { scrub.position = $0 }), in: 0...duration) { editing in
-                if !editing, let position = scrub.position {
-                    model.seek(to: position)
-                    scrub.position = nil
-                }
-            }
-            .tint(Palette.accent)
-            .accessibilityLabel("Position in song")
-        } else {
-            KnobGroove(value: 0, accessibilityLabel: "Position in song", accessibilityValue: "0:00", onChange: { _ in })
-                .disabled(true)
-        }
-    }
-
-    @ViewBuilder private var chip: some View {
-        let lit = model.mixState == .mixing
-        let text = chipText
-        ZStack {
-            if let text {
-                Text(text)
-                    .font(.system(size: 10, weight: .semibold).monospacedDigit()).tracking(0.4)
-                    .contentTransition(.numericText(countsDown: true))
-                    .foregroundStyle(lit || countdown != nil ? Glass.onAccent : Glass.secondary)
-                    .padding(.horizontal, 9)
-                    .frame(height: 20)
-                    .background(Capsule().fill(lit ? Palette.accent : (countdown != nil ? Palette.accent.opacity(0.45) : Glass.fill)))
-                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
-            }
-        }
-        .animation(Motion.snappy, value: text)
-    }
-
-    /// Seconds to a mix that is about to start: the last few of a planned one, or all of them
-    /// once KnobMix Now has been tapped.
-    private var countdown: Int? {
-        guard let mix = model.nextMix, mix.blends, model.mixState != .mixing else { return nil }
-        let left = Int(mix.at.timeIntervalSinceNow.rounded(.up))
-        return left > 0 && (model.mixNowWaiting || left <= Self.warning) ? left : nil
-    }
-
-    private var chipText: String? {
-        guard model.nowPlaying != nil else { return nil }
-        if model.mixState == .mixing { return "KNOBMIX" }
-        if let countdown { return "KNOBMIX IN \(countdown)" }
-        if model.mixNowWaiting { return "KNOBMIX STARTING" }
-        return model.mixState == .analyzing ? "PREPARING" : nil
-    }
 }
 
 /// What the player has to say under its buttons: a problem first, or else where the sound is

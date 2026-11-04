@@ -74,8 +74,9 @@ enum Screen {
     static let youtube = Color(hex: 0xFF0033)
 }
 
-/// The iPhone player's modern finish, following the iPhone's theme: dark text over a blurred,
-/// lightened cover in light mode, and light text over a darkened one in dark mode.
+/// The players' modern finish (the iPhone player and the Mac's KnobShift window), following the
+/// theme: dark text over a blurred, lightened cover in light mode, and light text over a darkened
+/// one in dark mode.
 enum Glass {
     static let text = themed(dark: .white, light: Color(hex: 0x1C1C1E))
     static let secondary = themed(dark: .white.opacity(0.65), light: .black.opacity(0.6))
@@ -93,7 +94,8 @@ enum Glass {
         let dark = UIColor(dark), light = UIColor(light)
         return Color(UIColor { $0.userInterfaceStyle == .dark ? dark : light })
         #else
-        return dark
+        let dark = NSColor(dark), light = NSColor(light)
+        return Color(NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light })
         #endif
     }
 }

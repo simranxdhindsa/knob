@@ -79,7 +79,7 @@ struct PhoneLaunch: View {
                 ZStack {
                     Circle().fill(Palette.accent)
                         .shadow(color: Palette.accentGlow.opacity(0.55 * (1 - Self.clamp((u - 0.8) / 0.2))), radius: 9)
-                    PhonePlayDisc(isPlaying: false, turn: 0, showsPointer: false, diameter: diameter)
+                    PlayDisc(isPlaying: false, turn: 0, showsPointer: false, diameter: diameter)
                         .opacity(Self.clamp((u - 0.75) / 0.25))
                 }
                 .frame(width: diameter, height: diameter)
@@ -234,30 +234,30 @@ struct LaunchMarks: View {
     /// How long a mark's kick and its cooling take once it has landed.
     private static let kick = 0.14, cooling = 0.22
     /// Seconds from the first mark leaving until the last has cooled.
-    static var length: Double { stagger * Double(PhonePlayDial.marks - 1) + flight + cooling }
+    static var length: Double { stagger * Double(PlayDial.marks - 1) + flight + cooling }
 
     /// How many marks have landed by this moment.
     static func landed(at time: Double) -> Int {
-        (0..<PhonePlayDial.marks).filter { time >= stagger * Double($0) + flight }.count
+        (0..<PlayDial.marks).filter { time >= stagger * Double($0) + flight }.count
     }
 
     var body: some View {
-        let knob = PhoneLaunch.knobSize, dial = playButton.width / PhonePlayDial.discShare
+        let knob = PhoneLaunch.knobSize, dial = playButton.width / PlayDial.discShare
         // RealisticKnob's marks, at the launch size.
         let startLength = knob * 0.085, startWidth = knob * 0.026, startReach = knob * 0.415 + startLength / 2
-        let endLength = dial * PhonePlayDial.markLength, endReach = dial * PhonePlayDial.markReach
+        let endLength = dial * PlayDial.markLength, endReach = dial * PlayDial.markReach
         let target = CGPoint(x: playButton.midX, y: playButton.midY)
         ZStack {
-            ForEach(0..<PhonePlayDial.marks, id: \.self) { mark in
-                let degrees = -PhonePlayDial.sweep / 2 + PhonePlayDial.sweep * Double(mark) / Double(PhonePlayDial.marks - 1)
+            ForEach(0..<PlayDial.marks, id: \.self) { mark in
+                let degrees = -PlayDial.sweep / 2 + PlayDial.sweep * Double(mark) / Double(PlayDial.marks - 1)
                 let since = time - Self.stagger * Double(mark) - Self.flight
                 let e = Self.ease((since + Self.flight) / Self.flight)
                 let start = Self.point(from, degrees, startReach), end = Self.point(target, degrees, endReach)
                 // Marks left of the middle bow out to the left, marks right of it to the right.
-                let bow = sin(.pi * e) * CGFloat(mark - PhonePlayDial.marks / 2) * 7
+                let bow = sin(.pi * e) * CGFloat(mark - PlayDial.marks / 2) * 7
                 Capsule()
                     .fill(Palette.accent)
-                    .frame(width: startWidth + (PhonePlayDial.markWidth - startWidth) * e,
+                    .frame(width: startWidth + (PlayDial.markWidth - startWidth) * e,
                            height: startLength + (endLength - startLength) * e)
                     .shadow(color: Palette.accentGlow.opacity(0.9), radius: 4)
                     .scaleEffect(1 + 0.55 * (1 - Self.ease(since / Self.kick)) * (since > 0 ? 1 : 0))

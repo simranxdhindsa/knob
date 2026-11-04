@@ -5,6 +5,7 @@ import SwiftUI
 /// Every row has a fixed height, so the queue never jumps while songs download. Removing and
 /// deleting for good both ask first.
 struct KnobShiftPlaylistRows: View {
+    @Environment(\.surface) private var surface
     @ObservedObject var model: KnobShiftModel
     /// Open the Add sheets: the song picker for an update lives there.
     var onSpotify: () -> Void = {}
@@ -53,12 +54,12 @@ struct KnobShiftPlaylistRows: View {
             Image(systemName: icon(playlist.kind)).font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.accent)
                 .frame(width: 16)
             VStack(alignment: .leading, spacing: 2) {
-                Text(playlist.name).font(.system(size: 11, weight: .semibold)).foregroundStyle(Screen.text).lineLimit(1)
+                Text(playlist.name).font(.system(size: 11, weight: .semibold)).foregroundStyle(surface.text).lineLimit(1)
                 if let progress {
                     KnobShiftImportBar(progress: progress, compact: true)
                 } else {
                     Text(failed > 0 ? "\(count.ready) of \(count.total) ready, \(failed) not downloaded" : "\(count.total) song\(count.total == 1 ? "" : "s") from \(service(playlist))")
-                        .font(.system(size: 9.5)).foregroundStyle(Screen.textTertiary).lineLimit(1)
+                        .font(.system(size: 9.5)).foregroundStyle(surface.tertiary).lineLimit(1)
                 }
             }
             Spacer(minLength: 4)
@@ -66,7 +67,7 @@ struct KnobShiftPlaylistRows: View {
                 Button { model.cancelDownload(playlist) } label: {
                     Image(systemName: "stop.fill").font(.system(size: 9, weight: .bold))
                 }
-                .buttonStyle(.plain).foregroundStyle(Screen.textSecondary)
+                .buttonStyle(.plain).foregroundStyle(surface.secondary)
                 .help("Stop downloading")
                 .accessibilityLabel("Stop downloading \(playlist.name)")
             } else {
@@ -82,7 +83,7 @@ struct KnobShiftPlaylistRows: View {
                 } label: {
                     Image(systemName: "arrow.clockwise").font(.system(size: 10, weight: .bold))
                 }
-                .buttonStyle(.plain).foregroundStyle(Screen.textSecondary)
+                .buttonStyle(.plain).foregroundStyle(surface.secondary)
                 .disabled(model.spotifyReadJob != nil)
                 .help("Update from \(service(playlist)) and pick songs")
                 .accessibilityLabel("Update \(playlist.name) from \(service(playlist))")
@@ -90,12 +91,12 @@ struct KnobShiftPlaylistRows: View {
             Button { confirmRemove = playlist } label: {
                 Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
             }
-            .buttonStyle(.plain).foregroundStyle(Screen.textTertiary)
+            .buttonStyle(.plain).foregroundStyle(surface.tertiary)
             .accessibilityLabel("Remove \(playlist.name)")
         }
         .padding(.horizontal, 10)
         .frame(height: 36)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Screen.tabTrack))
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(surface.fill))
     }
 
     private var removedSection: some View {
@@ -107,7 +108,7 @@ struct KnobShiftPlaylistRows: View {
                     Text("RECENTLY REMOVED \(model.removedPlaylists.count)").font(.system(size: 9, weight: .bold)).tracking(0.8)
                     Spacer()
                 }
-                .foregroundStyle(Screen.textTertiary)
+                .foregroundStyle(surface.tertiary)
                 .frame(height: 22)
                 .contentShape(Rectangle())
             }
@@ -122,15 +123,15 @@ struct KnobShiftPlaylistRows: View {
         let daysLeft = max(0, Int((KnobShiftPlaylists.keepRemovedFor - Date().timeIntervalSince(removed.removedAt)) / 86_400))
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 1) {
-                Text(removed.playlist.name).font(.system(size: 11, weight: .medium)).foregroundStyle(Screen.textSecondary).lineLimit(1)
+                Text(removed.playlist.name).font(.system(size: 11, weight: .medium)).foregroundStyle(surface.secondary).lineLimit(1)
                 Text(daysLeft == 0 ? "Last day to restore this" : "You can restore this for \(daysLeft) more day\(daysLeft == 1 ? "" : "s")")
-                    .font(.system(size: 9.5)).foregroundStyle(Screen.textTertiary).lineLimit(1)
+                    .font(.system(size: 9.5)).foregroundStyle(surface.tertiary).lineLimit(1)
             }
             Spacer(minLength: 4)
             Button("RESTORE") { Task { await model.restorePlaylist(removed) } }
                 .buttonStyle(.plain).font(.system(size: 9, weight: .bold)).foregroundStyle(Palette.accent)
             Button("DELETE") { confirmDelete = removed }
-                .buttonStyle(.plain).font(.system(size: 9, weight: .bold)).foregroundStyle(Screen.textTertiary)
+                .buttonStyle(.plain).font(.system(size: 9, weight: .bold)).foregroundStyle(surface.tertiary)
         }
         .padding(.horizontal, 10)
         .frame(height: 36)

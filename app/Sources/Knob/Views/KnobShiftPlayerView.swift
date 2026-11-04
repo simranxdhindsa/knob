@@ -1,37 +1,40 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// KnobShift's player on the Mac: a now-playing deck beside Up Next and the queue, on Knob's
-/// faceplate, in its own window (KnobShiftWindow.swift). The deck and cards are in
-/// KnobShiftNowPlaying.swift and KnobShiftQueue.swift. The iPhone has its own (PhonePlayer).
+/// KnobShift's player on the Mac, in its own window (KnobShiftWindow.swift), in the same modern
+/// finish as the iPhone player: the cover runs to the window's edges and melts into a blurred wash
+/// of its own colours, above the song with KnobMix and more beside it on glass, the position
+/// slider and the transport around the Play dial. Up Next and the queue sit on glass beside it in
+/// a wide window; a narrow one shows them in the cover's place from the queue button.
 struct KnobShiftPlayerView: View {
     static let minimumSize = CGSize(width: 440, height: 520)
     static let initialSize = CGSize(width: 820, height: 600)
     static let maximumSize = CGSize(width: 1_200, height: 900)
+    /// From this width the queue sits beside the player.
+    static let wide: CGFloat = 760
 
-    @Environment(\.colorScheme) private var scheme
     @ObservedObject var model: KnobShiftModel
+    @StateObject private var scrub = PlayerScrub()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var importing = false
     @State private var showingSpotify = false
     @State private var showingYouTube = false
+    /// A narrow window's queue, shown in the cover's place.
+    @State private var showingQueue = false
 
     var body: some View {
-        let palette = Palette.of(scheme)
         GeometryReader { geometry in
-            VStack(alignment: .leading, spacing: 16) {
-                header(palette)
-                workspace(width: geometry.size.width)
+            let wide = geometry.size.width >= Self.wide
+            HStack(spacing: 0) {
+                deck(wide: wide)
+                if wide {
+                    sidebar.frame(width: min(360, geometry.size.width * 0.42))
+                }
             }
-            .padding(20)
         }
         .frame(minWidth: Self.minimumSize.width, minHeight: Self.minimumSize.height)
-        .background {
-            ZStack {
-                LinearGradient(colors: [palette.panelTop, palette.panelBottom], startPoint: .top, endPoint: .bottom)
-                Grain(opacity: palette.grain)
-            }
-            .ignoresSafeArea()
-        }
+        .background { PlayerAmbient(url: (model.mixingInto ?? model.nowPlaying)?.url).ignoresSafeArea() }
+        .environment(\.surface, .glass)
         .sheet(isPresented: $showingSpotify) { KnobShiftSpotifySheet(model: model).focusEffectDisabled() }
         .sheet(isPresented: $showingYouTube) { KnobShiftYouTubeSheet(model: model).focusEffectDisabled() }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
@@ -40,40 +43,146 @@ struct KnobShiftPlayerView: View {
         }
     }
 
-    private func header(_ palette: Palette) -> some View {
-        HStack(spacing: 11) {
-            Image(systemName: "arrow.left.arrow.right.circle.fill")
-                .font(.system(size: 26))
-                .foregroundStyle(Palette.accent)
-                .shadow(color: Palette.accentGlow.opacity(0.45), radius: 6)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("KNOBSHIFT").font(.system(size: 15, weight: .heavy)).tracking(1.6).foregroundStyle(palette.label)
-                Text("Seamless mixes for the music on your \(Platform.deviceName)").font(.system(size: 11, weight: .medium)).foregroundStyle(palette.muted)
-            }
-            Spacer()
-        }
-    }
-
-    private var queue: some View {
-        KnobShiftQueue(model: model, onAdd: { importing = true }, onSpotify: { showingSpotify = true }, onYouTube: { showingYouTube = true })
-    }
-
-    @ViewBuilder private func workspace(width: CGFloat) -> some View {
-        if width >= 760 {
-            HStack(alignment: .top, spacing: 18) {
-                KnobShiftNowPlaying(model: model, compact: false)
-                VStack(spacing: 14) {
-                    KnobShiftUpNext(model: model)
-                    queue
+    private func deck(wide: Bool) -> some View {
+        GeometryReader { geometry in
+            let layout = KnobShiftPlayerLayout(size: geometry.size, wide: wide)
+            let queue = !wide && showingQueue
+            ZStack(alignment: .top) {
+                if model.nowPlaying == nil {
+                    // With no song there is no cover to melt, only a note on the plain background.
+                    Image(systemName: "music.note")
+                        .font(.system(size: 64, weight: .semibold))
+                        .foregroundStyle(Palette.accent)
+                        .frame(maxWidth: .infinity, maxHeight: layout.coverSpace)
+                        .opacity(queue ? 0 : 1)
+                        .accessibilityHidden(true)
+                } else {
+                    cover(layout, hidden: queue)
                 }
-                .frame(width: min(360, width * 0.42))
+                if queue {
+                    sidebar
+                        .frame(height: layout.coverSpace)
+                        .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 18)), removal: .opacity))
+                }
+                controls(wide: wide)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
             }
-        } else {
-            VStack(spacing: 12) {
-                KnobShiftNowPlaying(model: model, compact: true)
-                KnobShiftUpNext(model: model)
-                queue
+            .animation(reduceMotion ? .easeOut(duration: 0.2) : Motion.gentle, value: queue)
+        }
+    }
+
+    /// The cover from the top of the window, melting away towards the song's name, and towards
+    /// the queue beside it in a wide window. Pausing eases it back and dims it.
+    private func cover(_ layout: KnobShiftPlayerLayout, hidden: Bool) -> some View {
+        KnobShiftCover(model: model, clock: model.clock, size: layout.side, animated: model.isPlaying, corner: 0)
+            // A soft shade behind the window buttons, for bright covers.
+            .overlay(alignment: .top) {
+                LinearGradient(colors: [Glass.scrim, .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 70)
+            }
+            .mask { LinearGradient(stops: Self.melt, startPoint: .top, endPoint: .bottom) }
+            .mask {
+                LinearGradient(stops: [.init(color: .black, location: layout.wide ? 0.8 : 1), .init(color: .clear, location: 1)],
+                               startPoint: .leading, endPoint: .trailing)
+            }
+            .brightness(model.isPlaying ? 0 : -0.1)
+            .scaleEffect(model.isPlaying ? 1.04 : 1, anchor: .top)
+            .animation(reduceMotion ? .easeOut(duration: 0.2) : Motion.gentle, value: model.isPlaying)
+            .frame(width: layout.size.width, height: layout.size.height, alignment: .top)
+            .clipped()
+            .opacity(hidden ? 0 : 1)
+            .allowsHitTesting(false)
+    }
+
+    private static let melt: [Gradient.Stop] = [
+        .init(color: .black, location: 0.34), .init(color: .black.opacity(0.86), location: 0.46),
+        .init(color: .black.opacity(0.58), location: 0.6), .init(color: .black.opacity(0.28), location: 0.74),
+        .init(color: .black.opacity(0.08), location: 0.88), .init(color: .clear, location: 1),
+    ]
+
+    private func controls(wide: Bool) -> some View {
+        VStack(spacing: 0) {
+            titleRow(wide: wide)
+                .frame(height: KnobShiftPlayerLayout.title)
+            PlayerTimeline(model: model, clock: model.clock, scrub: scrub)
+                .frame(height: KnobShiftPlayerLayout.timeline)
+            PlayerTransport(model: model, scrub: scrub, dialSize: KnobShiftPlayerLayout.dial)
+                .frame(height: KnobShiftPlayerLayout.dial)
+            Text(model.notice ?? " ")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Palette.accent)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .frame(height: KnobShiftPlayerLayout.caption)
+        }
+        .padding(.horizontal, KnobShiftPlayerLayout.margin)
+        .padding(.bottom, KnobShiftPlayerLayout.bottom)
+    }
+
+    private func titleRow(wide: Bool) -> some View {
+        let track = model.nowPlaying
+        return HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(track?.name ?? "Nothing playing")
+                    .font(.system(size: 21, weight: .semibold)).foregroundStyle(Glass.text)
+                Text(track?.artist ?? (track != nil ? "Local music" : (model.tracks.isEmpty ? "Add songs from the dots" : "Press Play to start")))
+                    .font(.system(size: 16)).foregroundStyle(Glass.secondary)
+            }
+            .lineLimit(1)
+            .contentTransition(.opacity)
+            .animation(Motion.gentle, value: track?.id)
+            Spacer(minLength: 0)
+            PlayerGlassGroup {
+                HStack(spacing: 10) {
+                    MixNowButton(model: model, clock: model.clock)
+                    if !wide { queueButton }
+                    PlayerMoreMenu(model: model, onFiles: { importing = true }, onSpotify: { showingSpotify = true },
+                                   onYouTube: { showingYouTube = true })
+                }
             }
         }
     }
+
+    private var queueButton: some View {
+        Button {
+            Haptics.tick()
+            showingQueue.toggle()
+        } label: {
+            Image(systemName: "list.bullet")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(showingQueue ? Palette.accent : Glass.text)
+                .frame(width: 40, height: 40)
+                .playerGlass()
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(showingQueue ? "Hide the queue" : "Show the queue")
+    }
+
+    private var sidebar: some View {
+        VStack(spacing: 14) {
+            KnobShiftUpNext(model: model)
+            KnobShiftQueue(model: model, onAdd: { importing = true }, onSpotify: { showingSpotify = true }, onYouTube: { showingYouTube = true })
+        }
+        // Clear of the window's close, minimise and zoom buttons.
+        .padding(.top, 38)
+        .padding([.horizontal, .bottom], 18)
+    }
+}
+
+/// Where the Mac player's parts sit, worked out from the deck's size. The cover is a square at
+/// least as wide as the deck, so its sides run off the edges, and tall enough for its melt to
+/// reach the song's name.
+struct KnobShiftPlayerLayout {
+    static let margin: CGFloat = 28, title: CGFloat = 56, timeline: CGFloat = 60, dial: CGFloat = 112
+    static let caption: CGFloat = 22, bottom: CGFloat = 12
+    /// How far the cover's bottom edge reaches past the top of the song's name.
+    private static let overlap: CGFloat = 48
+    static var controls: CGFloat { title + timeline + dial + caption + bottom }
+
+    let size: CGSize
+    let wide: Bool
+
+    /// The space above the song's name.
+    var coverSpace: CGFloat { max(size.height - Self.controls, 0) }
+    var side: CGFloat { max(size.width, coverSpace + Self.overlap) }
 }
