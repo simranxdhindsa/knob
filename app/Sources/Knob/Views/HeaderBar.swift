@@ -1,13 +1,16 @@
-import AppKit
 import SwiftUI
 
 /// Wordmark, the power switch and the app menu.
 struct HeaderBar: View {
     @ObservedObject var model: KnobModel
     /// About Knob: the panel shows it in place; elsewhere it opens its own window.
+    #if os(macOS)
     var onAbout: () -> Void = { AboutWindow.show() }
     @AppStorage(PersistKey.showInDock.rawValue) private var showInDock = true
     @ObservedObject private var updater = Updater.shared
+    #else
+    var onAbout: () -> Void = {}
+    #endif
     @Environment(\.colorScheme) private var scheme
     @State private var menuOpen = false
 
@@ -24,8 +27,10 @@ struct HeaderBar: View {
                     .font(.system(size: 9.5, weight: .semibold).monospacedDigit())
                     .foregroundStyle(p.faint)
                     .accessibilityLabel("Version \(Self.version)")
+                #if os(macOS)
                 UpdateStatusLabel(status: updater.status)
                     .animation(Motion.gentle, value: updater.status)
+                #endif
             }
             Spacer(minLength: 6)
             PowerSwitch(isOn: Binding(get: { model.powerOn }, set: { model.userSetPower($0) }), label: "Sound effects")
@@ -42,7 +47,9 @@ struct HeaderBar: View {
             .focusEffectDisabled()
             .accessibilityLabel("Knob menu")
             .popover(isPresented: $menuOpen, arrowEdge: .bottom) { knobMenu }
+            #if os(macOS)
             .onChange(of: showInDock) { _, shown in DockPresence.apply(shown) }
+            #endif
         }
     }
 
@@ -53,6 +60,7 @@ struct HeaderBar: View {
             DropdownRow(title: "About Knob", action: { pick(onAbout) }) {
                 Image(systemName: "info.circle").font(.system(size: 13))
             }
+            #if os(macOS)
             if Updater.shared.isAvailable {
                 DropdownRow(title: "Check for Updates…", action: { pick { Updater.shared.checkForUpdates() } }) {
                     Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 12))
@@ -65,6 +73,7 @@ struct HeaderBar: View {
             DropdownRow(title: "Quit Knob", trailing: "⌘Q", action: { pick { model.quit() } }) {
                 Image(systemName: "power").font(.system(size: 12, weight: .semibold))
             }
+            #endif
         }
         .environment(\.colorScheme, scheme)
     }
@@ -109,7 +118,7 @@ struct PresetBar: View {
                 } label: {
                     Text("DELETE")
                         .font(.system(size: 9.5, weight: .bold)).tracking(0.8)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Glass.onAccent)
                         .padding(.horizontal, 10)
                         .frame(height: 24)
                         .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Palette.accent))
@@ -128,13 +137,13 @@ struct PresetBar: View {
                     .background(RecessedPill())
                     .focused($nameFocused)
                     .onSubmit(save)
-                    .onExitCommand { naming = false }
+                    .onEscapeKey { naming = false }
                 HardwareIconButton(systemImage: "checkmark", label: "Save preset", action: save)
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                 HardwareIconButton(systemImage: "xmark", label: "Cancel") { naming = false }
             } else {
                 PillMenu(items: model.presets, selection: model.currentPreset, title: { $0.name },
-                         placeholder: "Choose a preset") { model.select($0) }
+                         placeholder: "Choose a preset", icon: \.icon) { model.select($0) }
                 HardwareIconButton(systemImage: "chevron.left", label: "Previous preset") { model.stepPreset(-1) }
                 HardwareIconButton(systemImage: "chevron.right", label: "Next preset") { model.stepPreset(1) }
                 HardwareIconButton(systemImage: "square.and.arrow.down", label: "Save as a new preset") {

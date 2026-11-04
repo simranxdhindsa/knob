@@ -72,16 +72,16 @@ final class KnobShiftYouTube: @unchecked Sendable {
 
     /// Downloads one song into `folder`, or with `search` the closest match YouTube finds for its
     /// artist and name. Each line of yt-dlp's output goes to `onLine` as it arrives.
-    func download(_ song: KnobShiftSpotDL.Song, into folder: URL, search: Bool, id: UUID,
+    func download(_ song: KnobShiftSpotDL.Song, into folder: URL, search: Bool, id: UUID, browser: KnobShiftYouTubeBrowser? = nil,
                   onLine: @escaping @Sendable (String) -> Void) async -> KnobShiftHelperProcess.Result {
         guard let ffmpeg = KnobShiftSpotDL.ffmpeg, KnobShiftYouTubeParsing.isVideoId(song.song_id) else {
             return KnobShiftHelperProcess.Result(status: -1, lines: [], cancelled: false, stalled: false)
         }
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let arguments = search
-            ? KnobShiftYouTubeParsing.searchArguments(for: song, into: folder, ffmpeg: ffmpeg.path)
-            : KnobShiftYouTubeParsing.downloadArguments(for: song, into: folder, ffmpeg: ffmpeg.path)
-        return await run(arguments, id: id, idleLimit: 300, onLine: onLine)
+            ? KnobShiftYouTubeParsing.searchArguments(for: song, into: folder, ffmpeg: ffmpeg.path, browser: browser)
+            : KnobShiftYouTubeParsing.downloadArguments(for: song, into: folder, ffmpeg: ffmpeg.path, browser: browser)
+        return await run(arguments, id: id, idleLimit: 300, browser: browser, onLine: onLine)
     }
 
     // MARK: Stopping
@@ -102,7 +102,7 @@ final class KnobShiftYouTube: @unchecked Sendable {
     /// Runs yt-dlp with its own home, so its cache stays inside Knob, and with Helpers first on
     /// its PATH, where it finds Deno (needed to read YouTube's pages). It gets only the settings
     /// it needs, never the rest of Knob's environment.
-    func run(_ arguments: [String], id: UUID, idleLimit: TimeInterval?,
+    func run(_ arguments: [String], id: UUID, idleLimit: TimeInterval?, browser: KnobShiftYouTubeBrowser? = nil,
              onLine: @escaping @Sendable (String) -> Void) async -> KnobShiftHelperProcess.Result {
         guard let helper = Self.helper, let ffmpeg = KnobShiftSpotDL.ffmpeg else {
             return KnobShiftHelperProcess.Result(status: -1, lines: [], cancelled: false, stalled: false)
@@ -110,7 +110,8 @@ final class KnobShiftYouTube: @unchecked Sendable {
         Self.makeHome()
         let inherited = ProcessInfo.processInfo.environment
         var environment: [String: String] = [
-            "HOME": Self.home.path,
+            // The browser is found under the real home; yt-dlp's cache stays in Knob's folder.
+            "HOME": browser == nil ? Self.home.path : KnobShiftYouTubeBrowser.realHome,
             "XDG_CACHE_HOME": Self.home.appendingPathComponent("cache").path,
             "PATH": "\(ffmpeg.deletingLastPathComponent().path):/usr/bin:/bin",
             "PYTHONUNBUFFERED": "1", "PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1",

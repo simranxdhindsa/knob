@@ -8,6 +8,8 @@ actor KnobShiftAnalyser {
     struct Result {
         let track: KnobShiftModel.Track
         let steps: [String]
+        /// False when part of the measuring failed, so it is not saved and runs again next time.
+        var complete = true
     }
 
     func track(for url: URL) throws -> KnobShiftModel.Track {
@@ -27,7 +29,7 @@ actor KnobShiftAnalyser {
             return Result(track: track, steps: [note] + saved.steps)
         }
         let result = try measure(url, progress: progress ?? { _ in })
-        KnobShiftAnalysisCache.save(result.track, steps: result.steps)
+        if result.complete { KnobShiftAnalysisCache.save(result.track, steps: result.steps) }
         return result
     }
 
@@ -80,6 +82,8 @@ actor KnobShiftAnalyser {
         if let end = vocals.end {
             steps.append(String(format: "Outro after the voice: %.2fs of music before the audible end.", max(0, quietStart - end)))
         }
+        let hook = KnobShiftHooks.lastHook(in: url, breaks: sections.breaks, beats: rhythm.beats, audibleEnd: duration - trailing)
+        steps.append(contentsOf: hook.steps)
         let safeOutroCue = fade.cue ?? (trailing >= 1 ? quietStart : nil)
         if let safeOutroCue {
             let source = fade.cue != nil ? "fade start" : "start of the trailing silence"
@@ -97,11 +101,11 @@ actor KnobShiftAnalyser {
                                                lastLineStart: vocals.lastLineStart,
                                                mainVocalOnset: mainVerse, vocalStrays: vocals.strays,
                                                beatEntry: sections.beatEntry, musicBreaks: sections.breaks,
-                                               vocalLineEnds: vocals.lineEnds)
+                                               vocalLineEnds: vocals.lineEnds, lastHookStart: hook.start)
         steps.append(String(format: "Finished in %.0f ms.", Date().timeIntervalSince(started) * 1_000))
         let track = KnobShiftModel.Track(url: url, title: url.deletingPathExtension().lastPathComponent,
                                          duration: duration, tailSilence: trailing, analysis: analysis)
-        return Result(track: track, steps: steps)
+        return Result(track: track, steps: steps, complete: !vocals.failed)
     }
 
     private static let silenceRMS: Float = 0.006

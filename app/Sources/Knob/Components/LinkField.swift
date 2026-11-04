@@ -13,21 +13,25 @@ struct LinkField: View {
     var onPaste: () -> Void
     var onAdd: () -> Void
 
+    @Environment(\.surface) private var surface
+
     private var isEmpty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "link").font(.system(size: 11, weight: .semibold)).foregroundStyle(Screen.textTertiary)
+            Image(systemName: "link").font(.system(size: 11, weight: .semibold)).foregroundStyle(surface.tertiary)
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
-                .foregroundStyle(Screen.text)
+                .foregroundStyle(surface.text)
+                .tint(Palette.accent)
+                .autocorrectionDisabled()
                 .onSubmit(onAdd)
             Button(action: isEmpty ? onPaste : onAdd) {
                 Label(isEmpty ? "PASTE" : "ADD", systemImage: isEmpty ? "doc.on.clipboard" : "plus")
-                    .font(.system(size: 10, weight: .bold)).tracking(0.7).foregroundStyle(.white)
+                    .font(.system(size: 10, weight: .bold)).tracking(0.7).foregroundStyle(Glass.onAccent)
                     .padding(.horizontal, 14).frame(height: 26)
-                    .background(Capsule().fill(enabled ? Palette.accent : Screen.textTertiary.opacity(0.4)))
+                    .background(Capsule().fill(enabled ? Palette.accent : surface.tertiary.opacity(0.4)))
                     .contentTransition(.opacity)
                     .animation(Motion.snappy, value: isEmpty)
             }
@@ -37,7 +41,7 @@ struct LinkField: View {
         }
         .padding(.leading, 12).padding(.trailing, 4)
         .frame(height: 34)
-        .background(Capsule().fill(Screen.tabTrack))
-        .overlay(Capsule().strokeBorder(Screen.highlight, lineWidth: 1))
+        .background(Capsule().fill(surface.fill))
+        .overlay(Capsule().strokeBorder(surface.stroke, lineWidth: 1))
     }
 }

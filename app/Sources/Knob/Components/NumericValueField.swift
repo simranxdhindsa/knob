@@ -47,7 +47,7 @@ struct NumericValueField: View {
             if !enabled { finish(commit: false); focused = false }
         }
         .onSubmit { finish(commit: true); focused = false }
-        .onExitCommand { finish(commit: false); focused = false }
+        .onEscapeKey { finish(commit: false); focused = false }
         .onDisappear { finish(commit: false) }
         .accessibilityLabel("\(label)\(unit.isEmpty ? "" : " in " + unit)")
         .help(invalid

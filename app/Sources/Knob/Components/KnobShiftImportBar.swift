@@ -4,6 +4,7 @@ import SwiftUI
 /// thin orange bar under it. Used in the Spotify sheet and in the queue's playlist rows, so both
 /// read the same way. While it waits behind another playlist it says so instead.
 struct KnobShiftImportBar: View {
+    @Environment(\.surface) private var surface
     let progress: KnobShiftImport.Progress
     var compact = false
 
@@ -11,12 +12,12 @@ struct KnobShiftImportBar: View {
         VStack(alignment: .leading, spacing: compact ? 3 : 5) {
             Text(Self.summary(progress))
                 .font(.system(size: compact ? 9.5 : 10.5, weight: .medium))
-                .foregroundStyle(progress.started ? Palette.accent : Screen.textTertiary)
+                .foregroundStyle(progress.started ? Palette.accent : surface.tertiary)
                 .lineLimit(1)
                 .truncationMode(.tail)
             GeometryReader { box in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Screen.tabTrack)
+                    Capsule().fill(surface.fill)
                     Capsule().fill(Palette.accent)
                         .frame(width: max(progress.finished > 0 ? 3 : 0, box.size.width * progress.fraction))
                         .shadow(color: Palette.accentGlow.opacity(0.5), radius: 3)

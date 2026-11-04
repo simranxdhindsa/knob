@@ -6,6 +6,9 @@ import SwiftUI
 /// deleting for good both ask first.
 struct KnobShiftPlaylistRows: View {
     @ObservedObject var model: KnobShiftModel
+    /// Open the Add sheets: the song picker for an update lives there.
+    var onSpotify: () -> Void = {}
+    var onYouTube: () -> Void = {}
     @State private var confirmRemove: KnobShiftPlaylist?
     @State private var confirmDelete: KnobShiftRemovedPlaylist?
     @State private var showRemoved = false
@@ -73,7 +76,10 @@ struct KnobShiftPlaylistRows: View {
                         .help("Try the songs that did not download again")
                         .accessibilityLabel("Retry \(failed) songs of \(playlist.name)")
                 }
-                Button { Task { await model.updatePlaylist(playlist) } } label: {
+                Button {
+                    if playlist.source == .youtube { onYouTube() } else { onSpotify() }
+                    Task { await model.updatePlaylist(playlist) }
+                } label: {
                     Image(systemName: "arrow.clockwise").font(.system(size: 10, weight: .bold))
                 }
                 .buttonStyle(.plain).foregroundStyle(Screen.textSecondary)
@@ -117,7 +123,8 @@ struct KnobShiftPlaylistRows: View {
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(removed.playlist.name).font(.system(size: 11, weight: .medium)).foregroundStyle(Screen.textSecondary).lineLimit(1)
-                Text("Deleted for good in \(daysLeft) day\(daysLeft == 1 ? "" : "s")").font(.system(size: 9.5)).foregroundStyle(Screen.textTertiary)
+                Text(daysLeft == 0 ? "Last day to restore this" : "You can restore this for \(daysLeft) more day\(daysLeft == 1 ? "" : "s")")
+                    .font(.system(size: 9.5)).foregroundStyle(Screen.textTertiary).lineLimit(1)
             }
             Spacer(minLength: 4)
             Button("RESTORE") { Task { await model.restorePlaylist(removed) } }

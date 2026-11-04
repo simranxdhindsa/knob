@@ -39,13 +39,88 @@ struct KnobShiftPlan {
     /// No mix is shorter than this when the song leaves room, so its exit is heard.
     static let shortestMix: TimeInterval = 6
     /// No mix is ever longer than this.
-    static let longestMix: TimeInterval = 10
+    static let longestMix: TimeInterval = 16
+    /// A short mix lands the new voice this long before the old voice's last words end, so the
+    /// two always overlap, however little room there is.
+    static let handover: TimeInterval = 0.5
+    /// The least the old and new voices sing together, checked when the mix starts.
+    static let leastOverlap: TimeInterval = 0.25
+    /// The most they sing together: four bars of the old song, kept to 5...8 seconds.
+    static func mostTogether(bar: TimeInterval) -> TimeInterval { min(max(4 * bar, 5), 8) }
+    /// Where the new voice comes in, in seconds into the mix: half way from the start of the mix
+    /// to the old voice's last words, so the voices are heard mixing rather than one after the
+    /// other. Never so early that they sing together for more than `mostTogether`, and never
+    /// after the last words, so there is no gap.
+    static func newVoiceEntry(wordsEnd: TimeInterval, bar: TimeInterval) -> TimeInterval {
+        min(max(wordsEnd / 2, wordsEnd - mostTogether(bar: bar)), wordsEnd - handover)
+    }
+    /// The least time the old voice is given to finish once the mix starts.
+    static let shortestWords: TimeInterval = 4
+    /// The least room a mix gets before the old voice's last words, unless KnobMix Now asks for
+    /// less: with less, the press and the new song and its voice all land within a second or two.
+    static let shortestRunUp: TimeInterval = 8
+    static let longestRunUp: TimeInterval = 12
+    /// How long before the last words a mix starts when no hook decides it: the whole bars of
+    /// the old song nearest to 10 seconds.
+    static func runUp(bar: TimeInterval) -> TimeInterval {
+        min(max(max(1, (10 / bar).rounded()) * bar, shortestRunUp), longestRunUp)
+    }
+    /// Where a mix starts when no hook decides it: `runUp` before the last words, or on the
+    /// song's own music break, else line ending, nearest to that within the run up's range.
+    static func runUpStart(_ analysis: KnobShiftModel.Analysis, voiceEnd: TimeInterval, bar: TimeInterval) -> TimeInterval {
+        let wanted = voiceEnd - runUp(bar: bar)
+        let range = (voiceEnd - longestRunUp)...(voiceEnd - shortestRunUp)
+        let nearest = { (points: [TimeInterval]) in points.filter(range.contains).min { abs($0 - wanted) < abs($1 - wanted) } }
+        return max(0, nearest(analysis.musicBreaks) ?? nearest(analysis.vocalLineEnds ?? []) ?? wanted)
+    }
+    /// The song analysis finds singing in steps of about a second and a half: its first words
+    /// come out about this much early and its last words about this much late.
+    static let analysisSlack: TimeInterval = 1.25
+    /// How long before its first words a sung mix starts the new song.
+    static let voiceLead: TimeInterval = 0.3
+    /// The most of the new song's own music played before its voice comes in: it starts at the
+    /// beginning of the mix when the voice arrives within this long, later otherwise.
+    static let introLead: TimeInterval = 2
+    /// When the beats cannot lock, the new song's music starts this slow and reaches its own
+    /// speed as its voice comes in, so the voice itself is never slowed.
+    static let introSpeed = 0.92
+    /// The new song arrives in a hall and muffled; both clear this long after its voice comes in.
+    static let washEnds: TimeInterval = 2.5
+    /// The old song carries on under the new voice after its last words (its beats fading and
+    /// its pressed voice ringing out): three of its bars, kept to 6...8 seconds.
+    static let shortestTail: TimeInterval = 6
+    static let longestTail: TimeInterval = 8
+    static func tail(bar: TimeInterval) -> TimeInterval { min(max(3 * bar, shortestTail), longestTail) }
+    /// A voice this far or further before the main verse is a sung intro or ad libs over the
+    /// intro, not where the song starts singing, so a sung mix skips it.
+    static let introVoice: TimeInterval = 8
+    /// Where the new song starts singing for a sung mix, and whether that time is already on its
+    /// phrase grid, so it is not corrected by `analysisSlack`. The analyser places the main verse
+    /// on the grid only when the tempo is known and the beat comes in within 40 seconds
+    /// (`KnobShiftSections.placeVerse`); otherwise it is heard as early as any other onset.
+    static func firstSinging(_ analysis: KnobShiftModel.Analysis) -> (at: TimeInterval, onGrid: Bool)? {
+        let early = analysis.vocalOnset, main = analysis.mainVocalOnset
+        let placed = (analysis.tempo ?? 0) > 0 && (analysis.beatEntry.map { $0 <= 40 } ?? false)
+        if let early, let main, early <= main - introVoice { return (main, placed) }
+        guard let first = [early, main].compactMap({ $0 }).min() else {
+            // No voice found: a long intro still ends where the beat comes in, so a song is never
+            // started from its top just because its voice could not be read.
+            if placed, let entry = analysis.beatEntry, entry >= introVoice { return (entry, true) }
+            return nil
+        }
+        return (first, placed && first != early)
+    }
+    /// How long the old pressed voice rings on into the new song after its last words.
+    static let voiceRing: TimeInterval = 3
+    /// The longest the old voice is pressed down before its last words: the mix starts at the
+    /// last hook, unless the hook found is further back than this.
+    static let longestPress: TimeInterval = 30
     /// The most the new song's beats play under the old voice, and the most the old song may
     /// still be heard once the new voice sings.
     static let overlap: TimeInterval = 2
     /// How long a vocal throw lasts after the cut: the old music fades in time with the new
     /// beats while the old voice slows into a hall.
-    static let throwLength: TimeInterval = 5
+    static let throwLength: TimeInterval = 7
 
     /// The longest mix in the old song's music: the old song may slow by up to 8% to meet the
     /// new tempo, which stretches the mix, so this keeps it within 10 seconds of real time.
@@ -89,83 +164,87 @@ struct KnobShiftPlan {
 
         // Songs with vocals: the old voice finishes, then the old song leaves.
         if handoffAt != nil || outgoing.vocalEnd != nil {
-            var handoff = min(handoffAt ?? outgoing.vocalEnd ?? audibleEnd, audibleEnd)
-            let lastLine = min(outgoing.lastLineStart ?? handoff, handoff)
-            // The voice is cut rather than finished: KnobMix Now, or singing that runs to the end.
-            var cut = handoffAt != nil
+            var voiceEnd = min(handoffAt ?? outgoing.vocalEnd ?? audibleEnd, audibleEnd)
+            let lastLine = min(outgoing.lastLineStart ?? voiceEnd, voiceEnd)
             if let handoffAt {
-                reasoning.append("KnobMix Now: \(current.title) is cut at \(clock(handoffAt)), the next phrase or break.")
+                reasoning.append("KnobMix Now: \(current.title) starts leaving at \(clock(handoffAt)), the next phrase or break.")
             } else {
-                reasoning.append("\(current.title): its last vocal line runs \(clock(lastLine)) to \(clock(handoff)).")
+                reasoning.append("\(current.title): its last vocal line runs \(clock(lastLine)) to \(clock(voiceEnd)).")
             }
-            // Singing that runs right up to the end leaves no room to mix, so the voice is cut
-            // in the last minute, at least four bars from the end, as a DJ leaves a song before
-            // its final section: at its last break (where the bass drops out), else where a sung
-            // line ends, else where the song starts fading out under the voice.
-            if handoffAt == nil, audibleEnd - handoff < bar,
+            // Singing that runs right up to the end leaves no room: the voice is taken as ending
+            // at its last break (where the bass drops out), else where a sung line ends, else
+            // where the song starts fading out under the voice. A voice that ends with too little
+            // song left for the old song's tail is taken the same way, rather than mixing in the
+            // last two seconds.
+            if handoffAt == nil, audibleEnd - voiceEnd < max(bar, Self.shortestTail),
                let point = Self.cutPoint(outgoing, audibleEnd: audibleEnd, bar: bar, after: lastLine) {
-                reasoning.append("Its singing runs to the end, so it is cut at its \(point.kind), \(clock(point.at)), instead.")
-                handoff = point.at
-                cut = true
+                reasoning.append(audibleEnd - voiceEnd < bar
+                    ? "Its singing runs to the end, so it is taken as ending at its \(point.kind), \(clock(point.at))."
+                    : "Its voice ends only \(seconds(audibleEnd - voiceEnd)) before the song does, too little to mix, so it is taken as ending at its \(point.kind), \(clock(point.at)).")
+                voiceEnd = point.at
             }
-            let length = Self.length(bar: bar)
-            // Tempos too far apart to lock would clash, so then no new beats play under the old
-            // song: the new one starts on the downbeat as the old voice ends, and the old one
-            // leaves within 2 seconds under its echo or reverb, as a DJ echoes out.
-            // Judged with the same run of new beats the mix will have, so the deck agrees.
-            let sync = KnobShiftSync.make(outgoing: outgoing, incoming: incoming,
-                                          beatsBeforeVoice: mainVerse == nil ? nil : min(Self.overlap, bar, handoff))
-            let beatsLock = sync.isOn
-            // The new beats come in under the old voice's last words, at most 2 seconds before
-            // it ends; the new song opens up as it ends.
-            let underVoice = beatsLock ? min(Self.overlap, bar, handoff) : 0
-            let start = handoff - underVoice
-            // After the voice the old song leaves with its exit effects: the rest of the mix,
-            // or within 2 seconds (in whole beats) when its voice was cut, since it would keep
-            // singing, or when the beats cannot lock.
-            // A cut voice, or tempos far apart, leave as a vocal throw of about 5 seconds (in
-            // whole beats): the old music fades in time with the new beats while its voice alone
-            // slows into a hall, over the new song's intro.
-            let beat = bar / 4
-            let throwExit = max(beat, (Self.throwLength / beat + 0.001).rounded(.down) * beat)
-            let throwing = cut || !beatsLock || sync.wide
-            let afterVoice = throwing ? throwExit : length - underVoice
-            if !beatsLock {
-                reasoning.append("The tempos are too far apart to lock, so no new beats play under \(current.title); it echoes out as \(next.title) starts.")
-            }
-            let exit = min(audibleEnd, handoff + afterVoice)
-            let open = handoff
-            reasoning.append(throwing
-                ? "Vocal throw from \(clock(handoff)): for \(seconds(exit - handoff)) its music fades \(beatsLock ? "in time with the new beats" : "quickly, since the beats cannot lock") while its voice alone slows into a hall, gone before the new voice."
-                : "After its voice it plays out for \(seconds(exit - handoff)) with its exit effects and is gone at \(clock(exit)).")
-            let underneath = exit - start
-            let incomingOffset = mainVerse.map { max(leadIn, $0 - underneath) } ?? leadIn
-            if let mainVerse {
-                let skipped = incomingOffset - leadIn
-                reasoning.append("\(next.title): its main verse starts at \(clock(mainVerse)). It comes in at \(clock(incomingOffset))" +
-                                 (skipped > 0.5 ? ", skipping \(seconds(skipped)) of intro," : " with its whole intro,") +
-                                 " \(seconds(underVoice)) before \(current.title)'s voice ends, so its verse lands as \(current.title) is gone.")
+            // The mix begins where the song's last hook begins (the second chorus of two), so the
+            // old song leaves on its biggest moment (No Luck's is only 4.6 seconds before its last
+            // words). Without a hook, or with one too close to them to finish in, it begins a run
+            // up before them, so the old voice is pressed down gradually and the new song has room
+            // to come in ahead of its voice.
+            var start: TimeInterval
+            if let handoffAt {
+                start = handoffAt
+            } else if let hook = outgoing.lastHookStart, hook < voiceEnd, audibleEnd - hook >= Self.shortestMix,
+                      voiceEnd - hook >= Self.shortestWords {
+                start = hook
+                reasoning.append("\(current.title): its last hook begins at \(clock(hook)), so the mix starts there.")
             } else {
-                reasoning.append("\(next.title): no vocals found, so it comes in from \(clock(incomingOffset)), \(seconds(underneath)) before \(current.title) leaves.")
+                start = Self.runUpStart(outgoing, voiceEnd: voiceEnd, bar: bar)
+                reasoning.append("\(current.title): no usable last hook, so the mix starts at \(clock(start)), \(seconds(voiceEnd - start)) before its last words.")
             }
-            if exit < audibleEnd - 0.5 {
-                reasoning.append("\(current.title) skips its last \(seconds(audibleEnd - exit)): a mix never runs longer than \(Int(Self.longestMix)) seconds.")
+            // The old voice's last words end at `lastWords`. The new voice comes in half way to
+            // them, over the pressed old voice, so the two songs really mix. The
+            // new song itself starts a little earlier, so a moment of its own music plays first.
+            // A hook found far ahead of the last words would press the voice for too long: at
+            // most 30 seconds before them.
+            if voiceEnd - start > Self.longestPress {
+                start = voiceEnd - Self.longestPress
+                reasoning.append("That is more than \(Int(Self.longestPress)) seconds before its last words, so the mix starts at \(clock(start)) instead.")
             }
-            let strays = outgoing.vocalStrays.filter { $0 > handoff && $0 < exit }
-            if !strays.isEmpty {
-                reasoning.append("Its short vocal sounds at \(strays.map { clock($0) }.joined(separator: ", ")) fall inside its exit.")
-            }
+            let lastWords = min(max(voiceEnd, start + Self.shortestWords), audibleEnd)
+            let tail = Self.tail(bar: bar)
+            // The analysis places the last words about 1.25 seconds late, and the tail is counted
+            // from where they really end.
+            let exit = min(audibleEnd, max(lastWords - Self.analysisSlack + tail, start + Self.shortestMix))
+            let newVoiceAt = start + Self.newVoiceEntry(wordsEnd: lastWords - start, bar: bar)
+            let firstVoice = Self.firstSinging(incoming)?.at
+            let introLead = firstVoice.map { min(Self.introLead, max(0, $0 - leadIn)) } ?? Self.introLead
+            let handoff = max(start + 0.5, newVoiceAt - introLead)
             let duration = exit - start
-            guard duration > 0.05 else {
+            guard duration > 0.05, handoff < exit else {
                 reasoning.append("Nothing is left to blend, so the songs meet cleanly at \(clock(audibleEnd)).")
-                return clean(at: audibleEnd, offset: incomingOffset, reasoning: reasoning)
+                return clean(at: audibleEnd, offset: leadIn, reasoning: reasoning)
             }
-            reasoning.append("Blend: \(clock(start)) to \(clock(exit)), \(seconds(duration)), the new song opens up at \(clock(open)).")
-            return KnobShiftPlan(start: start, duration: duration, handoff: open, voiceEnd: handoff,
+            let sync = KnobShiftSync.make(outgoing: outgoing, incoming: incoming,
+                                          beatsBeforeVoice: firstVoice == nil ? nil : newVoiceAt - handoff)
+            let beatsLock = sync.isOn
+            // The new song is started in its file so its first singing lands on `newVoiceAt`.
+            let incomingOffset = firstVoice.map { max(leadIn, $0 - (newVoiceAt - handoff)) } ?? leadIn
+            reasoning.append(beatsLock
+                ? "Tempos lock, so \(next.title) comes in at \(clock(handoff)) in time with \(current.title)'s beats, which play on under it."
+                : "The tempos are too far apart to lock, so \(current.title)'s beats leave before \(next.title)'s drums come in; \(next.title) comes in at \(clock(handoff)).")
+            if let firstVoice {
+                reasoning.append("\(next.title): its first singing (\(clock(firstVoice))) lands at \(clock(newVoiceAt)), half way to \(current.title)'s last words. It comes in from \(clock(incomingOffset)).")
+            } else {
+                reasoning.append("\(next.title): no vocals found, so it comes in from \(clock(incomingOffset)).")
+            }
+            reasoning.append("\(current.title)'s voice is pressed down and muffled into a hall from \(clock(start)), keeping its speed and pitch, sinks under the new voice as it sings its last words and rings on into it until \(clock(lastWords + Self.voiceRing)).")
+            if exit < audibleEnd - 0.5 {
+                reasoning.append("\(current.title) skips its last \(seconds(audibleEnd - exit)).")
+            }
+            reasoning.append("Blend: \(clock(start)) to \(clock(exit)), \(seconds(duration)), \(next.title) from \(clock(handoff)).")
+            return KnobShiftPlan(start: start, duration: duration, handoff: handoff, voiceEnd: lastWords,
                                  incomingOffset: incomingOffset,
-                                 beatsBeforeVoice: mainVerse == nil ? nil : open - start,
-                                 voiceThrow: throwing,
-                                 description: "READY • mix at \(clock(start)) for \(Int(duration.rounded()))s, opens up at \(clock(open))",
+                                 beatsBeforeVoice: firstVoice.map { max(0, $0 - incomingOffset) },
+                                 voiceThrow: true,
+                                 description: "READY • mix at \(clock(start)) for \(Int(duration.rounded()))s, \(next.title) from \(clock(handoff))",
                                  reasoning: reasoning)
         }
 

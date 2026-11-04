@@ -5,9 +5,9 @@
 
 # Knob
 
-### Free Mac music player and studio sound, right in your menu bar.
+### Studio sound and DJ style mixes, on your Mac and iPhone.
 
-Five effects, a 10 band equalizer and presets in a panel that feels like studio hardware,<br/>plus KnobShift, a music player that blends every song smoothly into the next.
+**🆕 4.0: KnobMix rebuilt, and Knob comes to iPhone.** [See what's new](CHANGELOG.md)
 
 <br/>
 
@@ -29,13 +29,9 @@ Five effects, a 10 band equalizer and presets in a panel that feels like studio 
 
 ## 💡 Why Knob
 
-Knob places its own audio device between your apps and your speakers. The Mac treats it like real hardware, and because every sound now passes through Knob, it can make that sound better on the way.
-
-- **Studio sound for everything you hear.** Five effects, a 10 band EQ and presets shape music, films and calls alike, on any output.
-- **Songs that flow.** KnobShift plays the music on your Mac and blends each song into the next, with the beats in step and the voices never clashing.
-- **Volume keys on every output.** On HDMI and DisplayPort monitors, where macOS locks the level at 100%, the **volume keys, Control Center and Knob's own knob all work again**.
-
-> **Your level never jumps.** When Knob takes over the output, it carries your volume across, and when it hands the output back, it carries it back. Nothing blasts at 100%, even after a crash.
+- 🎚️ **Studio sound** on everything you hear, on any output
+- 🎧 **Songs that flow** into each other like a DJ set
+- 🔊 **Volume keys that work** on HDMI and DisplayPort monitors
 
 ---
 
@@ -59,9 +55,9 @@ Knob places its own audio device between your apps and your speakers. The Mac tr
 
 ---
 
-## 🎧 KnobShift: seamless mixes
+## 🎧 KnobShift
 
-KnobShift is a music player inside Knob for the songs on your Mac. Add your music, press play, and every song **mixes into the next one like a DJ set**, the way Apple Music's AutoMix does, worked out fresh for every pair of songs.
+**Add your music, press play, and every song mixes into the next.**
 
 <div align="center">
 
@@ -75,127 +71,34 @@ KnobShift is a music player inside Knob for the songs on your Mac. Add your musi
   <img src="docs/images/knobmix.svg" width="100%" alt="Three KnobMixes in a row, each with its own transition. Two decks spin while the songs scroll past the playhead. Mix 1, Tape slowdown: the tempos are close, the beats lock and the old voice slows down like tape. Mix 2, Echo out: the tempos are far apart, each song keeps its speed and the verse echoes out on the beat. Mix 3: KnobMix Now is pressed, KnobShift waits for the next phrase, then the old song sinks into an Underwater fade. Below, each transition's effect curve rises until the verse ends and falls away by the handoff, next to badges for beat sync, the AI voice split and the bass swap." />
 </div>
 
-<table>
-<tr>
-<td width="50%" valign="top">
+| | | |
+|:--:|:--:|:--:|
+| 🪝 **Starts at the last hook** | 🎤 **Lands on the next verse** | 🥁 **Beats in step** |
+| ✂️ **On device voice split** | ⚡ **KnobMix Now** | 🔀 **Shuffle and drag** |
+| 🟢 **Spotify playlists** | 🔴 **YouTube and YouTube Music** | 🔒 **Mixing stays on your device** |
 
-### 🎤 Singers never clash
-KnobShift studies every song: where the voice starts and ends, where drums come in, where the music breaks. The old song finishes its last line and plays out its ending under the new intro. **The new verse lands as the old one leaves.**
+---
 
-### ✂️ Voice and music, separated
-On-device AI splits the next song's voice from its music. Only its **beats and music** come in while the old singer sings. Its voice joins when it takes over.
+## 📱 Mac to iPhone
 
-### 🥁 Beats in step
-Close tempos glide together with **beats locked** and natural pitch. Far apart songs keep their own speed, like Apple Music. The bass swaps on a bar line, so kick drums never fight.
+**Your Mac downloads. Your iPhone plays.**
 
-### 🎛️ A different transition every time
-One **per pair of songs**:
-- Beats can lock: **Underwater fade**, **Lofi dip**, **Tape slowdown**.
-- Tempos far apart: **Echo out**, **Reverb wash**.
+<div align="center">
+  <img src="docs/images/mac-to-iphone.svg" width="100%" alt="Your Mac downloads the songs. The iPhone shows Connected by itself and copies each song over your home network. Each cover waits in grey while the song is prepared, then comes up to full colour." />
+</div>
 
-Each waits a second, rises to half strength where the old verse ends, falls away two bars later and breathes on the beat. Mixes last 8 to 14 seconds, set by each song's tempo.
-
-</td>
-<td valign="top">
-
-### ⚡ KnobMix Now
-Want the next song sooner? Press **KnobMix Now**. It waits a few seconds for the next phrase or break and lets the singer finish the line, so the mix lands on the beat.
-
-### 🎙️ Voices with their own moves
-The **old voice leaves before the new one sings**, so two singers are never heard together. The new voice arrives through a short reverb that clears as the verse begins.
-
-### 🔀 Shuffle and reorder
-Shuffle shows the new order in the queue. Press again for your own order. **Drag songs** to rearrange, shuffle on or off.
-
-### 📥 Instant queue
-Add many songs at once. Each shows a ring while prepared, with a Retry if a file can't be read. Prepared songs open instantly next time.
-
-</td>
-</tr>
-</table>
-
-> **Private by design.** Everything happens on your Mac: the listening, the separation and the mixing. Nothing is uploaded. KnobShift plays files on your Mac, including songs you add from your Spotify playlists.
-
-**🔜 Coming next:** add music straight from YouTube videos and YouTube Music.
+<sub>The iPhone app has the full KnobShift player and Knob's sound controls. For now it is built from this source, it is not on the App Store.</sub>
 
 ---
 
 ## ✨ Features
 
-<table>
-<tr>
-<td width="50%" valign="top">
+| | | |
+|:--:|:--:|:--:|
+| 🔊 **Volume on every output** | 🎚️ **Five effects** | 📊 **10 band equalizer** |
+| 🎼 **Presets** | 📈 **Live meters** | ⏻ **One switch** |
 
-### 🔊 Volume for every output
-HDMI, DisplayPort, USB, Bluetooth, built-in. **Volume keys** and HUD work again, and the knob follows with a spring, marks lighting MIN to MAX.
-
-</td>
-<td width="50%" valign="top">
-
-### 🎚️ Five effects
-**Clarity, Ambience, Surround Sound, Dynamic Boost, Bass Boost**, each on its own knob with **Marshall-style marks** lighting orange as you turn up. Double-click resets.
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-### 📊 10-band equalizer
-Faders with a centre detent over a **live spectrum analyser**.
-
-</td>
-<td valign="top">
-
-### 🎼 Presets
-General, Music, Movies, Gaming, Voice, Bass Boost, Streaming Video and more, with **previous and next** buttons.
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-### ⏻ One switch
-**ON** makes Knob your output with effects on. **OFF** bypasses them instantly. Nothing restarts or is lost.
-
-</td>
-<td valign="top">
-
-### 💾 Remembers your sound
-Knobs, faders and presets save moments after a change and return at start.
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-### 📈 Live meters
-Left and right dB meters, and an orange glow that **breathes with the music**.
-
-</td>
-<td valign="top">
-
-### 🛡️ Safe by design
-A supervisor restores your speakers if the engine stops. Never stuck at full volume.
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-### 💡 Indicator marks
-Eleven marks, 0 to 10, around every knob like a guitar amp. They glow as you turn up and stay dark when off, in light and dark mode.
-
-</td>
-<td valign="top">
-
-### 📳 Haptic feedback
-On a MacBook or Magic Trackpad you **feel the knob turn**: a tick per notch, the strongest click at minimum, maximum and fader centre.
-
-</td>
-</tr>
-</table>
-
-**Also included:** 🌗 light and dark mode · 🪀 spring animations with Framer Motion settings · 📳 trackpad haptics on knobs and faders · ♿️ VoiceOver labels and adjustable controls · ⌨️ arrow keys on the tabs · 🧪 demo mode with sample data
+**Also included:** 💾 remembers your sound · 🛡️ restores your speakers if anything stops · 📳 trackpad haptics · 🌗 light and dark · ♿️ VoiceOver
 
 ---
 

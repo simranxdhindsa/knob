@@ -22,17 +22,26 @@ DSPController::DSPController() {
 }
 DSPController::~DSPController() = default;
 bool DSPController::available() const noexcept { return bool(dsp_); }
+#ifndef KNOB_PHONE
 void DSPController::prepare(AudioBridge& bridge, const std::string& outputUID) {
     bridge.stop();
 #ifdef KNOB_HAVE_DSP
     const auto format = streamFormat(findDevice(outputUID, false).id, false);
-    if (!dsp_->prepare(static_cast<int>(format.mSampleRate), 2)) throw std::runtime_error("DSP format preparation failed");
-    mix_ = bypass_.load() ? 0 : 1;
-    refreshState();
+    prepare(static_cast<int>(format.mSampleRate));
     bridge.setProcessor(process, this);
 #else
     (void)outputUID;
     bridge.setProcessor(nullptr, nullptr);
+#endif
+}
+#endif
+void DSPController::prepare(int sampleRate) {
+#ifdef KNOB_HAVE_DSP
+    if (!dsp_->prepare(sampleRate, 2)) throw std::runtime_error("DSP format preparation failed");
+    mix_ = bypass_.load() ? 0 : 1;
+    refreshState();
+#else
+    (void)sampleRate;
 #endif
 }
 void DSPController::edit(const std::function<void()>& mutation) {

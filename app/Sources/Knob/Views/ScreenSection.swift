@@ -5,19 +5,29 @@ struct ScreenSection: View {
     @ObservedObject var model: KnobModel
     @AppStorage(PersistKey.selectedTab.rawValue) private var tab = Tab.effects
 
-    enum Tab: String, CaseIterable { case effects, equalizer, knobShift }
+    enum Tab: String, CaseIterable {
+        case effects, equalizer, knobShift
+        /// The iPhone's main screen is the KnobShift player, so its sound sheet has no KnobShift tab.
+        static var shown: [Tab] {
+            #if os(macOS)
+            allCases
+            #else
+            [.effects, .equalizer]
+            #endif
+        }
+    }
 
     var body: some View {
         InsetScreen(glow: model.powerOn ? LevelMeter.position(max(model.peakLeft, model.peakRight)) : 0) {
             VStack(spacing: 10) {
-                SegmentedTabs(options: Tab.allCases, selection: $tab) {
+                SegmentedTabs(options: Tab.shown, selection: $tab) {
                     switch $0 {
                     case .effects: "EFFECTS"
                     case .equalizer: "EQUALIZER"
                     case .knobShift: "KNOBSHIFT"
                     }
                 }
-                if tab == .knobShift {
+                if tab == .knobShift, Tab.shown.contains(.knobShift) {
                     KnobShiftScreen(model: model.knobShift)
                         .frame(height: 176)
                 } else {

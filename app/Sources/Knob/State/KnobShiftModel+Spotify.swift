@@ -27,21 +27,6 @@ extension KnobShiftModel {
 
     var spotifyAvailable: Bool { KnobShiftSpotDL.isAvailable }
 
-    func loadPlaylists() {
-        var index = KnobShiftPlaylists.load()
-        KnobShiftPlaylists.purgeExpired(&index)
-        KnobShiftPlaylists.save(index)
-        playlists = index.playlists
-        removedPlaylists = index.removed
-        spotifyLoggedIn = KnobShiftSpotDL.isLoggedIn
-        youtubeSignedIn = KnobShiftGoogleAuth.isSignedIn
-        KnobShiftYouTube.removeOldBrowserSignIn()
-    }
-
-    func savePlaylists() {
-        KnobShiftPlaylists.save(KnobShiftPlaylists.Index(playlists: playlists, removed: removedPlaylists))
-    }
-
     /// Songs of a playlist in the queue, ready or on their way.
     func songCount(in playlist: KnobShiftPlaylist) -> (ready: Int, total: Int) {
         let ready = tracks.reduce(0) { $0 + ($1.playlistId == playlist.id ? 1 : 0) }
@@ -297,6 +282,7 @@ extension KnobShiftModel {
         if let playing = nowPlaying, playing.playlistId == playlist.id { stop() }
         let leaving = tracks.filter { $0.playlistId == playlist.id }
         for track in leaving { remove(track) }
+        let waiting = pending.filter { $0.playlistId == playlist.id }.count
         pending.removeAll { $0.playlistId == playlist.id }
         spotifyRaw[playlist.id] = nil
         do {
@@ -310,7 +296,7 @@ extension KnobShiftModel {
         playlists.removeAll { $0.id == playlist.id }
         savePlaylists()
         persistQueue()
-        log("SPOTIFY", "Removed \(playlist.name) with \(leaving.count) song(s).")
+        log("SPOTIFY", "Removed \(playlist.name) with \(leaving.count + waiting) song(s).")
     }
 
     func restorePlaylist(_ removed: KnobShiftRemovedPlaylist) async {

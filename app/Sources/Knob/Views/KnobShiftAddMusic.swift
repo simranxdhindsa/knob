@@ -8,29 +8,50 @@ struct KnobShiftAddMusic: View {
     var onMac: () -> Void
     var onSpotify: () -> Void
     var onYouTube: () -> Void = {}
+    /// Sync from your Mac (the iPhone app).
+    var sync: Bool = false
+    var onSync: () -> Void = {}
     /// Snapshots show the card open.
     var startsOpen = false
 
     @State private var open = false
 
-    private var hasChoices: Bool { spotify || youtube }
+    private var hasChoices: Bool { spotify || youtube || sync }
 
+    private var label: some View {
+        Label("ADD MUSIC", systemImage: "plus")
+            .font(.system(size: 9, weight: .bold)).tracking(0.6)
+            .foregroundStyle(Palette.accent)
+            .frame(height: 20)
+            .contentShape(Rectangle())
+    }
+
+    #if os(iOS)
+    /// The iPhone's own menu: a popover near the top of the screen had no room and cut off its rows.
+    var body: some View {
+        Menu {
+            Button(action: onMac) { Label("Songs on your iPhone", systemImage: "folder") }
+            if spotify { Button(action: onSpotify) { Label("Spotify playlist", systemImage: "link") } }
+            if youtube { Button(action: onYouTube) { Label("YouTube", systemImage: "play.rectangle") } }
+            if sync { Button(action: onSync) { Label("Sync from your Mac", systemImage: "laptopcomputer.and.iphone") } }
+        } label: {
+            label
+        }
+    }
+    #else
     var body: some View {
         Button {
             if hasChoices { open.toggle() } else { onMac() }
         } label: {
-            Label("ADD MUSIC", systemImage: "plus")
-                .font(.system(size: 9, weight: .bold)).tracking(0.6)
-                .foregroundStyle(Palette.accent)
-                .frame(height: 20)
-                .contentShape(Rectangle())
+            label
         }
         .buttonStyle(.plain)
         .focusEffectDisabled()
         .accessibilityHint(hasChoices ? "Opens a choice of songs on this Mac, Spotify or YouTube" : "Adds songs from this Mac")
         .popover(isPresented: $open, arrowEdge: .bottom) {
-            KnobShiftAddMusicCard(spotify: spotify, youtube: youtube,
-                                  onMac: { pick(onMac) }, onSpotify: { pick(onSpotify) }, onYouTube: { pick(onYouTube) })
+            KnobShiftAddMusicCard(spotify: spotify, youtube: youtube, sync: sync,
+                                  onMac: { pick(onMac) }, onSpotify: { pick(onSpotify) }, onYouTube: { pick(onYouTube) },
+                                  onSync: { pick(onSync) })
         }
         .onAppear { if startsOpen { open = true } }
     }
@@ -40,22 +61,33 @@ struct KnobShiftAddMusic: View {
         // Lets the popover close before a sheet or the file panel opens.
         DispatchQueue.main.async(execute: action)
     }
+    #endif
 }
 
 /// The dropdown card itself, also drawn on its own for snapshots. Always dark, like the
 /// KnobShift screen it opens from.
 struct KnobShiftAddMusicCard: View {
+    @Environment(\.surface) private var surface
+    @Environment(\.colorScheme) private var scheme
     var spotify = true
     var youtube = true
+    var sync = false
     var onMac: () -> Void
     var onSpotify: () -> Void
     var onYouTube: () -> Void = {}
+    var onSync: () -> Void = {}
 
     var body: some View {
         DropdownCard(width: 240) {
+            #if os(macOS)
             DropdownRow(title: "Songs on your Mac", detail: "Music files from Finder", action: onMac) {
                 Image(systemName: "apple.logo").font(.system(size: 14, weight: .medium))
             }
+            #else
+            DropdownRow(title: "Songs on your iPhone", detail: "Music files from Files", action: onMac) {
+                Image(systemName: "iphone").font(.system(size: 14, weight: .medium))
+            }
+            #endif
             if spotify {
                 DropdownRow(title: "Spotify playlist", detail: "Playlists, albums or Liked Songs", action: onSpotify) {
                     SpotifyMark().frame(width: 16, height: 16)
@@ -66,8 +98,13 @@ struct KnobShiftAddMusicCard: View {
                     YouTubeMark().frame(width: 18, height: 18)
                 }
             }
+            if sync {
+                DropdownRow(title: "Sync from your Mac", detail: "Playlists Knob on your Mac has", action: onSync) {
+                    Image(systemName: "laptopcomputer.and.iphone").font(.system(size: 13, weight: .medium))
+                }
+            }
         }
-        .environment(\.colorScheme, .dark)
+        .environment(\.colorScheme, surface.scheme(scheme))
     }
 }
 

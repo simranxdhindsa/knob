@@ -23,6 +23,9 @@ enum KnobShiftVocals {
         /// The song's typical confidence while someone is singing or rapping, 0...1.
         let level: Double
         let steps: [String]
+        /// The classifier could not listen, which says nothing about the song: it must not be
+        /// saved as an instrumental.
+        var failed = false
     }
 
     private static let labels = ["singing", "rapping", "speech", "choir_singing", "humming"]
@@ -36,17 +39,22 @@ enum KnobShiftVocals {
     /// intro) is never taken for the main verse.
     static func detect(in url: URL, beatEntry: TimeInterval? = nil) -> Result {
         let started = Date()
-        let observer = Observer()
+        var observer: Observer
         do {
-            let analyzer = try SNAudioFileAnalyzer(url: url)
-            let request = try SNClassifySoundRequest(classifierIdentifier: .version1)
-            request.windowDuration = CMTime(seconds: window, preferredTimescale: 1_000)
-            request.overlapFactor = 0.5
-            try analyzer.add(request, withObserver: observer)
-            analyzer.analyze()
+            observer = try listen(to: url)
+            // On the iPhone it has stopped giving readings partway through a queue: once more.
+            if observer.frames.isEmpty {
+                Thread.sleep(forTimeInterval: 1)
+                observer = try listen(to: url)
+            }
         } catch {
             return Result(onset: nil, end: nil, level: 0,
-                          steps: ["Vocals: the built-in sound classifier could not read this file (\(error.localizedDescription))."])
+                          steps: ["Vocals: the built-in sound classifier could not read this file (\(error.localizedDescription))."], failed: true)
+        }
+        guard !observer.frames.isEmpty else {
+            return Result(onset: nil, end: nil, level: 0, steps: [
+                "Vocals: the built-in sound classifier gave nothing back (\(observer.failure ?? "no error given")), so this song is measured again next time."
+            ], failed: true)
         }
         let frames = observer.frames.sorted { $0.time < $1.time }
         var steps = [String(format: "Vocals: %d voice readings from the built-in classifier in %.0f ms.",
@@ -105,6 +113,22 @@ enum KnobShiftVocals {
                       lineEnds: lineEnds, level: level, steps: steps)
     }
 
+    /// One pass of the classifier over the file, letting go of it before returning: analysing a
+    /// whole queue in one go otherwise leaves every classifier alive until the queue is done.
+    private static func listen(to url: URL) throws -> Observer {
+        let observer = Observer()
+        try autoreleasepool {
+            let analyzer = try SNAudioFileAnalyzer(url: url)
+            let request = try SNClassifySoundRequest(classifierIdentifier: .version1)
+            request.windowDuration = CMTime(seconds: window, preferredTimescale: 1_000)
+            request.overlapFactor = 0.5
+            try analyzer.add(request, withObserver: observer)
+            analyzer.analyze()
+            analyzer.removeAllRequests()
+        }
+        return observer
+    }
+
     /// Index ranges where smoothed voice stays at or above `floor` for at least `minimumRun`.
     private static func voicedRuns(_ values: [Double], floor: Double, minimumRun: Int) -> [ClosedRange<Int>] {
         var runs: [ClosedRange<Int>] = []
@@ -124,12 +148,17 @@ enum KnobShiftVocals {
     private final class Observer: NSObject, SNResultsObserving {
         struct Frame { let time: TimeInterval; let voice: Double }
         private(set) var frames: [Frame] = []
+        private(set) var failure: String?
 
         func request(_ request: SNRequest, didProduce result: SNResult) {
             guard let result = result as? SNClassificationResult else { return }
             let voice = KnobShiftVocals.labels.compactMap { result.classification(forIdentifier: $0)?.confidence }.max() ?? 0
             let middle = result.timeRange.start.seconds + result.timeRange.duration.seconds / 2
             frames.append(Frame(time: middle, voice: voice))
+        }
+
+        func request(_ request: SNRequest, didFailWithError error: Error) {
+            failure = error.localizedDescription
         }
     }
 }

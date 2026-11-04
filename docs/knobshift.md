@@ -80,7 +80,83 @@ Apple's long overlap let the old voice run on over the new song for 4 to 12
 seconds, which sounded wrong, so since 2026-11-03 KnobMix follows DJ practice
 instead: two voices are never heard together, and a mix is short.
 
-The rules (`KnobShiftPlan`, checked by `--knobshift-mix-check`):
+**The sung mix since 2026-11-04.** When the old song has a voice, these rules
+replace rules 1 to 4, 6 and 8 below: the voices now overlap, and the old voice
+is pressed down instead of slowed. Everything here is worked out per song
+(`KnobShiftPlan.make`, `applyHookMix`, placement in `beginBlend`):
+
+- **Start.** The mix starts where the old song's last hook starts (No Luck
+  2:54.66). The start moves later only when that hook is more than 30 seconds
+  before the old voice's last words (`longestPress`), since the hook finder can
+  pick an earlier chorus (Moosedrilla: 1:51.6, so the mix starts at 2:50).
+- **Finding the hook.** Music breaks are checked first. When none is a hook, every
+  half second of the later song is compared with everything before it, and the
+  last strongly repeating stretch is the hook (`lastRepeat`): Why So's chorus
+  comes back at 3:20 with no break. This is only a fallback, because over a whole
+  song it also catches verses that sound alike (it would move No Luck's hook from
+  2:54 to 2:33).
+- **Run up.** With no hook, or a hook under 4 seconds before the last words
+  (`shortestWords`), the mix starts a run up before them: the whole bars of the
+  old song nearest to 10 seconds, kept to 8 to 12 (`runUp(bar:)`), moved onto the
+  song's own music break, else line ending, when one is in that range
+  (`runUpStart`). Only KnobMix Now can start closer. Starting 0.6 of a mix (about
+  4.8 seconds) before the last words was tried and rejected: Why So into Kaali
+  Hoodie pressed the old voice in 1.3 seconds and the new voice arrived 1.4 seconds
+  in, so the new song seemed to appear all at once. With a run up it takes 20.2
+  seconds, and the new voice arrives 5.3 seconds in.
+- **Old voice.** It is pressed down from the start of the mix: compressed and
+  muffled into a hall, keeping its speed and pitch, while its beats play on. It
+  is fully pressed, with 80% hall, when the next voice arrives, then sinks by up
+  to 40% under it, sings all its last words and rings on for 3 seconds
+  (`voiceRing`). Its level comes after its hall, so fading it also cuts the hall's
+  tail: that is why the ring is this long.
+- **Next song's start.** It starts a little before its singing, never from the
+  top of a long intro: from the beginning of the mix when its voice arrives
+  within 2 seconds, else 2 seconds ahead of the voice (`introLead`), and at least
+  0.3 seconds ahead (`voiceLead`) plus two beats of room for the beat lock. A voice 8 seconds or more before the main verse is a sung intro
+  and is skipped (`firstSinging`, `introVoice`). Naggnee has a voice at 0:00 and
+  its main verse at 0:22.5, so it starts from 0:22. A lead in of two bars was
+  tried and rejected: it put the next song back near its beginning.
+- **Voices mix.** The next voice comes in half way from the start of the mix to
+  the old voice's last words, over the pressed old voice, so the songs mix
+  instead of following each other (`newVoiceEntry`). Landing it on the last words
+  was tried and rejected: Khuda played alone for 15 of 19 seconds, then Muse On
+  simply started, and No Luck into Jee Karuga sounded like a plain crossfade.
+  The voices sing together for at most four bars of the old song, kept to 5 to 8
+  seconds (`mostTogether`). With under a second to the last words the voice lands
+  half a second before them, so there is never a gap. When the beats lock, the
+  next song moves only by whole beats, so the timing varies per pair.
+- **Analysis correction.** The analysis finds first words about 1.25 seconds
+  early and last words about 1.25 seconds late (`analysisSlack`), so both are
+  corrected first. A main verse placed on the phrase grid is not corrected. It is
+  placed only when the tempo is known and the beat comes in within 40 seconds.
+- **Voice that could not be read.** On the iPhone the sound classifier sometimes
+  gives back nothing, which says nothing about the song. It is tried once more, and
+  a song it still fails on is not saved, so it is measured again next time
+  (`Result.failed`). Until then the song starts at its beat entry, not its top, when
+  that is at least 8 seconds in (`firstSinging`): No Good read as an instrumental
+  played from 0:00, though its beat and main verse come in at 0:22.
+- **Next song's arrival.** It never just appears. It comes in muffled and in a
+  hall (`sweep`, `reverbMix` on its deck), and both clear 2.5 seconds after its
+  voice arrives (`washEnds`). A clean arrival was tried and rejected: even with
+  the voices overlapping it sounded like a plain crossfade. When the beats cannot
+  lock, its music starts 8% slow and reaches its own speed as its voice comes in
+  (`introSpeed`). The voice itself is never slowed or pressed. When its drums land
+  within a second of its voice (Kaali Hoodie, both at 0:33.53), they cannot come in
+  first, so the hall and muffling clear over twice as long, 5 seconds, and they
+  rise out of it instead.
+- **Old song's tail.** After the last words its beats stay under the new voice
+  for three of its bars, kept to 6 to 8 seconds (`tail(bar:)`), then it is gone.
+  It is counted from where the last words really end (`analysisSlack` earlier than
+  the analysis places them). Counted from the analysis, Why So's beats ran on for
+  9.6 seconds into Takkar and felt too long.
+  The song's own end can cut this short (TODH ends 1.8 seconds after them).
+- **Length.** It follows from the above, so it differs per song: about 15 seconds
+  at least, unless the song ends first or KnobMix Now asks for less. Measured: 16.1
+  seconds (Kaali Hoodie into Sardaari), 20.2 (Why So into Kaali Hoodie), up to about
+  38 (Moosedrilla into Double Down, Nabhe Di Bottal into Putt Jam Te Lau).
+
+The earlier rules (`KnobShiftPlan`, checked by `--knobshift-mix-check`):
 
 1. **Length.** About 8 seconds, in whole bars of the old song's beat, never more
    than 10 (`length(bar:)` keeps it to 6 to 9.5 so a tempo glide stays under 10).
@@ -428,7 +504,9 @@ yt-dlp (bundled in `Contents/Resources/yt-dlp`, fetched and pinned by `packaging
 
 ### Signing in and the dashboard
 
-Knob signs in the way TV apps do, with Google's device flow (`State/KnobShiftGoogleAuth.swift`). Nothing is read from any browser.
+Knob signs in the way TV apps do, with Google's device flow (`State/KnobShiftGoogleAuth.swift`). That sign in never reads a browser.
+
+**Browser sign in for blocked downloads** (`State/KnobShiftYouTubeBrowser.swift`) is separate and off by default. The person picks a browser in the Add sheets. Downloads ignore it until YouTube's bot check blocks one; then it turns on for that session and the blocked songs are tried once more. yt-dlp reads the browser itself, and for those runs the helpers get the real home folder so it can find the browser. Knob never sees or stores the sign in, and it risks the person's YouTube account being flagged, which the choice says.
 
 1. **Google key.** The person adds their own Google key in the YouTube sheet: an OAuth client of the type "TVs and Limited Input devices", with YouTube Data API v3 turned on and their account added as a test user. A key made for a TV launcher works as it is. Saving it asks Google for a code first, so a wrong key or key type is refused straight away.
 2. **Code.** SIGN IN WITH GOOGLE shows a short code, copies it and opens google.com/device. Knob asks Google every few seconds until the code is entered. The scope is `youtube.readonly`.

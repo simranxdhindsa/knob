@@ -5,7 +5,10 @@ import SwiftUI
 /// 21st.dev MusicPlayerCard by dhileepkumargm (large art, track details, time slider, centred
 /// controls), rebuilt in SwiftUI on Knob's dark screen finish with its orange accent.
 struct KnobShiftNowPlaying: View {
+    @Environment(\.surface) private var surface
     @ObservedObject var model: KnobShiftModel
+    /// True while the iPhone opening's knob is flying in to become this Play button.
+    @Environment(\.hidesPlayButton) private var hidesPlayButton
     var compact: Bool
 
     var body: some View {
@@ -33,11 +36,11 @@ struct KnobShiftNowPlaying: View {
         return VStack(alignment: alignment, spacing: 5) {
             Text(track?.name ?? "Nothing playing")
                 .font(.system(size: compact ? 17 : 21, weight: .bold))
-                .foregroundStyle(track == nil ? Screen.textSecondary : Screen.text)
+                .foregroundStyle(track == nil ? surface.secondary : surface.text)
                 .lineLimit(1)
             Text(track?.artist ?? (track == nil ? "Pick a song from the queue" : "Local music"))
                 .font(.system(size: compact ? 12 : 13, weight: .medium))
-                .foregroundStyle(Screen.textSecondary)
+                .foregroundStyle(surface.secondary)
                 .lineLimit(1)
             if let track {
                 HStack(spacing: 6) {
@@ -61,10 +64,10 @@ struct KnobShiftNowPlaying: View {
     private func chip(_ text: String, lit: Bool) -> some View {
         Text(text)
             .font(.system(size: 9, weight: .bold)).tracking(0.7)
-            .foregroundStyle(lit ? Color.white : Screen.textSecondary)
+            .foregroundStyle(lit ? Color.white : surface.secondary)
             .padding(.horizontal, 8)
             .frame(height: 20)
-            .background(Capsule().fill(lit ? Palette.accent : Screen.tabTrack))
+            .background(Capsule().fill(lit ? Palette.accent : surface.fill))
             .shadow(color: lit ? Palette.accentGlow.opacity(0.6) : .clear, radius: 5)
     }
 
@@ -79,19 +82,24 @@ struct KnobShiftNowPlaying: View {
             Button { model.pauseOrResume() } label: {
                 Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: compact ? 19 : 22, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Glass.onAccent)
                     .frame(width: compact ? 46 : 54, height: compact ? 46 : 54)
                     .background(Circle().fill(Palette.accent))
                     .shadow(color: Palette.accentGlow.opacity(0.55), radius: 9)
             }
             .accessibilityLabel(model.isPlaying ? "Pause" : "Play")
+            // The iPhone opening lands its knob exactly here, then hands over to this button.
+            .background(GeometryReader { proxy in
+                Color.clear.preference(key: PlayButtonFrame.self, value: proxy.frame(in: .global))
+            })
+            .opacity(hidesPlayButton ? 0 : 1)
             Button { model.next() } label: {
                 Image(systemName: "forward.fill").font(.system(size: 17))
             }
             .accessibilityLabel("Next")
         }
         .buttonStyle(.plain)
-        .foregroundStyle(model.tracks.isEmpty ? Screen.textTertiary : Screen.text)
+        .foregroundStyle(model.tracks.isEmpty ? surface.tertiary : surface.text)
         .disabled(model.tracks.isEmpty)
         .frame(maxWidth: .infinity)
     }
@@ -111,7 +119,7 @@ struct KnobShiftNowPlaying: View {
                 Text(waiting ? "WAITING FOR THE BEAT" : "KNOBMIX NOW")
                     .font(.system(size: 10, weight: .bold)).tracking(0.8)
             }
-            .foregroundStyle(available || waiting ? Palette.accent : Screen.textTertiary)
+            .foregroundStyle(available || waiting ? Palette.accent : surface.tertiary)
             .padding(.horizontal, 16)
             .frame(height: 30)
             .background(Capsule().fill(Palette.accent.opacity(waiting ? 0.16 : 0.08)))
@@ -126,5 +134,26 @@ struct KnobShiftNowPlaying: View {
 
     static func clock(_ value: TimeInterval) -> String {
         String(format: "%d:%02d", Int(value) / 60, Int(value) % 60)
+    }
+}
+
+/// Where the player's Play button is on screen, so the iPhone opening can land its knob on it.
+struct PlayButtonFrame: PreferenceKey {
+    static let defaultValue = CGRect.zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        if next != .zero { value = next }
+    }
+}
+
+private struct HidesPlayButtonKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Hides the player's Play button while the iPhone opening's knob is becoming it.
+    var hidesPlayButton: Bool {
+        get { self[HidesPlayButtonKey.self] }
+        set { self[HidesPlayButtonKey.self] = newValue }
     }
 }

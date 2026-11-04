@@ -26,11 +26,12 @@ enum KnobShiftYouTubeParsing {
     }
 
     enum Failure: Error, Equatable {
-        case unavailable, privateVideo, ageRestricted, botCheck, offline, noSpace, nothingFound, failed, stalled, missingHelper
+        case browserSignIn, unavailable, privateVideo, ageRestricted, botCheck, offline, noSpace, nothingFound, failed, stalled, missingHelper
 
         /// Plain sentences for the player; no dashes.
         var message: String {
             switch self {
+            case .browserSignIn: return "Knob could not use your browser's sign in. Check that you are signed in to YouTube there and that Knob is allowed to read it."
             case .unavailable: return "YouTube says this video or playlist is not available."
             case .privateVideo: return "This is private on YouTube. If it is your own playlist, sign in with Google and add it from your playlists."
             case .ageRestricted: return "YouTube only plays this one to signed in viewers, so Knob cannot download it."
@@ -50,6 +51,7 @@ enum KnobShiftYouTubeParsing {
             case .privateVideo: return "Private"
             case .ageRestricted: return "Needs sign in"
             case .botCheck: return "YouTube paused"
+            case .browserSignIn: return "Browser sign in failed"
             case .offline: return "No internet"
             case .noSpace: return "No space"
             case .stalled: return "Stopped"
@@ -62,11 +64,9 @@ enum KnobShiftYouTubeParsing {
 
     private static let hosts: Set<String> = ["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be", "www.youtu.be"]
 
-    private static func isIdCharacter(_ character: Character) -> Bool {
-        character.isASCII && (character.isLetter || character.isNumber || character == "-" || character == "_")
-    }
+    private static func isIdCharacter(_ character: Character) -> Bool { KnobShiftPlaylists.isYouTubeIdCharacter(character) }
 
-    static func isVideoId(_ text: String) -> Bool { text.count == 11 && text.allSatisfy(isIdCharacter) }
+    static func isVideoId(_ text: String) -> Bool { KnobShiftPlaylists.isYouTubeVideoId(text) }
 
     private static func isListId(_ text: String) -> Bool { (2...80).contains(text.count) && text.allSatisfy(isIdCharacter) }
 
@@ -292,16 +292,28 @@ enum KnobShiftYouTubeParsing {
     /// Downloads one song's audio as m4a with its cover, named by `fileName(for:)`. Songs whose
     /// file is already there are not downloaded again. The link is rebuilt from the video id
     /// alone (callers check it is one), never taken from saved data.
-    static func downloadArguments(for song: KnobShiftSpotDL.Song, into folder: URL, ffmpeg: String) -> [String] {
-        audioArguments(for: song, into: folder, ffmpeg: ffmpeg)
+    static func downloadArguments(for song: KnobShiftSpotDL.Song, into folder: URL, ffmpeg: String,
+                                  browser: KnobShiftYouTubeBrowser? = nil) -> [String] {
+        audioArguments(for: song, into: folder, ffmpeg: ffmpeg) + browserArguments(browser)
             + ["--no-playlist", "--", "https://www.youtube.com/watch?v=\(song.song_id)"]
     }
 
     /// For a video that is gone or blocked: the closest match found by searching YouTube for the
     /// song's artist and name, saved under the original song's id so it lands in the same row.
-    static func searchArguments(for song: KnobShiftSpotDL.Song, into folder: URL, ffmpeg: String) -> [String] {
-        audioArguments(for: song, into: folder, ffmpeg: ffmpeg)
+    static func searchArguments(for song: KnobShiftSpotDL.Song, into folder: URL, ffmpeg: String,
+                                browser: KnobShiftYouTubeBrowser? = nil) -> [String] {
+        audioArguments(for: song, into: folder, ffmpeg: ffmpeg) + browserArguments(browser)
             + ["--match-filter", "duration < 900", "--", "ytsearch1:\(song.artist) \(song.name)"]
+    }
+
+    private static func browserArguments(_ browser: KnobShiftYouTubeBrowser?) -> [String] {
+        browser.map { ["--cookies-from-browser", $0.rawValue] } ?? []
+    }
+
+    /// yt-dlp could not open or decrypt the chosen browser's sign in. `text` is lowercased.
+    static func isBrowserFailure(_ text: String) -> Bool {
+        text.contains("cookies database") || text.contains("failed to decrypt") || text.contains("cannot decrypt")
+            || text.contains("operation not permitted") && text.contains("cookies")
     }
 
     private static func audioArguments(for song: KnobShiftSpotDL.Song, into folder: URL, ffmpeg: String) -> [String] {
@@ -319,6 +331,7 @@ enum KnobShiftYouTubeParsing {
     /// What went wrong, read from yt-dlp's messages; nil when nothing did.
     static func classify(_ lines: [String]) -> Failure? {
         let text = lines.joined(separator: "\n").lowercased()
+        if isBrowserFailure(text) { return .browserSignIn }
         if text.contains("not a bot") || text.contains("youtube_bot_check") || text.contains("http error 429")
             || text.contains("too many requests") { return .botCheck }
         if text.contains("confirm your age") || text.contains("age restricted") || text.contains("age-restricted") { return .ageRestricted }

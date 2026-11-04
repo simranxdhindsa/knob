@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import Foundation
 
 /// Developer diagnostics for KnobShift: every analysis step, plan decision, deck change and
@@ -7,7 +9,12 @@ import Foundation
 /// the previous log moves to knobshift.old.log.
 enum KnobShiftLog {
     static var url: URL? {
+        #if os(macOS)
         EngineLog.url?.deletingLastPathComponent().appendingPathComponent("knobshift.log")
+        #else
+        // The iPhone app has no engine log: its own Library/Logs.
+        URL.libraryDirectory.appendingPathComponent("Logs/knobshift.log")
+        #endif
     }
 
     private static let writer = Writer()
@@ -34,12 +41,14 @@ enum KnobShiftLog {
         }
     }
 
+    #if os(macOS)
     static func open() {
         guard let url else { return }
         writer.flush {
             DispatchQueue.main.async { NSWorkspace.shared.open(url) }
         }
     }
+    #endif
 
     /// All file state lives on one serial queue.
     private final class Writer: @unchecked Sendable {

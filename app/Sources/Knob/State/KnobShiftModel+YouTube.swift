@@ -121,7 +121,7 @@ extension KnobShiftModel {
                 markRows(of: playlist.id, ids: [song.song_id], failure: problem.rowText)
                 missing += 1
                 offlineInARow = problem == .offline ? offlineInARow + 1 : 0
-                if [.botCheck, .noSpace].contains(problem) || offlineInARow >= 2 {
+                if [.botCheck, .noSpace, .browserSignIn].contains(problem) || offlineInARow >= 2 {
                     stoppedBy = problem
                     break
                 }
@@ -186,15 +186,18 @@ extension KnobShiftModel {
             guard !(line.hasPrefix("[download]") && line.contains("%")) else { return }
             Task { @MainActor in self?.log("YOUTUBE", line) }
         }
-        var result = await KnobShiftYouTube.shared.download(song, into: folder, search: false, id: job, onLine: onLine)
+        var result = await KnobShiftYouTube.shared.download(song, into: folder, search: false, id: job, browser: downloadBrowser, onLine: onLine)
         if result.cancelled { return .stalled }
         if KnobShiftPlaylists.files(in: folder)[song.song_id] != nil { return nil }
         var problem = result.stalled ? .stalled : KnobShiftYouTubeParsing.classify(result.lines) ?? .failed
+        if problem == .botCheck, useBrowserAfterBlock() {
+            return await downloadYouTubeSong(song, into: folder, playlist: playlist, job: job)
+        }
         // Only for a video YouTube will not give; any other failure is reported as it is.
         guard [.unavailable, .privateVideo, .ageRestricted].contains(problem) else { return problem }
         log("YOUTUBE", "\(song.name) is not available (\(problem)); searching YouTube for \(song.artist) \(song.name).")
         setStage("Finding", for: playlist.id, ids: [song.song_id])
-        result = await KnobShiftYouTube.shared.download(song, into: folder, search: true, id: job, onLine: onLine)
+        result = await KnobShiftYouTube.shared.download(song, into: folder, search: true, id: job, browser: downloadBrowser, onLine: onLine)
         if result.cancelled { return .stalled }
         if KnobShiftPlaylists.files(in: folder)[song.song_id] != nil {
             log("YOUTUBE", "Found another upload of \(song.name).")

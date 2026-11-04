@@ -1,0 +1,92 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:"KRound";src:url("file:///System/Library/Fonts/SFNSRounded.ttf");font-weight:100 1000}
+@font-face{font-family:"KPro";src:url("file:///System/Library/Fonts/SFNS.ttf");font-weight:100 1000}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1280px;height:720px;overflow:hidden}
+body{font-family:"KPro",-apple-system,sans-serif;color:#F2F3F5;-webkit-font-smoothing:antialiased;
+ background:radial-gradient(ellipse 520px 460px at 330px 360px,rgba(255,138,61,.16),rgba(255,138,61,0) 70%),linear-gradient(#3A3D42,#141518);position:relative}
+#panel{position:absolute;left:110px;top:40px;width:431px;height:640px;border-radius:22px;overflow:hidden;
+ box-shadow:0 30px 80px rgba(0,0,0,.65),0 0 0 1px rgba(255,255,255,.08)}
+#panel img{width:431px;height:640px;display:block}
+#cursor{position:absolute;left:0;top:0;width:26px;height:26px;z-index:5;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))}
+#ripple{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;border:3px solid #FF8A3D;opacity:0;z-index:4;box-shadow:0 0 14px #FF8A3D}
+.copy{position:absolute;left:640px;top:0;bottom:0;width:560px;display:flex;flex-direction:column;justify-content:center}
+.eyebrow{font-size:14px;font-weight:650;letter-spacing:.22em;text-transform:uppercase;color:#FF8A3D;display:flex;align-items:center;gap:10px}
+.eyebrow i{width:24px;height:2px;background:#FF6B1F;border-radius:2px;box-shadow:0 0 8px #FF8A3D}
+#cap{position:relative;height:250px;margin-top:20px}
+.c{position:absolute;left:0;top:0;width:560px;opacity:0}
+.c h2{font-size:54px;font-weight:750;line-height:1.04;letter-spacing:-.03em;text-wrap:balance}
+.c h2 b{color:#FF7A2E;font-weight:750}
+.c p{font-size:21px;line-height:1.42;color:#A3A7AD;margin-top:16px;text-wrap:balance}
+.c .mark{display:flex;align-items:center;gap:16px}
+.c .mark img{width:72px;height:72px;margin-left:-6px}
+.c .mark span{font-family:"KRound";font-size:96px;font-weight:800;letter-spacing:-.035em;line-height:.9}
+.c .url{margin-top:22px;font-size:15px;font-weight:600;letter-spacing:.06em;color:#7E838A}
+.c .url b{color:#E6E8EB;font-weight:600}
+#dots{display:flex;gap:8px;margin-top:8px}
+#dots i{width:26px;height:4px;border-radius:2px;background:#45484E}
+#dots i.on{background:#FF6B1F;box-shadow:0 0 8px #FF8A3D}
+</style></head><body>
+<div id="panel"><img id="frame"></div>
+<div id="ripple"></div>
+<svg id="cursor" viewBox="0 0 26 26"><path d="M5 2.5 L5 21 L9.6 16.8 L12.6 23.4 L15.6 22.1 L12.7 15.6 L19 15.4 Z" fill="#fff" stroke="#000" stroke-width="1.4" stroke-linejoin="round"/></svg>
+<div class="copy">
+ <div class="eyebrow"><i></i>Knob for Mac</div>
+ <div id="cap">
+  <div class="c" id="c0"><h2>Studio sound for <b>your Mac.</b></h2><p>Meet Knob. It lives in your menu bar.</p></div>
+  <div class="c" id="c1"><h2>Turn it <b>up.</b></h2><p>A real volume knob that works on every output.</p></div>
+  <div class="c" id="c2"><h2>Pick a <b>sound.</b></h2><p>Presets reshape five studio effects at once.</p></div>
+  <div class="c" id="c3"><h2>Shape it with <b>the EQ.</b></h2><p>Ten bands over a live spectrum.</p></div>
+  <div class="c" id="c4"><h2>Every song flows <b>into the next.</b></h2><p>KnobShift blends your music with the beats in step.</p></div>
+  <div class="c" id="c5"><div class="mark"><img src="../../docs/images/icon.png"><span>knob</span></div><p>Free and open source, made by Simran Dhindsa.</p><div class="url"><b>github.com/simranxdhindsa/knob</b></div></div>
+ </div>
+ <div id="dots"><i></i><i></i><i></i><i></i><i></i></div>
+</div>
+<script>
+const FPS = 30, LAST = 374, S = 431 / 768, OX = 110, OY = 40;
+const FRAMES = "../../build/demo/frames/"; // written by Knob --demo-frames
+// Positions measured on the real frames (768 x 1140 pixels).
+const KNOB = [238, 368], R = 74, NEXT = [652, 128], EQTAB = [383, 680], SHIFTTAB = [600, 680], FADER = [85, 945], FADER_TOP = [85, 895], REST = [560, 1010];
+const stage = p => [OX + p[0] * S, OY + p[1] * S];
+const ease = (t, a, b) => { const x = Math.min(Math.max((t - a) / (b - a), 0), 1); return x * x * (3 - 2 * x); };
+const mix = (p, q, k) => [p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k];
+const onKnob = v => { const a = (-135 + 270 * v) * Math.PI / 180; return [KNOB[0] + R * Math.sin(a), KNOB[1] - R * Math.cos(a)]; };
+const START = [900, 1300];
+
+function pointer(t) {
+  if (t < 1.5) return mix(START, onKnob(0.45), ease(t, 0.2, 1.3));
+  if (t < 3.6) return onKnob(0.45 + 0.33 * ease(t, 1.5, 3.5));
+  if (t < 5.6) return mix(onKnob(0.78), NEXT, ease(t, 3.6, 3.95));
+  if (t < 6.2) return mix(NEXT, EQTAB, ease(t, 5.5, 5.95));
+  if (t < 8.3) return t < 6.5 ? mix(EQTAB, FADER, ease(t, 6.05, 6.45)) : mix(FADER, FADER_TOP, ease(t, 6.5, 8.0));
+  if (t < 10) return mix(FADER_TOP, SHIFTTAB, ease(t, 8.3, 8.95));
+  return mix(SHIFTTAB, REST, ease(t, 9.4, 10.4));
+}
+const CLICKS = [4.0, 6.0, 6.5, 9.0];
+const SCENES = [[0, 1.4], [1.4, 3.8], [3.8, 5.8], [5.8, 8.8], [8.8, 12.6], [12.6, 99]];
+
+function seek(f) {
+  const t = f / FPS;
+  const img = document.getElementById("frame");
+  const done = new Promise(r => { img.onload = r; img.onerror = r; });
+  img.src = FRAMES + "frame-" + String(Math.min(f, LAST)).padStart(5, "0") + ".png";
+  const [x, y] = stage(pointer(t));
+  const cur = document.getElementById("cursor");
+  cur.style.transform = `translate(${x - 5}px, ${y - 2.5}px)`;
+  cur.style.opacity = t > 12.4 ? Math.max(0, 1 - (t - 12.4) / 0.4) : 1;
+  const rip = document.getElementById("ripple");
+  const c = CLICKS.find(c => t >= c && t < c + 0.45);
+  if (c !== undefined) { const k = (t - c) / 0.45; rip.style.left = x + "px"; rip.style.top = y + "px"; rip.style.opacity = 1 - k; rip.style.transform = `scale(${0.4 + k})`; } else rip.style.opacity = 0;
+  SCENES.forEach(([a, b], i) => {
+    const el = document.getElementById("c" + i);
+    const inK = ease(t, a, a + 0.35), outK = 1 - ease(t, b - 0.25, b);
+    el.style.opacity = Math.min(inK, outK);
+    el.style.transform = `translateY(${(1 - inK) * 18}px)`;
+  });
+  [...document.querySelectorAll("#dots i")].forEach((d, i) => d.className = (t >= SCENES[i][0] ? "on" : ""));
+  document.getElementById("dots").style.opacity = t > 12.4 ? 0 : 1;
+  return done;
+}
+seek(0);
+</script>
+</body></html>

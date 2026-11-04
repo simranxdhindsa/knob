@@ -56,7 +56,7 @@ enum KnobShiftExitStyle: CaseIterable {
 
 extension KnobShiftModel {
     /// Readies the leaving song's effects at the start of a blend and announces the style.
-    func armExitEffects(from current: Track, to next: Track, sync: KnobShiftSync) {
+    func armExitEffects(from current: Track, to next: Track, sync: KnobShiftSync, announces: Bool = true) {
         let choice = KnobShiftExitStyle.choose(from: current, to: next, sync: sync)
         let beat = KnobShiftExitStyle.beat(of: current)
         let beatsPerMinute = 60 / beat
@@ -67,6 +67,7 @@ extension KnobShiftModel {
         // Slow, laid back songs slow a little more (12%), fast ones a little less (8%).
         tapeDepth = 0.8 + 0.4 * min(max((130 - beatsPerMinute) / 60, 0), 1)
         primaryDeck.armTransitionEffects(echoEvery: beat / 2, hall: choice.style == .reverbWash ? .largeHall : .mediumHall)
+        guard announces else { return }
         log("EFFECT", "\(choice.style.name) on \(current.title): \(choice.reason). Peak strength \(Int((exitStrength * 100).rounded()))%.")
         if choice.style == .tapeSlowdown { log("EFFECT", String(format: "Beat pulse at %.1f BPM: the effects build between kicks and drop on every beat, to 0%% on the first beat of each bar, 50%% on the second and fourth, 10%% on the third.", 60 / beat)) }
     }
@@ -95,7 +96,8 @@ extension KnobShiftModel {
     /// Moves the leaving song's effects with its exit, 0 at the handoff to 1 when it is gone.
     /// `exit` runs 0...1 through the leaving song's fade; `envelope` is the effects' keyframe
     /// curve over the whole mix: 0 at its start, full at its middle, 0 again when it completes.
-    func applyExitEffects(_ exit: Double, envelope: Double) {
+    /// `tail` (1...0) clears the old song's echo, reverb and voice hall as the new voice comes in.
+    func applyExitEffects(_ exit: Double, envelope: Double, tail: Double = 1) {
         guard let style = exitStyle else { return }
         let deck = primaryDeck
         // An echo out or reverb wash carries the old song after its own sound is gone, so it
@@ -113,9 +115,9 @@ extension KnobShiftModel {
         }
         // The effect levels below follow the keyframe curve; each is then scaled by the beat pulse.
         defer {
-            deck.reverbMix *= level
+            deck.reverbMix *= level * tail
             deck.lofiMix *= level
-            deck.echoMix *= level
+            deck.echoMix *= level * tail
             // The underwater filter half reopens on each kick, so the punch comes through.
             deck.sweep *= 0.5 + 0.5 * level
         }
@@ -128,7 +130,7 @@ extension KnobShiftModel {
             let curve = min(envelope / max(exitStrength, 0.01), 1)
             deck.tape = throwingVoice ? 0 : tapeDepth * curve
             secondaryDeck.tape = throwingVoice ? 0 : tapeDepth * curve
-            deck.reverbMix = 0.35 * max(curve, exit)
+            deck.reverbMix = 0.5 * max(curve, exit)
         case .echoOut:
             deck.echoMix = 0.6 * envelope
             deck.reverbMix = 0.15 * envelope
@@ -139,13 +141,12 @@ extension KnobShiftModel {
         // arrives through a reverb that clears as it takes over. The old voice is never slowed
         // on its own: it would drift behind its music (about 0.3s by the end) and the faint
         // trace of it left in the music would sing its last word twice.
-        if outgoingOnStems, !throwingVoice { deck.voiceReverb = 0.25 * envelope * Double(deck.voiceLevel) }
-        if blendHasStems { secondaryDeck.voiceReverb = 0.35 * envelope }
+        if outgoingOnStems, !throwingVoice { deck.voiceReverb = 0.25 * envelope * Double(deck.voiceLevel) * tail }
         announce("old voice", when: outgoingOnStems && envelope > 0.01, "Old voice gets a hall that peaks where it ends; it stays in time with its music and is gone before the new voice comes in.")
-        announce("new voice", when: blendHasStems && envelope > 0.01, "New voice comes in through a reverb that clears as it takes over.")
+        announce("clear", when: tail < 0.99, "Clearing the old song's echo and reverb so the new voice comes in clean.")
         announce("treble", when: exit > 0.01, "Treble fade on the leaving song: a low pass closing from 20 kHz to 1 kHz.")
         announce("reverb", when: deck.reverbMix > 0.01, style == .reverbWash
-                 ? "Reverb wash: large hall rising to 65%, ringing on after the old song is gone." : "Reverb tail: hall rising to \(Int((style == .tapeSlowdown ? 0.35 : 0.15) * 100))%.")
+                 ? "Reverb wash: large hall rising to 65%, ringing on after the old song is gone." : "Reverb tail: hall rising to \(Int((style == .tapeSlowdown ? 0.5 : 0.15) * 100))%.")
         announce("tape", when: deck.tape > 0.01, String(format: "Long tape slowdown: both songs ease to %.0f%% speed where the old voice ends, together so their beats stay locked, then back.",
                                                         (1 - 0.10 * tapeDepth) * 100))
         announce("echo", when: deck.echoMix > 0.01, "Echo out: repeats every half beat, 45% feedback, rising to 60%, ringing on after the old song is gone.")

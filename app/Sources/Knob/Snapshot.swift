@@ -145,6 +145,12 @@ enum Snapshot {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         Task { @MainActor in
             render(AppIconView(size: 1024), scheme: .dark, to: folder.appendingPathComponent("icon-1024.png"))
+            render(AppIconView(size: 1024, fullBleed: true), scheme: .dark, to: folder.appendingPathComponent("icon-ios-1024.png"))
+            // The iPhone launch image: the opening's first frame, at 2x and 3x (renders are 2x).
+            render(LaunchKnobPose(value: 0.68, size: 220), scheme: .dark, to: folder.appendingPathComponent("launch-knob@2x.png"))
+            render(LaunchKnobPose(value: 0.68, size: 330), scheme: .dark, to: folder.appendingPathComponent("launch-knob@3x.png"))
+            render(LaunchKnobPose(value: 0.68, size: 220, scheme: .light), scheme: .light, to: folder.appendingPathComponent("launch-knob-light@2x.png"))
+            render(LaunchKnobPose(value: 0.68, size: 330, scheme: .light), scheme: .light, to: folder.appendingPathComponent("launch-knob-light@3x.png"))
             render(InstallerBackgroundView(), scheme: .light, to: folder.appendingPathComponent("installer-background.png"))
             let statuses: [(String, UpdateStatus)] = [("checking", .checking), ("downloading", .downloading(progress: nil)),
                                                      ("installing", .installing), ("uptodate", .upToDate),

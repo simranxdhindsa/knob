@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// A vertical hardware fader: recessed groove, orange fill from the centre detent, and a
@@ -52,7 +51,7 @@ struct HardwareFader: View {
                 // Apply movement incrementally, so pressing/releasing Shift never jumps the value.
                 let previousY = lastY ?? g.startLocation.y
                 lastY = g.location.y
-                let sensitivity = NSEvent.modifierFlags.contains(.shift) ? 0.1 : 1.0
+                let sensitivity = Platform.fineAdjust ? 0.1 : 1.0
                 let raw = value + Double((previousY - g.location.y) / (travel / 2)) * sensitivity
                 var t = Transaction(); t.disablesAnimations = true
                 let next = min(max(Double(raw), -1), 1)
