@@ -60,6 +60,8 @@ mkdir -p "$bundle/presets"
 cp "$out/Knob" "$bundle/Knob"
 cp "$repo_dir/ios/Info.plist" "$bundle/Info.plist"
 cp "$repo_dir/presets/"*.fac "$bundle/presets/"
+# KnobShift's on-device vocal separation model (Open-Unmix, MIT) and its licence.
+ditto "$repo_dir/app/Resources/KnobShift" "$bundle/KnobShift"
 # The app icon (Knob's icon as a full square: iOS rounds the corners), compiled by Apple's asset
 # tool, which also says which Info.plist entries point at it.
 xcrun actool "$repo_dir/ios/Assets.xcassets" --compile "$bundle" --platform "$sdk" \
