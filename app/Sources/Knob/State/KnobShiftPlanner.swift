@@ -40,14 +40,20 @@ struct KnobShiftPlan {
     static let shortestMix: TimeInterval = 6
     /// No mix is ever longer than this.
     static let longestMix: TimeInterval = 16
-    /// In a sung mix the new voice comes in this long before the old voice's last words end,
-    /// so they overlap on the old song's last two or three words.
-    /// Half a second; when the mix starts the real overlap is measured and kept between
-    /// `leastOverlap` and `mostOverlap`.
+    /// A short mix lands the new voice this long before the old voice's last words end, so the
+    /// two always overlap, however little room there is.
     static let handover: TimeInterval = 0.5
-    /// The least and most the old and new voices sing together, checked when the mix starts.
+    /// The least the old and new voices sing together, checked when the mix starts.
     static let leastOverlap: TimeInterval = 0.25
-    static let mostOverlap: TimeInterval = 1
+    /// The most they sing together: four bars of the old song, kept to 5...8 seconds.
+    static func mostTogether(bar: TimeInterval) -> TimeInterval { min(max(4 * bar, 5), 8) }
+    /// Where the new voice comes in, in seconds into the mix: half way from the start of the mix
+    /// to the old voice's last words, so the voices are heard mixing rather than one after the
+    /// other. Never so early that they sing together for more than `mostTogether`, and never
+    /// after the last words, so there is no gap.
+    static func newVoiceEntry(wordsEnd: TimeInterval, bar: TimeInterval) -> TimeInterval {
+        min(max(wordsEnd / 2, wordsEnd - mostTogether(bar: bar)), wordsEnd - handover)
+    }
     /// The least time the old voice is given to finish once the mix starts.
     static let shortestWords: TimeInterval = 4
     /// The song analysis finds singing in steps of about a second and a half: its first words
@@ -55,8 +61,14 @@ struct KnobShiftPlan {
     static let analysisSlack: TimeInterval = 1.25
     /// How long before its first words a sung mix starts the new song.
     static let voiceLead: TimeInterval = 0.3
-    /// How much of the new song's own intro plays before its voice comes in.
-    static let introLead: TimeInterval = 2
+    /// The most of the new song's own music played before its voice comes in: it starts at the
+    /// beginning of the mix when the voice arrives within this long, later otherwise.
+    static let introLead: TimeInterval = 3
+    /// When the beats cannot lock, the new song's music starts this slow and reaches its own
+    /// speed as its voice comes in, so the voice itself is never slowed.
+    static let introSpeed = 0.92
+    /// The new song arrives in a hall and muffled; both clear this long after its voice comes in.
+    static let washEnds: TimeInterval = 2.5
     /// The old song carries on under the new voice after its last words (its beats fading and
     /// its pressed voice ringing out): three of its bars, kept to 6...8 seconds.
     static let shortestTail: TimeInterval = 6
@@ -77,7 +89,7 @@ struct KnobShiftPlan {
         return (first, placed && first != early)
     }
     /// How long the old pressed voice rings on into the new song after its last words.
-    static let voiceRing: TimeInterval = 1.5
+    static let voiceRing: TimeInterval = 3
     /// The longest the old voice is pressed down before its last words: the mix starts at the
     /// last hook, unless the hook found is further back than this.
     static let longestPress: TimeInterval = 30
@@ -163,10 +175,9 @@ struct KnobShiftPlan {
                 start = max(0, min(voiceEnd - 0.6 * target, audibleEnd - target))
                 reasoning.append("\(current.title): no last hook found, so the mix starts at \(clock(start)), over its last words.")
             }
-            // The old voice's last words end at `lastWords`. The new voice comes in on them, half
-            // a second before, while the old voice is pressed down and fading, so the two voices
-            // hand over smoothly instead of leaving a gap. The new song itself starts a little
-            // earlier, so a moment of its own intro plays before its voice.
+            // The old voice's last words end at `lastWords`. The new voice comes in half way to
+            // them, over the pressed old voice, so the two songs really mix. The
+            // new song itself starts a little earlier, so a moment of its own music plays first.
             // A hook found far ahead of the last words would press the voice for too long: at
             // most 30 seconds before them.
             if voiceEnd - start > Self.longestPress {
@@ -174,12 +185,12 @@ struct KnobShiftPlan {
                 reasoning.append("That is more than \(Int(Self.longestPress)) seconds before its last words, so the mix starts at \(clock(start)) instead.")
             }
             let lastWords = min(max(voiceEnd, start + Self.shortestWords), audibleEnd)
-            let newVoiceAt = lastWords - Self.handover
+            let tail = Self.tail(bar: bar)
+            let exit = min(audibleEnd, max(lastWords + tail, start + Self.shortestMix))
+            let newVoiceAt = start + Self.newVoiceEntry(wordsEnd: lastWords - start, bar: bar)
             let firstVoice = Self.firstSinging(incoming)?.at
             let introLead = firstVoice.map { min(Self.introLead, max(0, $0 - leadIn)) } ?? Self.introLead
             let handoff = max(start + 0.5, newVoiceAt - introLead)
-            let tail = Self.tail(bar: bar)
-            let exit = min(audibleEnd, max(lastWords + tail, start + Self.shortestMix))
             let duration = exit - start
             guard duration > 0.05, handoff < exit else {
                 reasoning.append("Nothing is left to blend, so the songs meet cleanly at \(clock(audibleEnd)).")
@@ -194,11 +205,11 @@ struct KnobShiftPlan {
                 ? "Tempos lock, so \(next.title) comes in at \(clock(handoff)) in time with \(current.title)'s beats, which play on under it."
                 : "The tempos are too far apart to lock, so \(current.title)'s beats leave before \(next.title)'s drums come in; \(next.title) comes in at \(clock(handoff)).")
             if let firstVoice {
-                reasoning.append("\(next.title): its first singing (\(clock(firstVoice))) is lined up with \(current.title)'s last words, at \(clock(newVoiceAt)). It comes in from \(clock(incomingOffset)).")
+                reasoning.append("\(next.title): its first singing (\(clock(firstVoice))) lands at \(clock(newVoiceAt)), half way to \(current.title)'s last words. It comes in from \(clock(incomingOffset)).")
             } else {
                 reasoning.append("\(next.title): no vocals found, so it comes in from \(clock(incomingOffset)).")
             }
-            reasoning.append("\(current.title)'s voice is pressed down and muffled into a hall from \(clock(start)), keeping its speed and pitch, sings its last words over the new voice and rings on into it until \(clock(lastWords + Self.voiceRing)).")
+            reasoning.append("\(current.title)'s voice is pressed down and muffled into a hall from \(clock(start)), keeping its speed and pitch, sinks under the new voice as it sings its last words and rings on into it until \(clock(lastWords + Self.voiceRing)).")
             if exit < audibleEnd - 0.5 {
                 reasoning.append("\(current.title) skips its last \(seconds(audibleEnd - exit)).")
             }
