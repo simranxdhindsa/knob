@@ -85,7 +85,7 @@ struct PhonePlayer: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(track?.name ?? "Nothing playing")
                     .font(.system(size: 21, weight: .semibold)).foregroundStyle(Glass.text)
-                Text(track?.artist ?? (track != nil ? "Local music" : (model.tracks.isEmpty ? "Add songs from the dots" : "Tap Play to start")))
+                Text(track?.artist ?? (track != nil ? "Local music" : (model.tracks.isEmpty ? "Add songs from the dots" : "Tap the knob to start")))
                     .font(.system(size: 18)).foregroundStyle(Glass.secondary)
             }
             .lineLimit(1)

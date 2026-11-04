@@ -86,10 +86,11 @@ struct PhoneTransport: View {
     }
 }
 
-/// Play, as a flat modern dial: an orange disc that plays and pauses, where the opening's knob
-/// lands, inside Knob's eleven marks. The marks glow up one by one and the disc's pointer turns through
-/// the song, so a glance tells how far along it is, and turning the ring moves through the song, with
-/// a tap felt at each mark.
+/// Play, as Knob's real master knob inside its eleven marks. The marks glow up one by one and the
+/// pointer turns through the song, so a glance tells how far along it is, and turning the ring
+/// moves through the song, with a tap felt at each mark. A tap on the knob plays or pauses: it
+/// melts into the orange button showing what just happened, and a second later melts back. The
+/// opening lands on that same button, which settles into the knob the same way.
 struct PhonePlayDial: View {
     @ObservedObject var model: KnobShiftModel
     @ObservedObject var clock: KnobShiftClock
@@ -98,9 +99,15 @@ struct PhonePlayDial: View {
     /// True while the opening's knob is flying in to become this disc.
     @Environment(\.hidesPlayButton) private var hidesPlayButton
     @State private var rotary: RotaryDrag?
+    /// The orange button is showing instead of the knob, as it is when the opening lands.
+    @State private var showingButton = true
+    @State private var symbol = "play.fill"
+    @State private var settling: Task<Void, Never>?
 
     private static let marks = 11, sweep = 270.0
     private static let discShare: CGFloat = 0.64
+    /// How long the button stays before it turns back into the knob.
+    private static let buttonHold = 1.0
     /// How lit the next mark is by the time the song is halfway to it.
     private static let faintGlow = 0.15
 
@@ -108,13 +115,22 @@ struct PhonePlayDial: View {
         let disc = size * Self.discShare
         ZStack {
             ring
-            Button {
-                Haptics.mark()
-                model.pauseOrResume()
-            } label: {
-                PhonePlayDisc(isPlaying: model.isPlaying, turn: -Self.sweep / 2 + Self.sweep * value,
-                                showsPointer: model.nowPlaying != nil, diameter: disc)
+            RealisticKnob(value: .constant(value), size: size, showsMinMax: false, showsMarks: false,
+                          accessibilityLabel: "", accessibilityValue: "", springsToChanges: false)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .scaleEffect(showingButton ? 0.9 : 1)
+                .opacity(hidesPlayButton ? 0 : 1)
+            Button(action: tapped) {
+                // The clear circle takes the tap while the button itself is out of sight.
+                Color.clear
+                    .frame(width: disc, height: disc)
                     .contentShape(Circle())
+                    .overlay {
+                        PhonePlayDisc(symbol: symbol, diameter: disc)
+                            .scaleEffect(showingButton ? 1 : 0.7)
+                            .opacity(showingButton ? 1 : 0)
+                    }
             }
             .buttonStyle(PhonePress())
             .disabled(model.tracks.isEmpty)
@@ -125,6 +141,26 @@ struct PhonePlayDial: View {
             .opacity(hidesPlayButton ? 0 : 1)
         }
         .frame(width: size, height: size)
+        .onChange(of: hidesPlayButton) { _, hidden in if !hidden { settle() } }
+        .onDisappear { settling?.cancel() }
+    }
+
+    private func tapped() {
+        Haptics.mark()
+        symbol = model.isPlaying ? "pause.fill" : "play.fill"
+        model.pauseOrResume()
+        withAnimation(Motion.snappy) { showingButton = true }
+        settle()
+    }
+
+    /// Turns the button back into the knob after a moment; another tap starts the moment again.
+    private func settle() {
+        settling?.cancel()
+        settling = Task {
+            try? await Task.sleep(for: .seconds(Self.buttonHold))
+            guard !Task.isCancelled else { return }
+            withAnimation(Motion.gentle) { showingButton = false }
+        }
     }
 
     private var ring: some View {
@@ -183,41 +219,27 @@ struct PhonePlayDial: View {
     private static func lit(_ value: Double) -> Int { Int((value * Double(marks - 1) + 0.001).rounded(.down)) + 1 }
 }
 
-/// The Play button: a flat orange disc with Play or Pause and the pointer, with only a touch of
+/// The orange button the knob turns into: a flat disc with Play or Pause, with only a touch of
 /// glass on it, a soft sheen from above and a thin bright rim.
 struct PhonePlayDisc: View {
-    let isPlaying: Bool
-    /// Where the song has turned the pointer to, in degrees from the top.
-    let turn: Double
-    let showsPointer: Bool
+    let symbol: String
     let diameter: CGFloat
 
     var body: some View {
         ZStack {
             Circle().fill(Palette.accent)
-            face.phoneTint()
+            Image(systemName: symbol)
+                .font(.system(size: diameter * 0.4, weight: .semibold))
+                .foregroundStyle(Glass.text)
+                .offset(x: symbol == "play.fill" ? diameter * 0.03 : 0)
+                .frame(width: diameter, height: diameter)
+                .phoneTint()
             Circle()
                 .fill(LinearGradient(colors: [Glass.fill, .clear], startPoint: .top, endPoint: .center))
                 .allowsHitTesting(false)
             Circle()
                 .strokeBorder(LinearGradient(colors: [Glass.tertiary, .clear], startPoint: .top, endPoint: .center), lineWidth: 1)
                 .allowsHitTesting(false)
-        }
-        .frame(width: diameter, height: diameter)
-    }
-
-    private var face: some View {
-        ZStack {
-            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                .font(.system(size: diameter * 0.4, weight: .semibold))
-                .foregroundStyle(Glass.text)
-                .contentTransition(.symbolEffect(.replace))
-                .offset(x: isPlaying ? 0 : diameter * 0.03)
-            Capsule().fill(Glass.text)
-                .frame(width: 3, height: diameter * 0.13)
-                .offset(y: -diameter * 0.4)
-                .rotationEffect(.degrees(turn))
-                .opacity(showsPointer ? 1 : 0)
         }
         .frame(width: diameter, height: diameter)
     }

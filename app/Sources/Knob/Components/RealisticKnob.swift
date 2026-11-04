@@ -9,6 +9,8 @@ struct RealisticKnob: View {
     var size: CGFloat
     var defaultValue: Double? = nil
     var showsMinMax = true
+    /// Off where the marks around the knob are drawn by its owner (the iPhone's Play dial).
+    var showsMarks = true
     /// When set, the knob shows this many marks, one per whole number (mark n sits where the
     /// pointer points at n and lights once the value rounds to n or more). The effect knobs use
     /// 10, so their lit marks always match the number shown under them.
@@ -46,7 +48,7 @@ struct RealisticKnob: View {
         let v = min(max(value, 0), 1)
         VStack(spacing: size * 0.01) {
             ZStack {
-                arc(p, v)
+                if showsMarks { arc(p, v) }
                 well(p)
                 skirt(p)
                 cap(p)
