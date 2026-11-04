@@ -116,7 +116,7 @@ Add many songs at once. Each shows a ring while prepared, with a Retry if a file
 
 > **Private by design.** Everything happens on your Mac: the listening, the separation and the mixing. Nothing is uploaded. KnobShift plays files on your Mac, including songs you add from your Spotify playlists.
 
-**🔜 Coming next:** add music straight from YouTube videos and YouTube Music.
+**🆕 New in 4.0:** KnobMix starts at the last hook and brings the next singer in over the old one, and Knob comes to iPhone. See the [changelog](CHANGELOG.md).
 
 ---
 

@@ -3,20 +3,36 @@
 What's new in each version of Knob, written for people who use it: new features first, then
 fixes. Knob updates itself, so installed copies get every version below on their own.
 
-## 3.1
+## 4.0
+
+Knob 4.0 is the biggest update yet. Knob comes to iPhone, and KnobMix now works the way a DJ does:
+it starts at the old song's last hook and brings the next singer in over the old one.
 
 ### New features
 
+- Knob comes to iPhone: the KnobShift player and Knob's sound controls, with the song's cover and colours filling the screen in light and dark (for now it is built from Knob's source, it is not on the App Store)
+- Add Spotify and YouTube songs from your iPhone, and sync your playlists from your Mac over your home network
+- KnobMix starts at the old song's last hook, wherever it falls, instead of waiting for the very end
+- The old voice is pressed down into a hall while the next singer comes in over it, about half way to the old singer's last words
+- The next song starts just before its first verse instead of from its intro, and arrives through reverb and a slight slow start that clear away
+- Mix length now follows each pair of songs and their tempo
 - After a song with no singing, the echo and reverb clear away just before the next singer starts
 - When the beats lock, both songs' beats play together until the old singer's last words
+- KnobShift shows on your lock screen and in Apple's media controls, and Next does a KnobMix
+- The song you played last comes back in the player, ready to play from where you stopped
+- Every preset has an icon, and presets you save get their own
 
 ### Fixes
 
+- The refresh button on a playlist opens the song picker again, so songs you added on Spotify or YouTube can be downloaded
+- Removing a playlist takes all its songs with it, instead of leaving rows that say Could not read this file
+- Recently removed playlists say plainly how many days you can still restore them
 - A song whose voice ends a couple of seconds before it does no longer squeezes the whole mix into its last 2 seconds; it leaves at an earlier break instead
 - The new singer no longer keeps a reverb after an echo out mix
 - Songs without a clear last chorus now mix gradually over about 20 seconds, so the next song no longer arrives all at once
-- KnobMix now finds a song's last chorus even when the music does not break before it, and the next song starts just before its first verse instead of from its intro
+- KnobMix now finds a song's last chorus even when the music does not break before it
 - A song on iPhone is no longer treated as an instrumental when its voice could not be read
+- The orange glow stays inside the analyser screen and no longer blows out
 
 ## 3.0
 
