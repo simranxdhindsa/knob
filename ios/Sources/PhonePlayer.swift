@@ -181,15 +181,15 @@ struct PhoneAmbient: View {
     @State private var wash: UIImage?
     /// The last song's wash, kept underneath so the next fades in over it with no dark dip.
     @State private var previous: UIImage?
+    @State private var shown = 0.0
 
     var body: some View {
         ZStack {
             LinearGradient(colors: [Screen.top, Screen.bottom], startPoint: .top, endPoint: .bottom)
             if let previous { blurred(previous) }
-            if let wash { blurred(wash).id(wash).transition(.opacity) }
+            if let wash { blurred(wash).opacity(shown) }
             Glass.scrim
         }
-        .animation(Motion.ambient, value: wash)
         .task(id: url) {
             guard let url, let image = await KnobShiftArtwork.load(url) else {
                 previous = nil
@@ -198,7 +198,11 @@ struct PhoneAmbient: View {
             }
             let size = CGSize(width: 40, height: 40)
             previous = wash
+            shown = 0
             wash = UIGraphicsImageRenderer(size: size).image { _ in image.draw(in: CGRect(x: 0, y: -size.height, width: size.width, height: size.height * 2)) }
+            // A frame at nothing first, so the fade has somewhere to start from.
+            try? await Task.sleep(for: .milliseconds(30))
+            withAnimation(Motion.ambient) { shown = 1 }
         }
         .accessibilityHidden(true)
     }
