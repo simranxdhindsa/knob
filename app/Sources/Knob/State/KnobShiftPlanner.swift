@@ -102,9 +102,13 @@ struct KnobShiftPlan {
             // in the last minute, at least four bars from the end, as a DJ leaves a song before
             // its final section: at its last break (where the bass drops out), else where a sung
             // line ends, else where the song starts fading out under the voice.
-            if handoffAt == nil, audibleEnd - handoff < bar,
+            // A voice that ends with too little song left for a mix (under 5 seconds) is cut the
+            // same way, rather than mixing in the last two seconds.
+            if handoffAt == nil, audibleEnd - handoff < max(bar, Self.throwLength),
                let point = Self.cutPoint(outgoing, audibleEnd: audibleEnd, bar: bar, after: lastLine) {
-                reasoning.append("Its singing runs to the end, so it is cut at its \(point.kind), \(clock(point.at)), instead.")
+                reasoning.append(audibleEnd - handoff < bar
+                    ? "Its singing runs to the end, so it is cut at its \(point.kind), \(clock(point.at)), instead."
+                    : "Its voice ends only \(seconds(audibleEnd - handoff)) before the song does, too little to mix, so it is cut at its \(point.kind), \(clock(point.at)), instead.")
                 handoff = point.at
                 cut = true
             }

@@ -269,20 +269,44 @@ extension KnobShiftModel {
     nonisolated static func voiceLevels(progress: Double, voiceDone: Double, length: TimeInterval) -> (old: Double, new: Double) {
         let seconds = max(length, 0.1)
         let old = progress < voiceDone ? 1 : max(0, 1 - (progress - voiceDone) * seconds / 1.5)
-        let arrives = max(voiceDone + 1.0 / seconds, 1 - KnobShiftPlan.overlap / seconds)
+        let arrives = newVoiceArrives(voiceDone: voiceDone, length: length)
         // A short mix leaves less room: the rise fits what is left, so it is full by the end.
         let rise = max(0.2, min(0.8, (1 - arrives) * seconds))
         let new = progress < arrives ? 0 : min((progress - arrives) * seconds / rise, 1)
         return (old, new)
     }
 
+    /// Where the new voice starts, 0...1 of the mix: at least a second after the old voice ends,
+    /// and in the last 2 seconds.
+    nonisolated static func newVoiceArrives(voiceDone: Double, length: TimeInterval) -> Double {
+        let seconds = max(length, 0.1)
+        return max(voiceDone + 1.0 / seconds, 1 - KnobShiftPlan.overlap / seconds)
+    }
+
+    /// How much of the old song's echo, reverb and voice hall is still let through: all of it
+    /// until half a second before the new voice, then cleared within 0.6 seconds, so the new
+    /// singer comes in clean, never over the old song's tails.
+    nonisolated static func tailLevel(progress: Double, newVoiceAt: Double, length: TimeInterval) -> Double {
+        let seconds = max(length, 0.1)
+        let from = newVoiceAt - 0.5 / seconds
+        return 1 - shape(min(max((progress - from) / (0.6 / seconds), 0), 1))
+    }
+
+    /// The new voice's reverb: it arrives through a hall that dries as it takes over, so it is
+    /// clear once at full.
+    nonisolated static func newVoiceReverb(envelope: Double, voice: Double) -> Double {
+        0.35 * min(max(envelope, 0), 1) * (1 - min(max(voice, 0), 1))
+    }
+
     /// A vocal throw at `share` of the way from the cut (0) to the end of the mix (1): the old
-    /// music fading slowly in time with the new beats, gone at 85%; the old voice slowing like
+    /// music playing on with the new beats, then fading in time with them, gone at 85%; the old voice slowing like
     /// tape (to 15% slower, its pitch falling) into a hall while it fades, gone at 90%; the new
     /// voice only after that. Beats that cannot lock lose the old music within the first 12%
     /// instead, so they barely meet.
     nonisolated static func throwLevels(share: Double, locked: Bool = true) -> (music: Double, voice: Double, tape: Double, reverb: Double, newVoice: Double) {
-        let music = locked ? cos(shape(min(share / 0.85, 1)) * .pi / 2) : 1 - shape(min(share / 0.12, 1))
+        // Locked beats play together at full through the first 30%, then the old ones fade, gone
+        // at 85%, before the new voice.
+        let music = locked ? cos(shape(min(max((share - 0.3) / 0.55, 0), 1)) * .pi / 2) : 1 - shape(min(share / 0.12, 1))
         let fading = min(share / 0.9, 1)
         let voice = cos(shape(fading) * .pi / 2)
         let tape = shape(min(share / 0.8, 1))
@@ -379,6 +403,9 @@ extension KnobShiftModel {
         // into a hall and fades, and the new voice waits until it is gone. Without separated
         // parts the whole old song leaves within the first 40%, as an echo out.
         throwingVoice = voiceThrow && outgoingOnStems && progress >= voiceDone
+        let newVoiceAt = voiceThrow ? voiceDone + 0.92 * (1 - voiceDone)
+            : Self.newVoiceArrives(voiceDone: pivot > 0.02 || sync.isOn ? voiceDone : 0, length: length)
+        let tail = Self.tailLevel(progress: progress, newVoiceAt: newVoiceAt, length: length)
         if voiceThrow, progress >= voiceDone {
             let share = voiceDone < 1 ? min(max((progress - voiceDone) / (1 - voiceDone), 0), 1) : 1
             let levels = Self.throwLevels(share: share, locked: sync.isOn)
@@ -386,7 +413,7 @@ extension KnobShiftModel {
                 outgoing = 1
                 primaryDeck.musicStemLevel = Float(levels.music)
                 primaryDeck.throwVoice(speed: 1 - 0.15 * levels.tape)
-                primaryDeck.voiceReverb = levels.reverb
+                primaryDeck.voiceReverb = levels.reverb * tail
                 oldVoice = levels.voice
             } else {
                 outgoing = min(outgoing, cos(Self.shape(min(share / 0.4, 1)) * .pi / 2))
@@ -421,7 +448,7 @@ extension KnobShiftModel {
         } else {
             envelope = 0.5 + 0.5 * cos((clamped - keyframes.peak) / max(keyframes.end - keyframes.peak, 0.001) * .pi)
         }
-        applyExitEffects(exit, envelope: exitStrength * envelope)
+        applyExitEffects(exit, envelope: exitStrength * envelope, tail: tail)
         logMilestones(clamped, keyframes: keyframes, pivot: pivot, length: length,
                       oldVoice: oldVoice, newVoice: voice, swap: swap)
     }

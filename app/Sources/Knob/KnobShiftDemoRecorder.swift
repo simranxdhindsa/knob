@@ -3,28 +3,33 @@ import AVFoundation
 
 /// Development builds only: records what the two decks really play during a check mix (each
 /// deck's output after all its effects, added together on their shared clock), so a mix can be
-/// listened to from a file. `KNOB_RECORD=FILE.m4a` with `--knobshift-check A B` turns it on.
+/// listened to from a file. `KNOB_RECORD=FILE.m4a` with `--knobshift-check A B` turns it on, and
+/// `KNOB_RECORD_PARTS=1` also writes each part ("old", "new", "new voice") beside it on the same
+/// timeline, so the mix can be measured.
 final class KnobShiftDemoRecorder: @unchecked Sendable {
     private let lock = NSLock()
-    private var parts: [(time: AVAudioFramePosition, left: [Float], right: [Float])] = []
+    private var parts: [(part: String, time: AVAudioFramePosition, left: [Float], right: [Float])] = []
     private var rate: Double = 44_100
 
     /// Called on the tap's own thread (not the audio render thread): copies the samples.
-    func add(_ buffer: AVAudioPCMBuffer, at time: AVAudioTime) {
+    func add(_ buffer: AVAudioPCMBuffer, at time: AVAudioTime, part: String, gain: Float = 1) {
         guard let data = buffer.floatChannelData, time.isSampleTimeValid else { return }
         let frames = Int(buffer.frameLength)
-        let left = Array(UnsafeBufferPointer(start: data[0], count: frames))
-        let right = buffer.format.channelCount > 1 ? Array(UnsafeBufferPointer(start: data[1], count: frames)) : left
+        let left = Array(UnsafeBufferPointer(start: data[0], count: frames)).map { $0 * gain }
+        let right = buffer.format.channelCount > 1 ? Array(UnsafeBufferPointer(start: data[1], count: frames)).map { $0 * gain } : left
         lock.withLock {
             rate = time.sampleRate
-            parts.append((time.sampleTime, left, right))
+            parts.append((part, time.sampleTime, left, right))
         }
     }
 
-    /// Adds every deck's recording together and writes it as AAC; returns its length.
-    func write(to url: URL) throws -> TimeInterval {
-        let (parts, rate) = lock.withLock { (self.parts, self.rate) }
-        guard let first = parts.map(\.time).min(), let last = parts.map({ $0.time + AVAudioFramePosition($0.left.count) }).max(),
+    /// Adds the chosen parts together (by default the two decks) and writes them as AAC; returns
+    /// the length. Every part is written on the same timeline, from the first sample of any.
+    func write(to url: URL, parts chosen: Set<String> = ["old", "new"]) throws -> TimeInterval {
+        let (all, rate) = lock.withLock { (self.parts, self.rate) }
+        let parts = all.filter { chosen.contains($0.part) }
+        guard let first = all.map(\.time).min(), let last = all.map({ $0.time + AVAudioFramePosition($0.left.count) }).max(),
+              !parts.isEmpty,
               let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 2),
               let mix = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(last - first)) else { return 0 }
         mix.frameLength = mix.frameCapacity

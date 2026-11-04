@@ -3,6 +3,18 @@
 What's new in each version of Knob, written for people who use it: new features first, then
 fixes. Knob updates itself, so installed copies get every version below on their own.
 
+## 3.1
+
+### New features
+
+- The next singer always comes in clean: the old song's echo, reverb and voice hall clear away just before the new voice starts
+- When the beats lock, both songs' beats play together for longer before the old song fades
+
+### Fixes
+
+- A song whose voice ends a couple of seconds before it does no longer squeezes the whole mix into its last 2 seconds; it leaves at an earlier break instead
+- The new singer no longer keeps a reverb after an echo out mix
+
 ## 3.0
 
 Knob 3.0 brings YouTube to KnobShift: videos, playlists and YouTube Music albums join the queue

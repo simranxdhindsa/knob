@@ -30,6 +30,8 @@ enum KnobShiftMixTests {
         wideGap()
         throwVoices()
         voices()
+        shortEnding()
+        clearForTheNewVoice()
         print(failures == 0 ? "KnobMix check passed" : "KnobMix check: \(failures) failure(s)")
     }
 
@@ -83,6 +85,9 @@ enum KnobShiftMixTests {
             (stride(from: 0.0, through: 1, by: 0.005).first { KnobShiftModel.throwLevels(share: $0, locked: locked).music <= 0.001 } ?? 1) * tail
         }
         expect(gone(true) >= 3.5, "\(name): beats locked, the old music fades slowly (\(String(format: "%.1f", gone(true)))s)")
+        expect(KnobShiftModel.throwLevels(share: 0.4, locked: true).music >= 0.75,
+               "\(name): beats locked, both songs' beats play together through the first part of the throw")
+        expect(KnobShiftModel.throwLevels(share: 0.9, locked: true).music <= 0.01, "\(name): the old beats are gone before the new voice")
         expect(gone(false) <= 0.8, "\(name): beats apart, the old music is gone in \(String(format: "%.1f", gone(false)))s")
     }
 
@@ -233,5 +238,35 @@ enum KnobShiftMixTests {
             }
             expect(!together && newRose, "\(length)s mix, old voice done at \(Int(voiceDone * 100))%: only a quiet tail meets the new voice, and it arrives")
         }
+    }
+
+    private static func shortEnding() {
+        print("A voice ending 2 seconds before the song does (Khuda)")
+        var current = song("Khuda", tempo: 133, duration: 203.7, trailing: 0.66, voice: 4...201, lastLine: 183)
+        var analysis = current.analysis
+        analysis.vocalLineEnds = [150.2, 190.5, 201]
+        current = KnobShiftModel.Track(url: current.url, title: current.title, duration: current.duration, tailSilence: 0.66, analysis: analysis)
+        let partner = song("Muse", tempo: 92, duration: 158, voice: 8...145, main: 8.37)
+        let plan = KnobShiftPlan.make(from: current, to: partner)
+        expect(abs(plan.handoff - 190.5) < 0.01, "it leaves at its last line ending, not 2s from the end (\(KnobShiftPlan.clock(plan.handoff)))")
+        expect(plan.start + plan.duration - plan.handoff >= 4, "the mix has room: \(String(format: "%.1f", plan.start + plan.duration - plan.handoff))s after the cut")
+    }
+
+    private static func clearForTheNewVoice() {
+        print("The new voice comes in clear")
+        for (length, voiceDone) in [(8.0, 0.25), (5.0, 0.2), (1.7, 0.0), (3.0, 0.5)] {
+            let arrives = KnobShiftModel.newVoiceArrives(voiceDone: voiceDone, length: length)
+            var tailUnder = 0.0
+            for step in 0...800 {
+                let progress = Double(step) / 800
+                let voice = KnobShiftModel.voiceLevels(progress: progress, voiceDone: voiceDone, length: length).new
+                let tail = KnobShiftModel.tailLevel(progress: progress, newVoiceAt: arrives, length: length)
+                if voice >= 0.5 { tailUnder = max(tailUnder, tail) }
+                if progress < arrives - 0.6 / length { expect(tail >= 0.999, "\(length)s mix: the old tails ring until just before the new voice"); break }
+            }
+            expect(tailUnder <= 0.01, "\(length)s mix: no old echo, reverb or hall under the new voice (\(String(format: "%.2f", tailUnder)))")
+        }
+        expect(KnobShiftModel.newVoiceReverb(envelope: 1, voice: 1) <= 0.001, "the new voice is dry once it has taken over")
+        expect(KnobShiftModel.newVoiceReverb(envelope: 1, voice: 0.2) > 0.2, "it arrives through a reverb")
     }
 }

@@ -246,8 +246,17 @@ final class KnobShiftDeck {
     #if DEBUG
     /// Development checks only: hands the deck's finished sound (after every effect) to the
     /// demo recorder.
-    func recordOutput(into recorder: KnobShiftDemoRecorder) {
-        room.installTap(onBus: 0, bufferSize: 4096, format: nil) { buffer, time in recorder.add(buffer, at: time) }
+    func recordOutput(into recorder: KnobShiftDemoRecorder, part: String) {
+        room.installTap(onBus: 0, bufferSize: 4096, format: nil) { buffer, time in recorder.add(buffer, at: time, part: part) }
+    }
+
+    /// The separated voice alone, after its hall, at the level it is heard at (its volume is
+    /// applied after this point, so the tap scales by it).
+    func recordVoice(into recorder: KnobShiftDemoRecorder, part: String) {
+        let voice = voice
+        voiceRoom.installTap(onBus: 0, bufferSize: 1024, format: nil) { buffer, time in
+            recorder.add(buffer, at: time, part: part, gain: voice.volume)
+        }
     }
     #endif
 }

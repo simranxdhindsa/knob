@@ -95,8 +95,10 @@ extension KnobShiftModel {
     /// Moves the leaving song's effects with its exit, 0 at the handoff to 1 when it is gone.
     /// `exit` runs 0...1 through the leaving song's fade; `envelope` is the effects' keyframe
     /// curve over the whole mix: 0 at its start, full at its middle, 0 again when it completes.
-    func applyExitEffects(_ exit: Double, envelope: Double) {
+    /// `tail` (1...0) clears the old song's echo, reverb and voice hall as the new voice comes in.
+    func applyExitEffects(_ exit: Double, envelope: Double, tail: Double = 1) {
         guard let style = exitStyle else { return }
+        let keyframe = envelope
         let deck = primaryDeck
         // An echo out or reverb wash carries the old song after its own sound is gone, so it
         // follows no beat and runs at full strength: only what reaches it before the old song
@@ -113,9 +115,9 @@ extension KnobShiftModel {
         }
         // The effect levels below follow the keyframe curve; each is then scaled by the beat pulse.
         defer {
-            deck.reverbMix *= level
+            deck.reverbMix *= level * tail
             deck.lofiMix *= level
-            deck.echoMix *= level
+            deck.echoMix *= level * tail
             // The underwater filter half reopens on each kick, so the punch comes through.
             deck.sweep *= 0.5 + 0.5 * level
         }
@@ -139,10 +141,13 @@ extension KnobShiftModel {
         // arrives through a reverb that clears as it takes over. The old voice is never slowed
         // on its own: it would drift behind its music (about 0.3s by the end) and the faint
         // trace of it left in the music would sing its last word twice.
-        if outgoingOnStems, !throwingVoice { deck.voiceReverb = 0.25 * envelope * Double(deck.voiceLevel) }
-        if blendHasStems { secondaryDeck.voiceReverb = 0.35 * envelope }
+        if outgoingOnStems, !throwingVoice { deck.voiceReverb = 0.25 * envelope * Double(deck.voiceLevel) * tail }
+        if blendHasStems {
+            secondaryDeck.voiceReverb = Self.newVoiceReverb(envelope: keyframe / max(exitStrength, 0.01), voice: Double(secondaryDeck.voiceLevel))
+        }
         announce("old voice", when: outgoingOnStems && envelope > 0.01, "Old voice gets a hall that peaks where it ends; it stays in time with its music and is gone before the new voice comes in.")
         announce("new voice", when: blendHasStems && envelope > 0.01, "New voice comes in through a reverb that clears as it takes over.")
+        announce("clear", when: tail < 0.99, "Clearing the old song's echo and reverb so the new voice comes in clean.")
         announce("treble", when: exit > 0.01, "Treble fade on the leaving song: a low pass closing from 20 kHz to 1 kHz.")
         announce("reverb", when: deck.reverbMix > 0.01, style == .reverbWash
                  ? "Reverb wash: large hall rising to 65%, ringing on after the old song is gone." : "Reverb tail: hall rising to \(Int((style == .tapeSlowdown ? 0.35 : 0.15) * 100))%.")
