@@ -57,12 +57,30 @@ struct KnobShiftPlan {
     static let voiceLead: TimeInterval = 0.3
     /// How much of the new song's own intro plays before its voice comes in.
     static let introLead: TimeInterval = 2
-    /// How long the old song carries on after its last words (its pressed voice ringing out).
-    static let tail: TimeInterval = 4
+    /// The old song carries on under the new voice after its last words (its beats fading and
+    /// its pressed voice ringing out): three of its bars, kept to 6...8 seconds.
+    static let shortestTail: TimeInterval = 6
+    static let longestTail: TimeInterval = 8
+    static func tail(bar: TimeInterval) -> TimeInterval { min(max(3 * bar, shortestTail), longestTail) }
+    /// A voice this far or further before the main verse is a sung intro or ad libs over the
+    /// intro, not where the song starts singing, so a sung mix skips it.
+    static let introVoice: TimeInterval = 8
+    /// Where the new song starts singing for a sung mix, and whether that time is already on its
+    /// phrase grid, so it is not corrected by `analysisSlack`. The analyser places the main verse
+    /// on the grid only when the tempo is known and the beat comes in within 40 seconds
+    /// (`KnobShiftSections.placeVerse`); otherwise it is heard as early as any other onset.
+    static func firstSinging(_ analysis: KnobShiftModel.Analysis) -> (at: TimeInterval, onGrid: Bool)? {
+        let early = analysis.vocalOnset, main = analysis.mainVocalOnset
+        let placed = (analysis.tempo ?? 0) > 0 && (analysis.beatEntry.map { $0 <= 40 } ?? false)
+        if let early, let main, early <= main - introVoice { return (main, placed) }
+        guard let first = [early, main].compactMap({ $0 }).min() else { return nil }
+        return (first, placed && first != early)
+    }
     /// How long the old pressed voice rings on into the new song after its last words.
     static let voiceRing: TimeInterval = 1.5
-    /// The longest the old voice is pressed down before its last words.
-    static let longestPress: TimeInterval = 10
+    /// The longest the old voice is pressed down before its last words: the mix starts at the
+    /// last hook, unless the hook found is further back than this.
+    static let longestPress: TimeInterval = 30
     /// The most the new song's beats play under the old voice, and the most the old song may
     /// still be heard once the new voice sings.
     static let overlap: TimeInterval = 2
@@ -145,18 +163,19 @@ struct KnobShiftPlan {
             // a second before, while the old voice is pressed down and fading, so the two voices
             // hand over smoothly instead of leaving a gap. The new song itself starts a little
             // earlier, so a moment of its own intro plays before its voice.
-            // A hook far ahead of the last words would press the voice for too long: at most 10
-            // seconds before them.
+            // A hook found far ahead of the last words would press the voice for too long: at
+            // most 30 seconds before them.
             if voiceEnd - start > Self.longestPress {
                 start = voiceEnd - Self.longestPress
                 reasoning.append("That is more than \(Int(Self.longestPress)) seconds before its last words, so the mix starts at \(clock(start)) instead.")
             }
             let lastWords = min(max(voiceEnd, start + Self.shortestWords), audibleEnd)
             let newVoiceAt = lastWords - Self.handover
-            let firstVoice = [incoming.vocalOnset, incoming.mainVocalOnset].compactMap { $0 }.min()
+            let firstVoice = Self.firstSinging(incoming)?.at
             let introLead = firstVoice.map { min(Self.introLead, max(0, $0 - leadIn)) } ?? Self.introLead
             let handoff = max(start + 0.5, newVoiceAt - introLead)
-            let exit = min(audibleEnd, max(lastWords + Self.tail, start + Self.shortestMix))
+            let tail = Self.tail(bar: bar)
+            let exit = min(audibleEnd, max(lastWords + tail, start + Self.shortestMix))
             let duration = exit - start
             guard duration > 0.05, handoff < exit else {
                 reasoning.append("Nothing is left to blend, so the songs meet cleanly at \(clock(audibleEnd)).")

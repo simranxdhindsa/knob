@@ -146,11 +146,13 @@ extension KnobShiftModel {
         do {
             // A sung mix starts the new song right where it starts singing, not from its intro:
             // a moment before, plus up to two of its beats for the beat lock, which moves forward
-            // to its next strong beat. The analysis finds singing about 1.25 seconds early, so
-            // its real first words are taken that much later.
+            // to its next strong beat. A sung intro well before the main verse is skipped, so the
+            // song starts at its main verse. The analysis finds the first singing about 1.25
+            // seconds early, so those first words are taken that much later; a main verse placed
+            // on the phrase grid is not.
             var entryOffset = offset
-            let analysedFirst = [next.analysis.vocalOnset, next.analysis.mainVocalOnset].compactMap { $0 }.min()
-            let firstWords = analysedFirst.map { $0 + ($0 >= KnobShiftPlan.analysisSlack ? KnobShiftPlan.analysisSlack : 0) }
+            let singing = KnobShiftPlan.firstSinging(next.analysis)
+            let firstWords = singing.map { $0.onGrid || $0.at < KnobShiftPlan.analysisSlack ? $0.at : $0.at + KnobShiftPlan.analysisSlack }
             if voiceThrow, let firstWords {
                 let lockRoom = sync.isOn ? 2 * 60 / max(sync.incomingTempo, 1) : 0
                 entryOffset = max(min(next.analysis.leadingSilence, firstWords), firstWords - KnobShiftPlan.voiceLead - lockRoom)
