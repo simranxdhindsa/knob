@@ -75,8 +75,8 @@ struct PhoneTransport: View {
 }
 
 /// Play, as a flat modern dial: an orange disc that plays and pauses, where the opening's knob
-/// lands, inside Knob's eleven marks. The marks light up and the disc's pointer turns through the
-/// song, so a glance tells how far along it is, and turning the ring moves through the song, with
+/// lands, inside Knob's eleven marks. The marks glow up one by one and the disc's pointer turns through
+/// the song, so a glance tells how far along it is, and turning the ring moves through the song, with
 /// a tap felt at each mark.
 struct PhonePlayDial: View {
     @ObservedObject var model: KnobShiftModel
@@ -89,6 +89,8 @@ struct PhonePlayDial: View {
 
     private static let marks = 11, sweep = 270.0
     private static let discShare: CGFloat = 0.64
+    /// How lit the next mark is by the time the song is halfway to it.
+    private static let faintGlow = 0.15
 
     var body: some View {
         let disc = size * Self.discShare
@@ -129,11 +131,13 @@ struct PhonePlayDial: View {
     }
 
     private var ring: some View {
-        let lit = Self.lit(value)
-        return ZStack {
+        ZStack {
             ForEach(0..<Self.marks, id: \.self) { mark in
+                let glow = model.nowPlaying == nil ? 0 : Self.glow(mark, at: value)
                 Capsule()
-                    .fill(lit > mark && model.nowPlaying != nil ? Palette.accent : Glass.tertiary)
+                    .fill(Glass.tertiary)
+                    .overlay(Capsule().fill(Palette.accent).opacity(glow))
+                    .shadow(color: Palette.accentGlow.opacity(glow * 0.7), radius: 3)
                     .frame(width: 2.5, height: size * 0.075)
                     .offset(y: -size * 0.45)
                     .rotationEffect(.degrees(-Self.sweep / 2 + Self.sweep * Double(mark) / Double(Self.marks - 1)))
@@ -166,6 +170,16 @@ struct PhonePlayDial: View {
                 if let time = scrub.position { model.seek(to: time) }
                 scrub.position = nil
             }
+    }
+
+    /// How lit a mark is at a position (0...1), as the song travels towards it from the mark
+    /// before: only a faint glow for the first half of the way, then from halfway it slowly
+    /// brightens until it is fully lit on arrival.
+    private static func glow(_ mark: Int, at value: Double) -> Double {
+        let travelled = min(max(value * Double(marks - 1) - Double(mark - 1), 0), 1)
+        if travelled <= 0.5 { return faintGlow * travelled / 0.5 }
+        let t = (travelled - 0.5) / 0.5
+        return faintGlow + (1 - faintGlow) * t * t * (3 - 2 * t)
     }
 
     /// How many marks are lit at a position (0...1).
