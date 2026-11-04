@@ -24,7 +24,17 @@ struct PhonePlayer: View {
         GeometryReader { geometry in
             let layout = PhonePlayerLayout(size: geometry.size, topInset: geometry.safeAreaInsets.top, queue: sheets.queue)
             ZStack(alignment: .topLeading) {
-                cover(layout)
+                // With no song there is no cover to melt, only a note on the plain background.
+                if model.nowPlaying == nil && !sheets.queue {
+                    Image(systemName: "music.note")
+                        .font(.system(size: layout.side * 0.2, weight: .semibold))
+                        .foregroundStyle(Palette.accent)
+                        .position(layout.cover)
+                        .transition(.opacity)
+                        .accessibilityHidden(true)
+                } else {
+                    cover(layout)
+                }
                 titleRow(layout)
                 if sheets.queue {
                     queue
