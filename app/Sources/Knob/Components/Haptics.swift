@@ -21,35 +21,14 @@ enum Haptics {
     static func detent() { perform(.levelChange, spaced: false) }
 
     /// One push of a knob straining against its end stop, `intensity` 0...1 (the iPhone
-    /// opening). The iPhone's rigid tap, a little firmer than asked so even the faint first and
-    /// last pushes are felt; on the Mac, the trackpad's tick.
+    /// opening). The iPhone's rigid tap at that strength; on the Mac, the trackpad's tick.
     static func strain(_ intensity: Double) {
         #if os(macOS)
         tick()
         #else
-        let firmer = 0.15 + 0.85 * min(max(intensity, 0), 1)
         DispatchQueue.main.async {
-            UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: CGFloat(firmer))
+            UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: CGFloat(min(max(intensity, 0.05), 1)))
         }
-        #endif
-    }
-
-    /// The iPhone opening's own taps: `firm` (medium) for each mark lighting and each mark landing
-    /// on the Play dial, `hard` (heavy) for reaching the last mark. The Mac has no opening, so
-    /// they fall back to its trackpad's clicks.
-    static func firm() {
-        #if os(macOS)
-        mark()
-        #else
-        DispatchQueue.main.async { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
-        #endif
-    }
-
-    static func hard() {
-        #if os(macOS)
-        detent()
-        #else
-        DispatchQueue.main.async { UIImpactFeedbackGenerator(style: .heavy).impactOccurred() }
         #endif
     }
 
