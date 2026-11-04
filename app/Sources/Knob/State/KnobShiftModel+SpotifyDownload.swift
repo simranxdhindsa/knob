@@ -326,8 +326,14 @@ extension KnobShiftModel {
             let files = KnobShiftPlaylists.files(in: KnobShiftPlaylists.folder(for: playlist))
             let missing = wanted.filter { files[$0.song_id] == nil && !skipped.contains($0.song_id) }
             guard !missing.isEmpty else { continue }
-            log("SPOTIFY", "Continuing the download of \(missing.count) song(s) of \(playlist.name).")
-            addSpotifyRows(for: missing, playlist: playlist)
+            let unavailable = Set(playlist.unavailable ?? []).intersection(missing.map(\.song_id))
+            if unavailable.count < missing.count {
+                log("SPOTIFY", "Continuing the download of \(missing.count - unavailable.count) song(s) of \(playlist.name).")
+            }
+            if !unavailable.isEmpty {
+                log("SPOTIFY", "\(unavailable.count) song(s) of \(playlist.name) were not found last time, so they wait for Retry.")
+            }
+            addSpotifyRows(for: missing, playlist: playlist, unavailable: unavailable)
         }
     }
 
@@ -357,14 +363,28 @@ extension KnobShiftModel {
     /// Changes the matching rows in one go: one update of the queue, not one per row.
     func markRows(of playlistId: String, ids: Set<String>, failure: String) {
         var rows = pending
-        var changed = false
+        var marked: Set<String> = []
         for index in rows.indices where rows[index].playlistId == playlistId && rows[index].waitingForDownload
             && rows[index].failure == nil && ids.contains(rows[index].spotifyId ?? "") {
             rows[index].failure = failure
             rows[index].stage = nil
-            changed = true
+            marked.insert(rows[index].spotifyId ?? "")
         }
-        if changed { pending = rows }
+        guard !marked.isEmpty else { return }
+        pending = rows
+        if Self.permanentFailures.contains(failure) { rememberUnavailable(marked, in: playlistId) }
+    }
+
+    /// Failures that trying again on its own would not fix: the song has no copy to download.
+    static let permanentFailures: Set<String> = ["Not found", "Private"]
+
+    /// Keeps these songs out of the next relaunch's download, so it does not search again.
+    private func rememberUnavailable(_ ids: Set<String>, in playlistId: String) {
+        guard let index = playlists.firstIndex(where: { $0.id == playlistId }) else { return }
+        let known = Set(playlists[index].unavailable ?? [])
+        guard !ids.isSubset(of: known) else { return }
+        playlists[index].unavailable = Array(known.union(ids)).sorted()
+        savePlaylists()
     }
 
     func setStage(_ stage: String, for playlistId: String, ids: Set<String>) {

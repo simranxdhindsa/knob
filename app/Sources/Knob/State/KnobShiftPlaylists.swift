@@ -18,6 +18,9 @@ struct KnobShiftPlaylist: Codable, Identifiable, Equatable {
     let addedAt: Date
     /// Songs the user left unticked, so Update playlist does not tick them again.
     var skipped: [String]? = nil
+    /// Songs Spotify or YouTube had no copy of when last tried, so a relaunch shows them as not
+    /// found instead of searching for them again. Retry still tries them.
+    var unavailable: [String]? = nil
 
     /// Read from the id, so playlists saved before YouTube import existed load unchanged.
     var source: Source { id.hasPrefix(KnobShiftPlaylists.youtubePrefix) ? .youtube : .spotify }

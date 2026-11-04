@@ -214,7 +214,7 @@ extension KnobShiftModel {
 
     /// Queue rows for songs not in the queue yet: downloaded ones are prepared, the rest wait for
     /// their download. All rows are added in one change, so thousands appear without a stall.
-    func addSpotifyRows(for songs: [KnobShiftSpotDL.Song], playlist: KnobShiftPlaylist) {
+    func addSpotifyRows(for songs: [KnobShiftSpotDL.Song], playlist: KnobShiftPlaylist, unavailable: Set<String> = []) {
         let folder = KnobShiftPlaylists.folder(for: playlist)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let files = KnobShiftPlaylists.files(in: folder)
@@ -229,8 +229,13 @@ extension KnobShiftModel {
             row.spotifyArtist = song.artists.joined(separator: ", ")
             if files[song.song_id] == nil {
                 row.waitingForDownload = true
-                row.stage = "Waiting to download"
-                toDownload.append(song)
+                if unavailable.contains(song.song_id) {
+                    // Not found last time: shown with Retry, not searched for again.
+                    row.failure = "Not found"
+                } else {
+                    row.stage = "Waiting to download"
+                    toDownload.append(song)
+                }
             }
             rows.append(row)
         }
