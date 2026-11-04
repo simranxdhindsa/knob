@@ -75,8 +75,9 @@ struct PhoneTransport: View {
 }
 
 /// Play, as a flat modern dial: an orange disc that plays and pauses, where the opening's knob
-/// lands, inside Knob's eleven marks. They light up through the song, so a glance tells how far
-/// along it is, and turning the ring moves through the song, with a tap felt at each mark.
+/// lands, inside Knob's eleven marks. The marks light up and the disc's pointer turns through the
+/// song, so a glance tells how far along it is, and turning the ring moves through the song, with
+/// a tap felt at each mark.
 struct PhonePlayDial: View {
     @ObservedObject var model: KnobShiftModel
     @ObservedObject var clock: KnobShiftClock
@@ -103,6 +104,7 @@ struct PhonePlayDial: View {
                     .contentTransition(.symbolEffect(.replace))
                     .offset(x: model.isPlaying ? 0 : disc * 0.03)
                     .frame(width: disc, height: disc)
+                    .overlay { pointer(disc) }
                     .background(Circle().fill(Palette.accent))
                     .contentShape(Circle())
             }
@@ -115,6 +117,15 @@ struct PhonePlayDial: View {
             .opacity(hidesPlayButton ? 0 : 1)
         }
         .frame(width: size, height: size)
+    }
+
+    /// Turns from the first mark to the last across the song, at its exact position.
+    private func pointer(_ disc: CGFloat) -> some View {
+        Capsule().fill(Glass.text)
+            .frame(width: 3, height: disc * 0.13)
+            .offset(y: -disc * 0.4)
+            .rotationEffect(.degrees(-Self.sweep / 2 + Self.sweep * value))
+            .opacity(model.nowPlaying == nil ? 0 : 1)
     }
 
     private var ring: some View {
