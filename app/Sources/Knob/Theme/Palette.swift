@@ -74,15 +74,28 @@ enum Screen {
     static let youtube = Color(hex: 0xFF0033)
 }
 
-/// The iPhone player's modern finish: light text and thin glass over a blurred, darkened cover.
+/// The iPhone player's modern finish, following the iPhone's theme: dark text over a blurred,
+/// lightened cover in light mode, and light text over a darkened one in dark mode.
 enum Glass {
-    static let text = Color.white
-    static let secondary = Color.white.opacity(0.65)
-    static let tertiary = Color.white.opacity(0.28)
-    static let fill = Color.white.opacity(0.16)
-    static let stroke = Color.white.opacity(0.1)
-    /// Darkens the blurred cover so light text always reads on it.
-    static let scrim = Color.black.opacity(0.5)
+    static let text = themed(dark: .white, light: Color(hex: 0x1C1C1E))
+    static let secondary = themed(dark: .white.opacity(0.65), light: .black.opacity(0.6))
+    static let tertiary = themed(dark: .white.opacity(0.28), light: .black.opacity(0.22))
+    static let fill = themed(dark: .white.opacity(0.16), light: .black.opacity(0.08))
+    static let stroke = themed(dark: .white.opacity(0.1), light: .black.opacity(0.08))
+    /// Fades the blurred cover towards the theme, so text always reads on it.
+    static let scrim = themed(dark: .black.opacity(0.5), light: .white.opacity(0.55))
+    /// White in both themes: on the orange accent, and for slider handles.
+    static let onAccent = Color.white
+    static let shadow = Color.black.opacity(0.35)
+
+    private static func themed(dark: Color, light: Color) -> Color {
+        #if os(iOS)
+        let dark = UIColor(dark), light = UIColor(light)
+        return Color(UIColor { $0.userInterfaceStyle == .dark ? dark : light })
+        #else
+        return dark
+        #endif
+    }
 }
 
 /// The VU meter's own tokens. Its face, ink and hub follow `Palette` like the knobs; only the

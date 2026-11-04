@@ -37,8 +37,6 @@ struct PhonePlayer: View {
             .animation(reduceMotion ? .easeOut(duration: 0.2) : Motion.gentle, value: sheets.queue)
         }
         .background { PhoneAmbient(url: (model.mixingInto ?? model.nowPlaying)?.url).ignoresSafeArea() }
-        // Always dark, like Apple Music's player, so the clock and battery read on the wash too.
-        .preferredColorScheme(.dark)
         .environment(\.glassCards, true)
         .sheet(item: $sheets.mac) { PhoneMacSheet(model: model, source: $0) }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
@@ -85,7 +83,7 @@ struct PhonePlayer: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(track?.name ?? "Nothing playing")
                     .font(.system(size: 21, weight: .semibold)).foregroundStyle(Glass.text)
-                Text(track?.artist ?? (track != nil ? "Local music" : (model.tracks.isEmpty ? "Add songs from the dots" : "Tap the knob to start")))
+                Text(track?.artist ?? (track != nil ? "Local music" : (model.tracks.isEmpty ? "Add songs from the dots" : "Tap Play to start")))
                     .font(.system(size: 18)).foregroundStyle(Glass.secondary)
             }
             .lineLimit(1)
@@ -156,7 +154,7 @@ struct PhonePlayerLayout {
 
     var width: CGFloat { size.width - 2 * Self.margin }
     /// The Play dial, smaller on short phones.
-    var dial: CGFloat { size.height < 720 ? 112 : 142 }
+    var dial: CGFloat { size.height < 720 ? 100 : 118 }
     private var lower: CGFloat { Self.timeline + dial + Self.volume + Self.buttons + Self.caption }
     /// The top of the song's name while the cover is large.
     private var songTop: CGFloat { min(size.width * 1.2 - topInset - Self.overlap, size.height - lower - Self.title - 6) }
@@ -174,7 +172,7 @@ struct PhonePlayerLayout {
 }
 
 /// The player's background: the lower half of the cover shrunk to a few pixels, blurred and
-/// darkened, so it is a soft wash of the colours the cover melts into, and costs almost nothing
+/// faded towards the theme, so it is a soft wash of the colours the cover melts into, and costs almost nothing
 /// to draw. It fades from song to song.
 struct PhoneAmbient: View {
     let url: URL?
@@ -182,10 +180,12 @@ struct PhoneAmbient: View {
     /// The last song's wash, kept underneath so the next fades in over it with no dark dip.
     @State private var previous: UIImage?
     @State private var shown = 0.0
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
+        let p = Palette.of(scheme)
         ZStack {
-            LinearGradient(colors: [Screen.top, Screen.bottom], startPoint: .top, endPoint: .bottom)
+            LinearGradient(colors: [p.panelTop, p.panelBottom], startPoint: .top, endPoint: .bottom)
             if let previous { blurred(previous) }
             if let wash { blurred(wash).opacity(shown) }
             Glass.scrim
@@ -280,7 +280,7 @@ struct PhoneTimeline: View {
                 Text(text)
                     .font(.system(size: 10, weight: .semibold).monospacedDigit()).tracking(0.4)
                     .contentTransition(.numericText(countsDown: true))
-                    .foregroundStyle(lit || countdown != nil ? Glass.text : Glass.secondary)
+                    .foregroundStyle(lit || countdown != nil ? Glass.onAccent : Glass.secondary)
                     .padding(.horizontal, 9)
                     .frame(height: 20)
                     .background(Capsule().fill(lit ? Palette.accent : (countdown != nil ? Palette.accent.opacity(0.45) : Glass.fill)))
