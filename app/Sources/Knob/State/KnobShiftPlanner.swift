@@ -210,7 +210,9 @@ struct KnobShiftPlan {
             }
             let lastWords = min(max(voiceEnd, start + Self.shortestWords), audibleEnd)
             let tail = Self.tail(bar: bar)
-            let exit = min(audibleEnd, max(lastWords + tail, start + Self.shortestMix))
+            // The analysis places the last words about 1.25 seconds late, and the tail is counted
+            // from where they really end.
+            let exit = min(audibleEnd, max(lastWords - Self.analysisSlack + tail, start + Self.shortestMix))
             let newVoiceAt = start + Self.newVoiceEntry(wordsEnd: lastWords - start, bar: bar)
             let firstVoice = Self.firstSinging(incoming)?.at
             let introLead = firstVoice.map { min(Self.introLead, max(0, $0 - leadIn)) } ?? Self.introLead

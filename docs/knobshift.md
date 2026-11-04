@@ -147,6 +147,9 @@ is pressed down instead of slowed. Everything here is worked out per song
   rise out of it instead.
 - **Old song's tail.** After the last words its beats stay under the new voice
   for three of its bars, kept to 6 to 8 seconds (`tail(bar:)`), then it is gone.
+  It is counted from where the last words really end (`analysisSlack` earlier than
+  the analysis places them). Counted from the analysis, Why So's beats ran on for
+  9.6 seconds into Takkar and felt too long.
   The song's own end can cut this short (TODH ends 1.8 seconds after them).
 - **Length.** It follows from the above, so it differs per song: about 15 seconds
   at least, unless the song ends first or KnobMix Now asks for less. Measured: 16.1
