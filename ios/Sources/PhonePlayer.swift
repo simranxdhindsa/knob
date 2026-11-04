@@ -182,7 +182,7 @@ final class PhoneScrub: ObservableObject {
     @Published var position: TimeInterval?
 }
 
-/// The song's position: the slider with the next KnobMix marked on it, the times, and what
+/// The song's position: the slider, the times, and what
 /// KnobShift is doing between them, where Apple Music shows the audio quality. It alone watches
 /// the playback clock, so ten updates a second redraw nothing else.
 struct PhoneTimeline: View {
@@ -209,8 +209,7 @@ struct PhoneTimeline: View {
         }
     }
 
-    /// The iPhone's own slider, with the next mix marked on its track. With nothing playing it
-    /// is an empty line, since the slider shows its handle even with nothing to move.
+    /// The iPhone's own slider. With nothing playing it is an empty line, since the slider shows its handle even with nothing to move.
     @ViewBuilder private func slider(playing: Bool, time: TimeInterval, duration: TimeInterval) -> some View {
         if playing {
             Slider(value: Binding(get: { min(time, duration) }, set: { scrub.position = $0 }), in: 0...duration) { editing in
@@ -221,26 +220,10 @@ struct PhoneTimeline: View {
             }
             .tint(Palette.accent)
             .accessibilityLabel("Position in song")
-            .overlay {
-                if let band = band(duration) {
-                    GeometryReader { geometry in
-                        Capsule().fill(Palette.accentGlow.opacity(0.7))
-                            .frame(width: max(4, geometry.size.width * (band.upperBound - band.lowerBound)), height: 4)
-                            .offset(x: geometry.size.width * band.lowerBound, y: geometry.size.height / 2 - 2)
-                    }
-                    .allowsHitTesting(false)
-                }
-            }
         } else {
             KnobGroove(value: 0, accessibilityLabel: "Position in song", accessibilityValue: "0:00", onChange: { _ in })
                 .disabled(true)
         }
-    }
-
-    /// The stretch of this song where the next mix runs.
-    private func band(_ duration: TimeInterval) -> ClosedRange<Double>? {
-        guard let mix = model.nextMix, mix.blends, mix.endsAt > mix.startsAt else { return nil }
-        return min(mix.startsAt / duration, 1)...min(mix.endsAt / duration, 1)
     }
 
     @ViewBuilder private var chip: some View {
