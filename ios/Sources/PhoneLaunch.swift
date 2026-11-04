@@ -60,20 +60,19 @@ struct PhoneLaunch: View {
             // the tap and simply starts to move.
             ZStack {
                 Self.background.opacity(1 - Self.smoother((u - 0.1) / 0.6))
-                // The Play button it becomes, the very same disc, drawn at its final size and
-                // scaled. It waits solid behind the knob, so the knob melts away to reveal it and
-                // no see through moment shows between the two.
-                let body = Self.knobSize * Self.bodyShare
-                let diameter = playButton == .zero ? body : playButton.width
-                PhonePlayDisc(isPlaying: false, turn: 0, showsPointer: false, diameter: diameter)
-                    .scaleEffect(body * spot.scale / diameter)
-                    .opacity(Self.clamp((u - 0.1) / 0.2))
-                    .position(spot.center)
                 // Only the indicator marks glow, as they light.
                 LaunchKnobPose(value: value, size: Self.knobSize,
                                knobScale: spot.scale * (endStop ? 1.035 : 1),
-                               knobOpacity: 1 - Self.smoother((u - 0.3) / 0.5),
+                               knobOpacity: 1 - Self.smoother((u - 0.55) / 0.4),
                                overshoot: strainDegrees(at: timeline.date), scheme: scheme)
+                    .position(spot.center)
+                // The Play button it becomes, the very same disc, growing solid out of the knob's
+                // centre until it covers it. Never faded: the grey knob blended with a see through
+                // disc dulled the orange and greyed the triangle, which looked like a flicker.
+                let body = Self.knobSize * Self.bodyShare
+                let diameter = playButton == .zero ? body : playButton.width
+                PhonePlayDisc(isPlaying: false, turn: 0, showsPointer: false, diameter: diameter)
+                    .scaleEffect(max(body * spot.scale / diameter * Self.smoother((u - 0.1) / 0.5), 0.001))
                     .position(spot.center)
             }
             .opacity(fading ? 0 : 1)
