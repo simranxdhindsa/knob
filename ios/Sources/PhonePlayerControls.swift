@@ -22,6 +22,17 @@ extension View {
     }
 }
 
+extension View {
+    /// The Play knob's lens: Liquid Glass with an orange tint, over the orange underneath it.
+    @ViewBuilder func phoneLens() -> some View {
+        if #available(iOS 26, *) {
+            glassEffect(.regular.tint(Palette.accent.opacity(0.35)).interactive(), in: .circle)
+        } else {
+            self
+        }
+    }
+}
+
 /// Glass buttons side by side share one pass of Liquid Glass.
 struct PhoneGlassGroup<Content: View>: View {
     @ViewBuilder var content: Content
@@ -100,14 +111,8 @@ struct PhonePlayDial: View {
                 Haptics.mark()
                 model.pauseOrResume()
             } label: {
-                Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: disc * 0.4, weight: .semibold))
-                    .foregroundStyle(Glass.text)
-                    .contentTransition(.symbolEffect(.replace))
-                    .offset(x: model.isPlaying ? 0 : disc * 0.03)
-                    .frame(width: disc, height: disc)
-                    .overlay { pointer(disc) }
-                    .background(Circle().fill(Palette.accent))
+                PhoneKnobButton(isPlaying: model.isPlaying, turn: -Self.sweep / 2 + Self.sweep * value,
+                                showsPointer: model.nowPlaying != nil, diameter: disc)
                     .contentShape(Circle())
             }
             .buttonStyle(PhonePress())
@@ -119,15 +124,6 @@ struct PhonePlayDial: View {
             .opacity(hidesPlayButton ? 0 : 1)
         }
         .frame(width: size, height: size)
-    }
-
-    /// Turns from the first mark to the last across the song, at its exact position.
-    private func pointer(_ disc: CGFloat) -> some View {
-        Capsule().fill(Glass.text)
-            .frame(width: 3, height: disc * 0.13)
-            .offset(y: -disc * 0.4)
-            .rotationEffect(.degrees(-Self.sweep / 2 + Self.sweep * value))
-            .opacity(model.nowPlaying == nil ? 0 : 1)
     }
 
     private var ring: some View {
@@ -184,6 +180,68 @@ struct PhonePlayDial: View {
 
     /// How many marks are lit at a position (0...1).
     private static func lit(_ value: Double) -> Int { Int((value * Double(marks - 1) + 0.001).rounded(.down)) + 1 }
+}
+
+/// The Play button, half hardware and half glass: a dark machined knob body with a grip edge
+/// that turns with the song, and an orange Liquid Glass lens set into it, holding Play or Pause
+/// and the pointer. Before iOS 26 the lens is the orange and its highlights alone.
+struct PhoneKnobButton: View {
+    let isPlaying: Bool
+    /// Where the song has turned the knob to, in degrees from the top.
+    let turn: Double
+    let showsPointer: Bool
+    let diameter: CGFloat
+
+    private static let lensShare: CGFloat = 0.78
+
+    var body: some View {
+        let p = Palette.dark
+        let lens = diameter * Self.lensShare
+        ZStack {
+            Circle()
+                .fill(LinearGradient(colors: [p.knobBodyTop, p.knobBodyBottom], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .overlay(Circle().stroke(p.knobOutline, lineWidth: 1))
+                .shadow(color: p.dropShadow, radius: diameter * 0.09, y: diameter * 0.07)
+            Circle()
+                .strokeBorder(Glass.fill, style: StrokeStyle(lineWidth: diameter * 0.075, dash: [1.5, 2.6]))
+                .rotationEffect(.degrees(turn))
+            Circle()
+                .strokeBorder(LinearGradient(colors: [Glass.secondary, .clear], startPoint: .top, endPoint: .center), lineWidth: 1)
+            Circle()
+                .fill(RadialGradient(colors: [Palette.accentGlow, Palette.accent], center: UnitPoint(x: 0.35, y: 0.28),
+                                     startRadius: 0, endRadius: lens * 0.75))
+                .frame(width: lens, height: lens)
+                .shadow(color: p.dropShadow, radius: 2, y: 1)
+            face(lens).phoneLens()
+            // The light across the top of the lens, and its bright rim.
+            Ellipse()
+                .fill(LinearGradient(colors: [Glass.secondary, .clear], startPoint: .top, endPoint: .bottom))
+                .frame(width: lens * 0.68, height: lens * 0.38)
+                .offset(y: -lens * 0.25)
+                .allowsHitTesting(false)
+            Circle()
+                .strokeBorder(LinearGradient(colors: [Glass.secondary, .clear, Glass.tertiary], startPoint: .top, endPoint: .bottom), lineWidth: 1)
+                .frame(width: lens, height: lens)
+                .allowsHitTesting(false)
+        }
+        .frame(width: diameter, height: diameter)
+    }
+
+    private func face(_ lens: CGFloat) -> some View {
+        ZStack {
+            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                .font(.system(size: lens * 0.42, weight: .semibold))
+                .foregroundStyle(Glass.text)
+                .contentTransition(.symbolEffect(.replace))
+                .offset(x: isPlaying ? 0 : lens * 0.03)
+            Capsule().fill(Glass.text)
+                .frame(width: 3, height: lens * 0.13)
+                .offset(y: -lens * 0.4)
+                .rotationEffect(.degrees(turn))
+                .opacity(showsPointer ? 1 : 0)
+        }
+        .frame(width: lens, height: lens)
+    }
 }
 
 /// KnobMix Now, where Apple Music has its star: a glass button that pulses while it waits for
