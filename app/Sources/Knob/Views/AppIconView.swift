@@ -49,11 +49,13 @@ struct LaunchKnobPose: View {
     var overshoot: Double = 0
     /// The knob's finish: the opening follows the iPhone's theme.
     var scheme = ColorScheme.dark
+    /// Off once the marks have set off on their own for the Play button.
+    var showsMarks = true
 
     var body: some View {
         RealisticKnob(value: .constant(value), size: size, showsMinMax: false,
                       accessibilityLabel: "Knob", accessibilityValue: "", springsToChanges: false,
-                      pointerOvershoot: overshoot)
+                      pointerOvershoot: overshoot, showsMarks: showsMarks)
             .allowsHitTesting(false)
             .scaleEffect(knobScale)
             .opacity(knobOpacity)

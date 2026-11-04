@@ -87,8 +87,10 @@ struct PhonePlayDial: View {
     @Environment(\.hidesPlayButton) private var hidesPlayButton
     @State private var rotary: RotaryDrag?
 
-    private static let marks = 11, sweep = 270.0
-    private static let discShare: CGFloat = 0.64
+    static let marks = 11, sweep = 270.0
+    static let discShare: CGFloat = 0.64
+    /// A mark's width, then its length and how far out it sits as shares of the dial.
+    static let markWidth: CGFloat = 2.5, markLength: CGFloat = 0.075, markReach: CGFloat = 0.45
     /// How lit the next mark is by the time the song is halfway to it.
     private static let faintGlow = 0.15
 
@@ -123,8 +125,8 @@ struct PhonePlayDial: View {
                     .fill(Glass.tertiary)
                     .overlay(Capsule().fill(Palette.accent).opacity(glow))
                     .shadow(color: Palette.accentGlow.opacity(glow * 0.7), radius: 3)
-                    .frame(width: 2.5, height: size * 0.075)
-                    .offset(y: -size * 0.45)
+                    .frame(width: Self.markWidth, height: size * Self.markLength)
+                    .offset(y: -size * Self.markReach)
                     .rotationEffect(.degrees(-Self.sweep / 2 + Self.sweep * Double(mark) / Double(Self.marks - 1)))
             }
         }

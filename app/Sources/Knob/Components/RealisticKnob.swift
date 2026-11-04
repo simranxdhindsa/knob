@@ -22,6 +22,8 @@ struct RealisticKnob: View {
     /// Degrees the pointer alone is pushed past where the value puts it, while the marks stay:
     /// the iPhone opening's knob straining against its end stop. 0 everywhere else.
     var pointerOvershoot: Double = 0
+    /// Off once the iPhone opening's marks have left the knob for the Play button.
+    var showsMarks = true
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.isEnabled) private var isEnabled
@@ -46,7 +48,7 @@ struct RealisticKnob: View {
         let v = min(max(value, 0), 1)
         VStack(spacing: size * 0.01) {
             ZStack {
-                arc(p, v)
+                if showsMarks { arc(p, v) }
                 well(p)
                 skirt(p)
                 cap(p)

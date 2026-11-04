@@ -7,9 +7,10 @@ import SwiftUI
 /// strains past it for a moment (the pointer shaking a few degrees beyond the eleventh mark with
 /// a rumble felt in the hand), then flies down into the player's Play button, shrinking to its
 /// size and fading to orange, so the knob you watched becomes the button you tap (a shared
-/// element hand over, like iOS zoom transitions). Only the
-/// marks glow: there is no halo behind the knob. Everything follows the clock frame by frame, so
-/// it stays smooth at 120 Hz. With Reduce Motion it only fades.
+/// element hand over, like iOS zoom transitions). Its marks stay behind in the air, then jump
+/// across one after another to the marks around Play (LaunchMarks). Only the marks glow: there
+/// is no halo behind the knob. Everything follows the clock frame by frame, so it stays smooth
+/// at 120 Hz. With Reduce Motion it only fades.
 struct PhoneLaunch: View {
     /// Where the player's Play button is on screen; zero until the player has laid out.
     var playButton: CGRect
@@ -55,16 +56,20 @@ struct PhoneLaunch: View {
             let value = sweepValue(at: timeline.date)
             let u = landingProgress(at: timeline.date)
             let spot = landingSpot(u, in: screen.size)
+            let marksTravel = landingStarted != nil && playButton != .zero
+            let marksTime = landingStarted.map { timeline.date.timeIntervalSince($0) } ?? 0
             // The first frame is exactly the iPhone's launch image (the same view renders it, in
             // the launch screen's colour, centred on the whole screen), so the knob is there from
             // the tap and simply starts to move.
+            ZStack {
             ZStack {
                 Self.background.opacity(1 - Self.smoother((u - 0.1) / 0.6))
                 // Only the indicator marks glow, as they light.
                 LaunchKnobPose(value: value, size: Self.knobSize,
                                knobScale: spot.scale * (endStop ? 1.035 : 1),
                                knobOpacity: 1 - Self.clamp((u - 0.45) / 0.35),
-                               overshoot: strainDegrees(at: timeline.date), scheme: scheme)
+                               overshoot: strainDegrees(at: timeline.date), scheme: scheme,
+                               showsMarks: !marksTravel)
                     .position(spot.center)
                 // The Play button it becomes: orange fading in over the knob from halfway, then
                 // the real disc with its triangle for the last quarter. Its glow is gone by the
@@ -87,6 +92,16 @@ struct PhoneLaunch: View {
             // real button's white triangle underneath, a dip that looked like a flicker.
             .compositingGroup()
             .opacity(fading ? 0 : 1)
+            // Outside the fade: the last marks are still landing as the button hands over.
+            if marksTravel {
+                LaunchMarks(time: marksTime, from: CGPoint(x: screen.size.width / 2, y: screen.size.height / 2),
+                            playButton: playButton)
+            }
+            }
+            // One tick as each mark clicks into its place.
+            .onChange(of: LaunchMarks.landed(at: marksTime)) { _, landed in
+                if landed > 0 { Haptics.tick() }
+            }
             // The strain is felt with the shake it is seen with: one tap each time the pointer
             // pushes out furthest past the stop, as strong as that push.
             .onChange(of: strainPush(at: timeline.date)) { _, push in
@@ -132,7 +147,7 @@ struct PhoneLaunch: View {
         try? await Task.sleep(for: .seconds(Self.landing))
         onLanded()
         withAnimation(.easeOut(duration: Self.handOver)) { fading = true }
-        try? await Task.sleep(for: .seconds(Self.handOver))
+        try? await Task.sleep(for: .seconds(LaunchMarks.length - Self.landing))
         finished = true
         onFinished()
     }
@@ -202,4 +217,64 @@ struct PhoneLaunch: View {
 
     /// Which of the ten steps between the eleven indicators the pointer has reached.
     private static func mark(_ value: Double) -> Int { Int((value * 10 + 1e-6).rounded(.down)) }
+}
+
+/// The opening's eleven marks on their way to the Play dial. They wait where the knob left them,
+/// then from the first to the eleventh each jumps across on a soft curve, kicks as it clicks into
+/// its place and cools away, leaving the dial's own mark underneath. Drawn by the frame clock.
+struct LaunchMarks: View {
+    /// Seconds since the knob set off for the Play button.
+    var time: Double
+    /// The middle of the knob they start around.
+    var from: CGPoint
+    var playButton: CGRect
+
+    /// Seconds between one mark leaving and the next, and how long each is in the air.
+    private static let stagger = 0.036, flight = 0.3
+    /// How long a mark's kick and its cooling take once it has landed.
+    private static let kick = 0.14, cooling = 0.22
+    /// Seconds from the first mark leaving until the last has cooled.
+    static var length: Double { stagger * Double(PhonePlayDial.marks - 1) + flight + cooling }
+
+    /// How many marks have landed by this moment.
+    static func landed(at time: Double) -> Int {
+        (0..<PhonePlayDial.marks).filter { time >= stagger * Double($0) + flight }.count
+    }
+
+    var body: some View {
+        let knob = PhoneLaunch.knobSize, dial = playButton.width / PhonePlayDial.discShare
+        // RealisticKnob's marks, at the launch size.
+        let startLength = knob * 0.085, startWidth = knob * 0.026, startReach = knob * 0.415 + startLength / 2
+        let endLength = dial * PhonePlayDial.markLength, endReach = dial * PhonePlayDial.markReach
+        let target = CGPoint(x: playButton.midX, y: playButton.midY)
+        ZStack {
+            ForEach(0..<PhonePlayDial.marks, id: \.self) { mark in
+                let degrees = -PhonePlayDial.sweep / 2 + PhonePlayDial.sweep * Double(mark) / Double(PhonePlayDial.marks - 1)
+                let since = time - Self.stagger * Double(mark) - Self.flight
+                let e = Self.ease((since + Self.flight) / Self.flight)
+                let start = Self.point(from, degrees, startReach), end = Self.point(target, degrees, endReach)
+                // Marks left of the middle bow out to the left, marks right of it to the right.
+                let bow = sin(.pi * e) * CGFloat(mark - PhonePlayDial.marks / 2) * 7
+                Capsule()
+                    .fill(Palette.accent)
+                    .frame(width: startWidth + (PhonePlayDial.markWidth - startWidth) * e,
+                           height: startLength + (endLength - startLength) * e)
+                    .shadow(color: Palette.accentGlow.opacity(0.9), radius: 4)
+                    .scaleEffect(1 + 0.55 * (1 - Self.ease(since / Self.kick)) * (since > 0 ? 1 : 0))
+                    .rotationEffect(.degrees(degrees))
+                    .opacity(1 - min(max(since / Self.cooling, 0), 1))
+                    .position(x: start.x + (end.x - start.x) * e + bow, y: start.y + (end.y - start.y) * e)
+            }
+        }
+    }
+
+    private static func point(_ center: CGPoint, _ degrees: Double, _ reach: CGFloat) -> CGPoint {
+        let angle = degrees * .pi / 180
+        return CGPoint(x: center.x + reach * sin(angle), y: center.y - reach * cos(angle))
+    }
+
+    private static func ease(_ x: Double) -> Double {
+        let t = min(max(x, 0), 1)
+        return t * t * t * (t * (6 * t - 15) + 10)
+    }
 }
