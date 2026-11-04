@@ -2,13 +2,13 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
-/// The iPhone's main screen, laid out like Apple Music's player in a modern finish: a blurred,
-/// darkened copy of the cover fills the screen, under a large cover, the song with KnobMix and
-/// more beside it on glass, the position slider, the transport around the Play dial, the
-/// iPhone's volume, and three buttons along the bottom for Knob's sound, the output and the
-/// queue. Pausing shrinks the cover back. The queue button shrinks it to the corner and opens the
-/// queue in its place, while the song and the controls stay. The cover moves as one view, by
-/// transform only.
+/// The iPhone's main screen, laid out like Apple Music's player in a modern finish: the cover
+/// runs edge to edge from the top of the screen and melts into a blurred wash of its own colours,
+/// above the song with KnobMix and more beside it on glass, the position slider, the transport
+/// around the Play dial, the iPhone's volume, and three buttons along the bottom for Knob's
+/// sound, the output and the queue. Pausing eases the cover back and dims it. The queue button
+/// shrinks it to the corner and opens the queue in its place, while the song and the controls
+/// stay. The cover moves as one view, by transform only.
 struct PhonePlayer: View {
     @ObservedObject var model: KnobShiftModel
     let knob: KnobModel
@@ -22,7 +22,7 @@ struct PhonePlayer: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let layout = PhonePlayerLayout(size: geometry.size, queue: sheets.queue)
+            let layout = PhonePlayerLayout(size: geometry.size, topInset: geometry.safeAreaInsets.top, queue: sheets.queue)
             ZStack(alignment: .topLeading) {
                 cover(layout)
                 titleRow(layout)
@@ -49,15 +49,35 @@ struct PhonePlayer: View {
     }
 
     private func cover(_ layout: PhonePlayerLayout) -> some View {
-        let scale = sheets.queue ? PhonePlayerLayout.small / layout.side : (model.isPlaying ? 1 : PhonePlayerLayout.paused)
-        return KnobShiftCover(model: model, clock: model.clock, size: layout.side, animated: model.isPlaying,
-                              corner: sheets.queue ? 0.13 : 0.035)
+        let queue = sheets.queue
+        let scale = queue ? PhonePlayerLayout.small / layout.side : (model.isPlaying ? PhonePlayerLayout.playing : 1)
+        return KnobShiftCover(model: model, clock: model.clock, size: layout.side, animated: model.isPlaying, corner: queue ? 0.13 : 0)
+            // A soft shade behind the clock and battery, for bright covers.
+            .overlay(alignment: .top) {
+                LinearGradient(colors: [Glass.scrim, .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: layout.side * 0.2)
+                    .opacity(queue ? 0 : 1)
+            }
+            // The melt: solid at the top, gone by the bottom edge. Solid all over in the queue.
+            .mask {
+                ZStack {
+                    LinearGradient(stops: Self.melt, startPoint: .top, endPoint: .bottom)
+                    Color.black.opacity(queue ? 1 : 0)
+                }
+            }
+            .brightness(model.isPlaying || queue ? 0 : -0.1)
             .scaleEffect(scale)
-            .animation(reduceMotion ? .easeOut(duration: 0.2) : Motion.knob, value: model.isPlaying)
+            .animation(reduceMotion ? .easeOut(duration: 0.2) : Motion.gentle, value: model.isPlaying)
             .position(layout.cover)
             .onTapGesture { sheets.queue = false }
-            .allowsHitTesting(sheets.queue)
+            .allowsHitTesting(queue)
     }
+
+    private static let melt: [Gradient.Stop] = [
+        .init(color: .black, location: 0.56), .init(color: .black.opacity(0.82), location: 0.68),
+        .init(color: .black.opacity(0.42), location: 0.82), .init(color: .black.opacity(0.12), location: 0.93),
+        .init(color: .clear, location: 1),
+    ]
 
     private func titleRow(_ layout: PhonePlayerLayout) -> some View {
         let track = model.nowPlaying
@@ -92,8 +112,10 @@ struct PhonePlayer: View {
         VStack(spacing: 0) {
             PhoneTimeline(model: model, clock: model.clock, scrub: scrub)
                 .frame(height: PhonePlayerLayout.timeline)
+            Spacer(minLength: 0)
             PhoneTransport(model: model, scrub: scrub, dialSize: layout.dial)
                 .frame(height: layout.dial)
+            Spacer(minLength: 0)
             PhoneVolumeRow(knob: knob)
                 .frame(height: PhonePlayerLayout.volume)
             HStack {
@@ -110,42 +132,50 @@ struct PhonePlayer: View {
             PhoneCaption(model: model)
                 .frame(height: PhonePlayerLayout.caption)
         }
-        .frame(width: layout.width, height: layout.lower)
-        .offset(x: PhonePlayerLayout.margin, y: layout.lowerTop)
+        .frame(width: layout.width, height: layout.size.height - layout.controlsTop)
+        .offset(x: PhonePlayerLayout.margin, y: layout.controlsTop)
     }
 }
 
-/// Where everything on the player sits, worked out from the screen, so the cover fills what the
-/// controls leave and every phone gets the same layout.
+/// Where everything on the player sits, worked out from the screen. The cover is a square a
+/// little wider than the screen, so its sides run off the edges and its melt reaches the song's
+/// name; the controls spread out over what is left below, and on short phones the cover gives
+/// way to them.
 struct PhonePlayerLayout {
     static let margin: CGFloat = 24, top: CGFloat = 10, title: CGFloat = 56, timeline: CGFloat = 60
     static let volume: CGFloat = 34, buttons: CGFloat = 44, caption: CGFloat = 20
-    /// The cover's size in the queue, and its share of full size while paused.
-    static let small: CGFloat = 60, paused: CGFloat = 0.76
+    /// The cover's size in the queue, and how far it zooms in while playing. It never gets
+    /// smaller than the screen, which would show its edges.
+    static let small: CGFloat = 60, playing: CGFloat = 1.05
+    /// How far the cover's bottom edge reaches past the top of the song's name.
+    private static let overlap: CGFloat = 48
 
     let size: CGSize
+    let topInset: CGFloat
     let queue: Bool
 
     var width: CGFloat { size.width - 2 * Self.margin }
     /// The Play dial, smaller on short phones.
     var dial: CGFloat { size.height < 720 ? 100 : 118 }
-    var lower: CGFloat { Self.timeline + dial + Self.volume + Self.buttons + Self.caption }
-    var lowerTop: CGFloat { size.height - lower }
-    private var coverSpace: CGFloat { lowerTop - Self.title - Self.top - 14 }
-    var side: CGFloat { max(120, min(width, coverSpace)) }
-    private var playerCover: CGPoint { CGPoint(x: size.width / 2, y: Self.top + coverSpace / 2) }
+    private var lower: CGFloat { Self.timeline + dial + Self.volume + Self.buttons + Self.caption }
+    /// The top of the song's name while the cover is large.
+    private var songTop: CGFloat { min(size.width * 1.2 - topInset - Self.overlap, size.height - lower - Self.title - 6) }
+    var side: CGFloat { max(size.width, songTop + topInset + Self.overlap) }
+    var controlsTop: CGFloat { songTop + Self.title + 6 }
+    private var playerCover: CGPoint { CGPoint(x: size.width / 2, y: side / 2 - topInset) }
     private var smallCover: CGPoint { CGPoint(x: Self.margin + Self.small / 2, y: Self.top + Self.small / 2) }
     var cover: CGPoint { queue ? smallCover : playerCover }
 
     var titleX: CGFloat { Self.margin + (queue ? Self.small + 12 : 0) }
-    var titleY: CGFloat { queue ? smallCover.y - Self.title / 2 : lowerTop - Self.title - 6 }
+    var titleY: CGFloat { queue ? smallCover.y - Self.title / 2 : songTop }
     var titleWidth: CGFloat { width - (queue ? Self.small + 12 : 0) }
     var queueTop: CGFloat { Self.top + Self.small + 12 }
-    var queueHeight: CGFloat { lowerTop - queueTop - 6 }
+    var queueHeight: CGFloat { controlsTop - queueTop - 6 }
 }
 
-/// The player's background: the cover shrunk to a few pixels, blurred and darkened, so it is a
-/// soft wash of the song's colours that costs almost nothing to draw. It fades from song to song.
+/// The player's background: the lower half of the cover shrunk to a few pixels, blurred and
+/// darkened, so it is a soft wash of the colours the cover melts into, and costs almost nothing
+/// to draw. It fades from song to song.
 struct PhoneAmbient: View {
     let url: URL?
     @State private var wash: UIImage?
@@ -169,7 +199,7 @@ struct PhoneAmbient: View {
         .task(id: url) {
             guard let url, let image = await KnobShiftArtwork.load(url) else { wash = nil; return }
             let size = CGSize(width: 40, height: 40)
-            wash = UIGraphicsImageRenderer(size: size).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
+            wash = UIGraphicsImageRenderer(size: size).image { _ in image.draw(in: CGRect(x: 0, y: -size.height, width: size.width, height: size.height * 2)) }
         }
         .accessibilityHidden(true)
     }
@@ -209,7 +239,8 @@ struct PhoneTimeline: View {
         }
     }
 
-    /// The iPhone's own slider. With nothing playing it is an empty line, since the slider shows its handle even with nothing to move.
+    /// The iPhone's own slider. With nothing playing it is an empty line, since the slider
+    /// shows its handle even with nothing to move.
     @ViewBuilder private func slider(playing: Bool, time: TimeInterval, duration: TimeInterval) -> some View {
         if playing {
             Slider(value: Binding(get: { min(time, duration) }, set: { scrub.position = $0 }), in: 0...duration) { editing in
