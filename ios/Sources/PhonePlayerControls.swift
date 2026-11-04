@@ -106,6 +106,8 @@ struct PhonePlayDial: View {
 
     private static let marks = 11, sweep = 270.0
     private static let discShare: CGFloat = 0.64
+    /// The size of the volume knob in the panel (VolumeSection).
+    private static let panelKnob: CGFloat = 150
     /// How long the button stays before it turns back into the knob.
     private static let buttonHold = 1.0
     /// How lit the next mark is by the time the song is halfway to it.
@@ -115,11 +117,14 @@ struct PhonePlayDial: View {
         let disc = size * Self.discShare
         ZStack {
             ring
-            RealisticKnob(value: .constant(value), size: size, showsMinMax: false, showsMarks: false,
+            // Drawn at the panel's size and scaled as a whole: the knob changes its proportions
+            // when drawn small, and this must be exactly the panel's volume knob.
+            RealisticKnob(value: .constant(value), size: Self.panelKnob, showsMinMax: false, showsMarks: false,
                           accessibilityLabel: "", accessibilityValue: "", springsToChanges: false)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
-                .scaleEffect(showingButton ? 0.9 : 1)
+                .scaleEffect((showingButton ? 0.9 : 1) * size / Self.panelKnob)
+                .frame(width: size, height: size)
                 .opacity(hidesPlayButton ? 0 : 1)
             Button(action: tapped) {
                 // The clear circle takes the tap while the button itself is out of sight.
@@ -171,8 +176,8 @@ struct PhonePlayDial: View {
                     .fill(Glass.tertiary)
                     .overlay(Capsule().fill(Palette.accent).opacity(glow))
                     .shadow(color: Palette.accentGlow.opacity(glow * 0.7), radius: 3)
-                    .frame(width: 2.5, height: size * 0.075)
-                    .offset(y: -size * 0.45)
+                    .frame(width: size * 0.026, height: size * 0.085)
+                    .offset(y: -size * 0.4575)
                     .rotationEffect(.degrees(-Self.sweep / 2 + Self.sweep * Double(mark) / Double(Self.marks - 1)))
             }
         }

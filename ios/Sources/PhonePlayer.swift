@@ -156,7 +156,7 @@ struct PhonePlayerLayout {
 
     var width: CGFloat { size.width - 2 * Self.margin }
     /// The Play dial, smaller on short phones.
-    var dial: CGFloat { size.height < 720 ? 100 : 118 }
+    var dial: CGFloat { size.height < 720 ? 112 : 142 }
     private var lower: CGFloat { Self.timeline + dial + Self.volume + Self.buttons + Self.caption }
     /// The top of the song's name while the cover is large.
     private var songTop: CGFloat { min(size.width * 1.2 - topInset - Self.overlap, size.height - lower - Self.title - 6) }
