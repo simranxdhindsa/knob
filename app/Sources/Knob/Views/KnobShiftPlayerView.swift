@@ -69,6 +69,8 @@ struct KnobShiftPlayerView: View {
             }
             .animation(reduceMotion ? .easeOut(duration: 0.2) : Motion.gentle, value: queue)
         }
+        // Under the see-through title bar, so the cover reaches the window's top edge.
+        .ignoresSafeArea(.container, edges: .top)
     }
 
     /// The cover from the top of the window, melting away towards the song's name, and towards

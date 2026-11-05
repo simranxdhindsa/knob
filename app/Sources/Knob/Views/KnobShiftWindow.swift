@@ -32,6 +32,9 @@ enum KnobShiftWindow {
             created.title = "KnobShift"
             created.titlebarAppearsTransparent = true
             created.titleVisibility = .hidden
+            // Always dark: only white text can sit on the cover's real colours, spread over the
+            // whole window. Light text colours would need a pale wash over them.
+            created.appearance = NSAppearance(named: .darkAqua)
             created.isMovableByWindowBackground = true
             created.isReleasedWhenClosed = false
             created.minSize = KnobShiftPlayerView.minimumSize

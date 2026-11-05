@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The player's background: the cover and its reflection shrunk to a few pixels and blurred, so a
 /// soft wash of its colours fills the screen, and costs almost nothing to draw. Dark mode fades it
-/// towards black. Light mode turns it into bright pastels of the same colours (`pastel`), because
+/// towards black. Light mode lifts the cover's own colours into a light range (`pastel`), because
 /// white laid over a cover greys a dark one and bleaches a bright one. It fades from song to song.
 /// The iPhone player and the Mac's KnobShift window share it.
 struct PlayerAmbient: View {
@@ -42,7 +42,9 @@ struct PlayerAmbient: View {
     private func blurred(_ image: CGImage) -> some View {
         Color.clear
             .overlay {
-                Image(decorative: image, scale: 1).resizable().scaledToFill()
+                // Stretched, not cropped: a wide window would otherwise show only a thin slice
+                // where the cover meets its reflection, and that slice's colours would be all of it.
+                Image(decorative: image, scale: 1).resizable()
                     .blur(radius: scheme == .dark ? 40 : 90).saturation(scheme == .dark ? 1.5 : 1)
                     .scaleEffect(scheme == .dark ? 1.3 : 1.7)
             }
@@ -72,8 +74,10 @@ struct PlayerAmbient: View {
         return context.makeImage()
     }
 
-    /// Every pixel keeps its hue at one bright level and a capped strength, so text stays readable.
-    /// Near black has no real colour of its own, so it fades to white instead of a random hue.
+    /// The cover's own colours lifted into a light range, so text stays readable: its dark and
+    /// bright areas stay apart and a grey poster stays grey. Colour is taken as the distance from
+    /// grey, not as a share of brightness, or the faint tint in near black parts would become the
+    /// whole wash (a black and white poster came out pink).
     private static func pastel(_ image: CGImage) -> CGImage {
         let width = image.width, height = image.height
         guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
@@ -81,37 +85,13 @@ struct PlayerAmbient: View {
               let data = context.data?.assumingMemoryBound(to: UInt8.self) else { return image }
         context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
         for pixel in stride(from: 0, to: width * height * 4, by: 4) {
-            let (hue, saturation, brightness) = hsb(Double(data[pixel]) / 255, Double(data[pixel + 1]) / 255, Double(data[pixel + 2]) / 255)
-            let strength = min(saturation * 1.5, 0.5) * min(brightness / 0.2, 1)
-            let (red, green, blue) = rgb(hue, strength, 0.96)
-            data[pixel] = UInt8(red * 255)
-            data[pixel + 1] = UInt8(green * 255)
-            data[pixel + 2] = UInt8(blue * 255)
+            let red = Double(data[pixel]) / 255, green = Double(data[pixel + 1]) / 255, blue = Double(data[pixel + 2]) / 255
+            let grey = 0.3 * red + 0.59 * green + 0.11 * blue
+            let lifted = 0.66 + 0.32 * grey
+            for (channel, value) in [red, green, blue].enumerated() {
+                data[pixel + channel] = UInt8(min(max(lifted + (value - grey) * 1.1, 0), 1) * 255)
+            }
         }
         return context.makeImage() ?? image
-    }
-
-    /// Hue (0...1), saturation and brightness of a colour, as UIColor and NSColor give them.
-    private static func hsb(_ r: Double, _ g: Double, _ b: Double) -> (Double, Double, Double) {
-        let high = max(r, g, b), low = min(r, g, b), range = high - low
-        guard high > 0, range > 0 else { return (0, 0, high) }
-        var hue: Double
-        if high == r { hue = (g - b) / range } else if high == g { hue = 2 + (b - r) / range } else { hue = 4 + (r - g) / range }
-        hue /= 6
-        if hue < 0 { hue += 1 }
-        return (hue, range / high, high)
-    }
-
-    private static func rgb(_ hue: Double, _ saturation: Double, _ brightness: Double) -> (Double, Double, Double) {
-        let sector = hue * 6, step = Int(sector) % 6, f = sector - Double(Int(sector))
-        let p = brightness * (1 - saturation), q = brightness * (1 - saturation * f), t = brightness * (1 - saturation * (1 - f))
-        switch step {
-        case 0: return (brightness, t, p)
-        case 1: return (q, brightness, p)
-        case 2: return (p, brightness, t)
-        case 3: return (p, q, brightness)
-        case 4: return (t, p, brightness)
-        default: return (brightness, p, q)
-        }
     }
 }
