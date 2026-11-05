@@ -72,9 +72,8 @@ int main(int argc, char** argv) {
     assert((*driver)->SetPropertyData(driver, volume, 0, &scalar, 0, nullptr, 4, &gain) == noErr);
     info.mOutputTime.mSampleTime = 256; info.mInputTime.mSampleTime = 768;
     assert(io(true, 256, samples.data()) == noErr && io(false, 256, read.data()) == noErr);
-    // 50% follows macOS's volume curve: halfway from -63.5 dB to 0 dB, -31.75 dB, as the Mac's
-    // speakers do, not half the amplitude.
-    const float expected = std::pow(10.0f, -31.75f / 20.0f);
+    // 50% steps evenly in decibels: halfway from -50 dB to 0 dB, -25 dB, not half the amplitude.
+    const float expected = std::pow(10.0f, -25.0f / 20.0f);
     for (size_t i = 0; i < samples.size(); ++i) assert(std::fabs(read[i] - samples[i] * expected) <= 1e-6f);
     auto decibels = address(kAudioLevelControlPropertyDecibelValue); float db = 0; UInt32 dbSize = 4;
     assert((*driver)->GetPropertyData(driver, volume, 0, &decibels, 0, nullptr, 4, &dbSize, &db) == noErr
