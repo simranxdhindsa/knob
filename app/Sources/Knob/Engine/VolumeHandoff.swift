@@ -21,6 +21,7 @@ enum VolumeHandoff {
     static func takeOver(from physical: HardwareDevice?) {
         guard let knob = HardwareDevices.device(uid: HardwareDevices.knobUID) else { return }
         if let physical, HardwareDevices.isMuted(physical.id) == true {
+            KnobShiftLog.append(stage: "VOLUME", message: "\(physical.uid) was muted: Knob takes the mute.")
             HardwareDevices.setMuted(true, of: knob.id)
             HardwareDevices.setMuted(false, of: physical.id)
         }
@@ -29,9 +30,11 @@ enum VolumeHandoff {
             HardwareDevices.setVolume(level, of: knob.id)
             HardwareDevices.setVolume(1, of: physical.id)
             remember(level)
+            KnobShiftLog.append(stage: "VOLUME", message: "Took over \(physical.uid): Knob's volume is its \(Int((level * 100).rounded()))%, and it goes to 100% underneath.")
         } else {
             let saved = UserDefaults.standard.object(forKey: PersistKey.lastVolume.rawValue) as? Double
             HardwareDevices.setVolume(saved ?? fallbackLevel, of: knob.id)
+            KnobShiftLog.append(stage: "VOLUME", message: "\(physical?.uid ?? "The output") has no volume of its own: Knob uses its last level, \(Int(((saved ?? fallbackLevel) * 100).rounded()))%.")
         }
     }
 
@@ -43,6 +46,7 @@ enum VolumeHandoff {
         let knobLevel = HardwareDevices.device(uid: HardwareDevices.knobUID).flatMap { HardwareDevices.volume(of: $0.id) }
         let saved = UserDefaults.standard.object(forKey: PersistKey.lastVolume.rawValue) as? Double
         HardwareDevices.setVolume(knobLevel ?? saved ?? fallbackLevel, of: physical.id)
+        KnobShiftLog.append(stage: "VOLUME", message: "Gave \(uid) back at \(Int(((knobLevel ?? saved ?? fallbackLevel) * 100).rounded()))%.")
         if let knob = HardwareDevices.device(uid: HardwareDevices.knobUID), let muted = HardwareDevices.isMuted(knob.id) {
             HardwareDevices.setMuted(muted, of: physical.id)
         }

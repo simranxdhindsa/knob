@@ -3,6 +3,26 @@
 What's new in each version of Knob, written for people who use it: new features first, then
 fixes. Knob updates itself, so installed copies get every version below on their own.
 
+## 4.1
+
+Knob 4.1 keeps the orange microphone dot away, makes low volumes easier to hear, and adds a Playlists view.
+
+### New features
+
+- A new Playlists view from the queue: open any playlist, pick songs or add them all, and imported songs wait there until you add them
+- Knob no longer uses your Mac's audio input to carry sound, so the orange microphone dot stays off while Knob is on. Turning Knob on asks you to install a small update to its audio device, once
+- Low volumes in Knob are louder, so small steps are easier to hear, and 100% stays exactly as loud as before
+
+### Fixes
+
+- Check for Updates shows its result in the panel instead of a window, so the panel stays open
+- Pausing during a mix now freezes both songs, and Play carries the same mix on from that moment
+- Shuffle stays on after you restart Knob, in the same order, and turning it off still gives your own order
+- The KnobShift window comes back where you left it, at the size you left it
+- KnobShift on your Mac spreads the real colours of the cover across the whole window, and black and white covers no longer turn pink
+- On iPhone in light mode, the background keeps the cover's own colours instead of turning pale yellow or pink
+- New headphones and speakers show in Knob as soon as you connect them, with no need to restart it
+
 ## 4.0
 
 Knob 4.0 is the biggest update yet. Knob comes to iPhone, and KnobMix now works the way a DJ does:

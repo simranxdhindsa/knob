@@ -1,4 +1,5 @@
 #include "driver.h"
+#include "loopback.h"
 #include <mach/mach_time.h>
 #include <math.h>
 #include <pthread.h>
@@ -93,6 +94,18 @@ OSStatus kn_io(AudioServerPlugInDriverRef d,AudioObjectID o,AudioObjectID stream
     UInt64 start=(UInt64)time->mSampleTime,epoch=atomic_load(&kn_epoch);
     float* samples=buffer,volume; UInt32 bits=atomic_load(&kn_gain_bits); memcpy(&volume,&bits,4);
     float gain=atomic_load(&kn_muted)?0:kn_scalar_to_gain(volume);
+    /* The mixed output also goes down the private path to the engine, when it is attached. The
+       engine's read position only decides whether there is room; slots are always masked. */
+    KnLoopback* shared=write?kn_loopback_current():NULL;
+    UInt64 shared_write=0;
+    if(shared) {
+        shared_write=__atomic_load_n(&shared->write,__ATOMIC_RELAXED);
+        UInt64 taken=shared_write-__atomic_load_n(&shared->read,__ATOMIC_ACQUIRE);
+        if(frames>KN_LOOP_FRAMES || taken>KN_LOOP_FRAMES-frames) {
+            __atomic_fetch_add(&shared->dropped,1,__ATOMIC_RELAXED);
+            shared=NULL;
+        }
+    }
     for(UInt32 i=0;i<frames;i++) {
         UInt64 frame=start+i;
         if(!write && frame<KN_DELAY) { samples[2*i]=samples[2*i+1]=0; continue; }
@@ -101,6 +114,10 @@ OSStatus kn_io(AudioServerPlugInDriverRef d,AudioObjectID o,AudioObjectID stream
         if(write) {
             atomic_store(&slot->stamp,tag-1);
             float left=samples[2*i]*gain,right=samples[2*i+1]*gain;
+            if(shared) {
+                UInt64 place=((shared_write+i)&(KN_LOOP_FRAMES-1))*2;
+                shared->samples[place]=left; shared->samples[place+1]=right;
+            }
             UInt32 l,r; memcpy(&l,&left,4); memcpy(&r,&right,4);
             atomic_store(&slot->left,l); atomic_store(&slot->right,r); atomic_store(&slot->epoch,epoch);
             atomic_store(&slot->stamp,tag);
@@ -112,5 +129,6 @@ OSStatus kn_io(AudioServerPlugInDriverRef d,AudioObjectID o,AudioObjectID stream
             memcpy(samples+2*i,&l,4); memcpy(samples+2*i+1,&r,4);
         }
     }
+    if(shared) __atomic_store_n(&shared->write,shared_write+frames,__ATOMIC_RELEASE);
     return noErr;
 }

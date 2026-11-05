@@ -86,23 +86,30 @@ extension KnobShiftModel {
         deck.fileLevel = 1
         deck.musicStemLevel = 0
         deck.voiceLevel = 0
-        // A node left playing would start these at once, not at `startAt`.
-        deck.musicStem.stop()
-        deck.voice.stop()
-        deck.musicStem.scheduleSegment(music, startingFrame: skip, frameCount: AVAudioFrameCount(frames), at: nil)
         // The voice path runs a few milliseconds late, so its part starts that much further in.
         let lag = AVAudioFramePosition((deck.voiceLatency * rate).rounded())
-        deck.voice.scheduleSegment(vocals, startingFrame: skip + lag, frameCount: AVAudioFrameCount(frames - lag), at: nil)
+        let startParts: (AVAudioTime) -> Void = { startAt in
+            // A node left playing would start these at once, not at `startAt`.
+            deck.musicStem.stop()
+            deck.voice.stop()
+            deck.musicStem.scheduleSegment(music, startingFrame: skip, frameCount: AVAudioFrameCount(frames), at: nil)
+            deck.voice.scheduleSegment(vocals, startingFrame: skip + lag, frameCount: AVAudioFrameCount(frames - lag), at: nil)
+            deck.musicStem.play(at: startAt)
+            deck.voice.play(at: startAt)
+        }
         // From the moment `position` was read, so the parts land on the file they replace.
         let startAt = nodeTime.isHostTimeValid
             ? AVAudioTime(hostTime: nodeTime.hostTime + AVAudioTime.hostTime(forSeconds: lead))
             : KnobShiftDeck.startTime(after: lead)
-        deck.musicStem.play(at: startAt)
-        deck.voice.play(at: startAt)
+        mixPause.stemsStart = Date().addingTimeInterval(lead)
+        mixPause.restartStems = startParts
+        startParts(startAt)
         log("STEMS", String(format: "%@ switches to its separated music and voice at %.2fs, crossfaded, so its voice alone can be pressed down.", current.title, position))
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(lead + 0.03))
             for step in 1...8 {
+                // Paused: the fade waits too, so the file is not faded out before the parts start.
+                while self?.isMixPaused == true { try? await Task.sleep(for: .milliseconds(30)) }
                 // Next, Stop or a seek reloaded the deck: its levels are no longer this fade's.
                 guard deck.musicStem.isPlaying else { return }
                 let share = Float(step) / 8

@@ -8,6 +8,7 @@
     "dev:demo": "bash scripts/dev.sh --demo",
     "dev:once": "bash scripts/dev.sh --once",
     "mobile": "open \"$(xcode-select -p)/../Applications/DeviceHub.app\" && bash ios/build-ios.sh simulator run",
+    "build": "bash ios/install-phone.sh",
     "release:trial": "bash scripts/release/release.sh",
     "release:secrets": "bash scripts/release/set-github-secrets.sh"
   }

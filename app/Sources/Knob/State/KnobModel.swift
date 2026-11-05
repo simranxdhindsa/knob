@@ -173,7 +173,11 @@ final class KnobModel: ObservableObject {
 
     /// The switch, flipped by the user: remembered, so the next launch comes back the same way.
     func userSetPower(_ on: Bool) {
-        guard !starting else { return }
+        guard !starting else {
+            KnobShiftLog.append(stage: "POWER", message: "You turned Knob \(on ? "ON" : "OFF"), ignored because it is still starting.")
+            return
+        }
+        KnobShiftLog.append(stage: "POWER", message: "You turned Knob \(on ? "ON" : "OFF").")
         Self.rememberPower(on)
         setPower(on)
     }
@@ -220,7 +224,13 @@ final class KnobModel: ObservableObject {
 
     /// Sends a command and reports whether the engine accepted it (a reply with no data is success).
     func succeeds(_ command: String, _ arguments: [String: Any]) async -> Bool {
-        do { _ = try await engine.send(command, arguments); return true } catch { return false }
+        do {
+            _ = try await engine.send(command, arguments)
+            return true
+        } catch {
+            KnobShiftLog.append(stage: "ENGINE", message: "\(command) refused: \(error.localizedDescription)")
+            return false
+        }
     }
 
     func refreshState(includeControls: Bool = false) async {

@@ -4,7 +4,7 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 build_dir=${KNOB_TEST_BUILD_DIR:-/private/tmp/knob-engine-unit-tests}
 mkdir -p "$build_dir"
 flags=${KNOB_TEST_FLAGS:--O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer}
-for name in stereo-ring adaptive-resampler; do
+for name in stereo-ring adaptive-resampler shared-loopback; do
     # Flags are intentionally word-split to accept compiler options from the test runner.
     xcrun clang++ -std=c++17 -Wall -Wextra -Werror $flags "$root/$name-test.cpp" -o "$build_dir/$name-test"
     "$build_dir/$name-test"

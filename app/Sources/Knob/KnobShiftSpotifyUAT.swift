@@ -181,6 +181,23 @@ extension KnobShiftSpotifyCheck {
             } else {
                 expect(false, "the playlist is there after reopening")
             }
+
+            lag.phase("step 8")
+            print("9. Shuffle on, open again: shuffle and its order come back")
+            let present = { (paths: [String]) in paths.filter { FileManager.default.fileExists(atPath: $0) } }
+            // Real songs in the queue, or an empty one would pass this by itself.
+            let songs = model.playlists.flatMap { KnobShiftPlaylists.files(in: KnobShiftPlaylists.folder(for: $0)).values }
+            await model.addTracks(Array(songs.prefix(8)))
+            expect(model.tracks.count >= 4, "songs in the queue to shuffle (\(model.tracks.count))")
+            if !model.isShuffled { model.toggleShuffle() }
+            let shuffled = present(model.tracks.map(\.url.path))
+            let ownOrder = present(model.unshuffled.map(\.url.path))
+            model.persistQueueNow()
+            let shuffledBack = KnobShiftModel(restoresQueue: true)
+            await waitUntil(seconds: 60) { shuffledBack.isShuffled && shuffledBack.pending.allSatisfy { $0.failure != nil || $0.waitingForDownload } }
+            expect(shuffledBack.isShuffled, "shuffle is still on after reopening")
+            expect(shuffledBack.tracks.map(\.url.path) == shuffled, "in the same shuffled order")
+            expect(shuffledBack.unshuffled.map(\.url.path) == ownOrder, "and turning it off still gives your own order")
         }
 
         await finishUAT(lag)

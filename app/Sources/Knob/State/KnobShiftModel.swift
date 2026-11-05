@@ -163,6 +163,8 @@ final class KnobShiftModel: ObservableObject {
     @Published internal(set) var mixNowWaiting = false
     /// The user's own order while shuffle is on, so turning it off brings that order back.
     var unshuffled: [Track] = []
+    /// The shuffled order waiting to be put back while a saved queue is restored.
+    var shuffleToRestore: [String]?
     @Published internal(set) var nowPlaying: Track?
     /// For the log and checks only; nothing on screen shows it, so it never redraws the player.
     internal(set) var transitionDescription = "Add local music to begin."
@@ -173,7 +175,7 @@ final class KnobShiftModel: ObservableObject {
     var coverLoads: [UUID: Task<Void, Never>] = [:]
     /// Songs whose voice is being read again.
     @Published internal(set) var rereading: Set<UUID> = []
-    @Published private(set) var isPlaying = false
+    @Published internal(set) var isPlaying = false
     @Published internal(set) var notice: String?
     /// Where the song is, ten times a second. It lives in its own object so only the timelines
     /// redraw, not the queue with its hundreds or thousands of rows.
@@ -237,7 +239,7 @@ final class KnobShiftModel: ObservableObject {
 
     /// One per song being prepared at once: an analyser works on one song at a time.
     let analysers = [KnobShiftAnalyser(), KnobShiftAnalyser()]
-    private let audioEngine = AVAudioEngine()
+    let audioEngine = AVAudioEngine()
     private let deckOne: KnobShiftDeck
     private let deckTwo: KnobShiftDeck
     /// The deck the listener hears now; the other one brings in the next song. They swap roles
@@ -266,7 +268,8 @@ final class KnobShiftModel: ObservableObject {
     /// The exit effects' strength at their peak for the current mix, at most half.
     var exitStrength = 0.5
     var transitionTask: Task<Void, Never>?
-    private var progressTask: Task<Void, Never>?
+    var mixPause = MixPause()
+    var progressTask: Task<Void, Never>?
     var playbackStartedAt = Date()
     private var configurationObserver: NSObjectProtocol?
     /// The song the current plan or blend leads into, for the log when it is called off.
@@ -472,7 +475,15 @@ final class KnobShiftModel: ObservableObject {
 
     func pauseOrResume() {
         guard nowPlaying != nil else { play(); return }
-        if isPlaying {
+        if isPlaying, mixState == .mixing, transitionTask != nil {
+            pauseMix()
+        } else if isMixPaused {
+            do { try resumeMix() }
+            catch {
+                log("ERROR", "Resume failed: \(error.localizedDescription)")
+                notice = "KnobShift could not play this file."
+            }
+        } else if isPlaying {
             updatePlaybackTime()
             log("PLAY", "Paused at \(Self.seconds(playbackTime)).")
             cancelPlan("Paused")
@@ -575,6 +586,7 @@ final class KnobShiftModel: ObservableObject {
     /// Calls off the planned or running transition and says why, at the moment it happens.
     func cancelPlan(_ reason: String) {
         mixNowWaiting = false
+        mixPause = MixPause()
         guard let task = transitionTask else { return }
         task.cancel()
         transitionTask = nil
@@ -615,7 +627,7 @@ final class KnobShiftModel: ObservableObject {
 
     /// Reads where the song really is from its deck, which stays right while KnobShift slows or
     /// speeds it up; the wall clock is only a fallback before the deck has rendered.
-    private func updatePlaybackTime() {
+    func updatePlaybackTime() {
         guard isPlaying else { return }
         let position = primaryDeck.position ?? Date().timeIntervalSince(playbackStartedAt)
         playbackTime = min(playbackDuration, max(0, position))

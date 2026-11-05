@@ -13,6 +13,7 @@ extension KnobShiftModel {
     }
 
     func toggleShuffle() {
+        shuffleToRestore = nil
         if isShuffled {
             tracks = unshuffled
             unshuffled = []

@@ -1,6 +1,7 @@
 #pragma once
 #include "audio-devices.h"
 #include "adaptive-resampler.h"
+#include "shared-loopback.h"
 #include <atomic>
 #include <chrono>
 #include <array>
@@ -29,17 +30,21 @@ private:
                            const AudioTimeStamp*, AudioBufferList*, const AudioTimeStamp*, void*);
     static OSStatus propertyChanged(AudioObjectID, UInt32, const AudioObjectPropertyAddress*, void*);
     void listeners(bool add);
+    template <class Ring> UInt32 pull(Ring& ring, UInt32 frames, bool& missing) noexcept;
     AudioDeviceID input_ = 0, output_ = 0;
     AudioDeviceIOProcID captureID_ = nullptr, renderID_ = nullptr;
     bool listening_ = false;
     StereoRing ring_;
+    /// The driver's private path. While active there is no capture IOProc at all, which is what
+    /// keeps the microphone dot away; the ring above is then unused.
+    SharedLoopback shared_;
     AdaptiveResampler resampler_;
     std::array<StereoFrame, 4096> scratch_{};
     std::array<float, 8192> renderScratch_{};
     Processor processor_ = nullptr;
     void* processorContext_ = nullptr;
     std::atomic<uint64_t> captured_{0}, rendered_{0}, delivered_{0}, overruns_{0}, underruns_{0}, hostTime_{0};
-    std::atomic<uint64_t> captureTick_{0}, renderTick_{0};
+    std::atomic<uint64_t> captureTick_{0}, renderTick_{0}, aliveTick_{0};
     std::atomic<double> driftPPM_{0};
     std::atomic<float> peakLeft_{0}, peakRight_{0};
     std::atomic<bool> changed_{false};

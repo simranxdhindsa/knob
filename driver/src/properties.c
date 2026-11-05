@@ -1,4 +1,5 @@
 #include "driver.h"
+#include "loopback.h"
 #include <math.h>
 
 Boolean kn_object(AudioObjectID o) { return o>=kAudioObjectPlugInObject && o<=KN_SOURCE; }
@@ -24,6 +25,7 @@ Boolean kn_settable(AudioObjectID o, AudioObjectPropertySelector s) {
     return (o==KN_VOLUME && (s==kAudioLevelControlPropertyScalarValue || s==kAudioLevelControlPropertyDecibelValue))
         || (o==KN_MUTE && s==kAudioBooleanControlPropertyValue)
         || (o==KN_SOURCE && s==kAudioSelectorControlPropertyCurrentItem)
+        || (o==KN_DEVICE && s==KN_ATTACH)
         || ((o==KN_INPUT || o==KN_OUTPUT) && s==kAudioStreamPropertyIsActive);
 }
 OSStatus kn_value(AudioObjectID o,const AudioObjectPropertyAddress* a,UInt32 qn,const void* q,UInt32* n,void* out) {
@@ -65,6 +67,12 @@ OSStatus kn_value(AudioObjectID o,const AudioObjectPropertyAddress* a,UInt32 qn,
 OSStatus kn_set(AudioObjectID o,const AudioObjectPropertyAddress* a,UInt32 n,const void* data) {
     if(!a || !data) return kAudioHardwareIllegalOperationError;
     if(!kn_settable(o,a->mSelector)) return kAudioHardwareUnsupportedOperationError;
+    if(o==KN_DEVICE) {
+        CFStringRef name=NULL;
+        if(n!=sizeof(name)) return kAudioHardwareBadPropertySizeError;
+        memcpy(&name,data,sizeof(name));
+        return kn_loopback_attach(name);
+    }
     if(n!=sizeof(UInt32)) return kAudioHardwareBadPropertySizeError;
     UInt32 v; memcpy(&v,data,4);
     if(o==KN_VOLUME) {

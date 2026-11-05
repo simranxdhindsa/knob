@@ -49,6 +49,26 @@ enum KnobShiftSmokeCheck {
                              Date().timeIntervalSince(pressed), model.playbackTime))
                 for line in model.diagnostics where line.stage == "PLAN" && line.message.contains("KnobMix Now") { print(line.message) }
             } else if plan.start - lead > 1 { model.seek(to: plan.start - lead) }
+            // KNOB_CHECK_PAUSE=SECONDS pauses that far into the mix, as a person would, and resumes 3
+            // seconds later: the sound must stop, and the same mix must carry on and finish.
+            if let pauseAfter = ProcessInfo.processInfo.environment["KNOB_CHECK_PAUSE"].flatMap(Double.init) {
+                let waiting = Date()
+                while model.mixState != .mixing, Date().timeIntervalSince(waiting) < lead * 1.3 + 10 {
+                    try? await Task.sleep(for: .milliseconds(20))
+                }
+                guard model.mixState == .mixing else { fail("the mix never started") }
+                try? await Task.sleep(for: .seconds(pauseAfter))
+                model.pauseOrResume()
+                try? await Task.sleep(for: .milliseconds(300))
+                let held = (model.primaryDeck.position, model.secondaryDeck.position, model.blendProgress)
+                try? await Task.sleep(for: .seconds(3))
+                guard !model.isPlaying, model.primaryDeck.position == held.0, model.secondaryDeck.position == held.1 else {
+                    fail("the music kept moving while paused")
+                }
+                guard model.isMixPaused, model.blendProgress == held.2 else { fail("pausing lost the mix (progress \(held.2))") }
+                print(String(format: "Paused %.0f%% into the mix and held still for 3s.", held.2 * 100))
+                model.pauseOrResume()
+            }
             // Wait for the handoff itself rather than a fixed time, with a few seconds of slack.
             // Slowed-down blends take longer than their music, so allow for that too.
             let deadline = Date().addingTimeInterval(mixNowAt != nil ? 25 : lead * 1.3 + plan.duration * 1.3 + 4)

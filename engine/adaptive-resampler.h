@@ -18,7 +18,7 @@ public:
         const double slew = 0.000001 * std::max(1.0, outputFrames * nominal_ / 128.0);
         correction_ += std::clamp(goal - correction_, -slew, slew);
     }
-    bool next(StereoRing& ring, StereoFrame& frame) noexcept {
+    template <class Ring> bool next(Ring& ring, StereoFrame& frame) noexcept {
         if (!primed_) {
             if (ring.available() < targetFrames) { frame = {}; return false; }
             primed_ = true;

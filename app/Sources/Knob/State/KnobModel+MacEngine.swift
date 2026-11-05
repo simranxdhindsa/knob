@@ -62,6 +62,7 @@ extension KnobModel {
         notice = "Starting the sound engine..."
         defer { starting = false }
         let physical = HardwareDevices.preferredPhysicalOutput()
+        trace("POWER", "Starting the engine for \(outputName(physical?.uid)). The Mac's output is \(systemOutputName).")
         if isStaleEngine { await retireEngine(keepingLauncher: false) }
         let session = Self.sessionURL.flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }
 
@@ -69,6 +70,7 @@ extension KnobModel {
         // (right after installing or updating) works on the second.
         // An older audio device than this app carries: update it first (one password prompt).
         if DriverInstaller.installedIsOutdated {
+            trace("POWER", "Not started: the installed audio device is older than this app's.")
             canInstallDevice = true
             notice = "Knob's audio device has an update that matches your Mac's volume steps. Install it to continue."
             wantsOn = false
@@ -84,6 +86,7 @@ extension KnobModel {
                 wantsOn = false
                 return
             } catch {
+                trace("POWER", "The engine could not start: \(error.localizedDescription)")
                 switch error as? EngineLauncher.Problem {
                 case .permissionDenied: showStartupFailure(.audioAccess)
                 case .noOutput: showStartupFailure(.outputUnavailable)
@@ -109,10 +112,14 @@ extension KnobModel {
                 if routingActive {
                     VolumeHandoff.takeOver(from: physical)
                     notice = nil   // started: the "Starting the sound engine..." message goes away
+                    trace("POWER", "Knob is ON, on try \(attempt).")
+                    logAudioHealth(after: "turning ON")
                     return
                 }
+                trace("POWER", "Try \(attempt): the engine answers but did not become the Mac's output.")
                 if attempt == 2 { break }
             }
+            trace("POWER", "Try \(attempt) failed (engine \(connection == .online ? "online" : "not answering")), starting a fresh engine.")
             notice = "Starting the sound engine again..."
             await retireEngine(keepingLauncher: false)
             try? await Task.sleep(for: .seconds(1))
@@ -124,6 +131,7 @@ extension KnobModel {
         // Capture the failure before stopping the partial launch. OFF must really mean off.
         let diagnostic = launcher.startupFailure
         let failure: StartupFailure = diagnostic == .engineUnavailable && launcher.isRunning ? .routing : diagnostic
+        trace("POWER", "Knob could not turn ON: \(failure).")
         await retireEngine(keepingLauncher: false)
         powerOn = false
         wantsOn = false
@@ -149,6 +157,7 @@ extension KnobModel {
     /// Stops whatever engine is running without saving over the user's session, waits until it
     /// is really gone, and gives the speakers back.
     private func retireEngine(keepingLauncher: Bool) async {
+        trace("POWER", "Retiring the running engine.")
         _ = await succeeds("activateRouting", ["value": false])
         _ = await succeeds("shutdown", [:])
         if !keepingLauncher { launcher?.stop() }
@@ -187,15 +196,20 @@ extension KnobModel {
     func takeOverOutput(followingSystem: Bool) async {
         if followingSystem { await followSystemOutput() }
         let physical = outputUID.flatMap(HardwareDevices.device(uid:))
-        for _ in 0..<15 {   // the engine refuses until audio is flowing again after an output change
+        trace("OUTPUT", "Taking the Mac's output, playing through \(outputName(outputUID)).")
+        for attempt in 1...15 {   // the engine refuses until audio is flowing again after an output change
             if await succeeds("activateRouting", ["value": true]) {
                 VolumeHandoff.takeOver(from: physical)
                 notice = nil
                 await refreshState()
+                trace("OUTPUT", "Took the Mac's output on try \(attempt). The Mac's output is \(systemOutputName).")
+                logAudioHealth(after: "taking the output")
                 return
             }
             try? await Task.sleep(for: .milliseconds(200))
         }
+        trace("OUTPUT", "Gave up taking the Mac's output after 15 tries.")
+        logAudioHealth(after: "failing to take the output")
         notice = "Knob couldn't take over the sound output. Try again."
     }
 
@@ -204,12 +218,14 @@ extension KnobModel {
         let current = HardwareDevices.defaultOutputID
         guard let device = HardwareDevices.all().first(where: { $0.id == current && $0.isPhysicalOutput }),
               device.uid != outputUID else { return }
+        trace("OUTPUT", "Following the Sound menu from \(outputName(outputUID)) to \(outputName(device.uid)).")
         if await succeeds("setOutputUID", ["outputUID": device.uid]) { outputUID = device.uid }
     }
 
     /// Something else became the Mac's output (the Sound menu, or the engine stopping).
     /// Give the volume back right away; if Knob is meant to be on, take over again on the new output.
     private func defaultOutputChanged() {
+        trace("OUTPUT", "The Mac's output is now \(systemOutputName) (Knob wants ON: \(wantsOn), switching: \(switchingOutput), engine \(connection == .online ? "online" : "offline")).")
         guard !knobIsOutput else { return }
         VolumeHandoff.giveBack()
         routingActive = false
@@ -220,6 +236,49 @@ extension KnobModel {
         Task {
             await takeOverOutput(followingSystem: true)
             reclaiming = false
+        }
+    }
+
+    // MARK: Logging
+
+    private func trace(_ stage: String, _ message: String) { KnobShiftLog.append(stage: stage, message: message) }
+
+    private func outputName(_ uid: String?) -> String {
+        guard let uid else { return "no output" }
+        return outputs.first { $0.uid == uid }?.name ?? HardwareDevices.outputDevices().first { $0.uid == uid }?.name ?? uid
+    }
+
+    private var systemOutputName: String {
+        let id = HardwareDevices.defaultOutputID
+        guard let device = HardwareDevices.all().first(where: { $0.id == id }) else { return "unknown" }
+        return device.uid == HardwareDevices.knobUID ? "Knob" : outputName(device.uid)
+    }
+
+    /// What the engine reports a moment after a change, and each device's volume and mute: enough
+    /// to tell from the log whether sound reached the output and where it stopped. Reads only.
+    private func logAudioHealth(after change: String) {
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self else { return }
+            guard let root = (try? await engine.send("getState", [:])) as? [String: Any] else {
+                trace("HEALTH", "After \(change): the engine is not answering.")
+                return
+            }
+            let metrics = root["metrics"] as? [String: Any] ?? [:]
+            func metric(_ key: String) -> String { metrics[key].map { "\($0)" } ?? "?" }
+            let uid = root["outputUID"] as? String
+            let physical = uid.flatMap(HardwareDevices.device(uid:))
+            let knob = HardwareDevices.device(uid: HardwareDevices.knobUID)
+            func level(_ device: HardwareDevice?) -> String {
+                guard let device else { return "missing" }
+                let volume = HardwareDevices.volume(of: device.id).map { "\(Int(($0 * 100).rounded()))%" } ?? "no volume"
+                return HardwareDevices.isMuted(device.id) == true ? "\(volume), muted" : volume
+            }
+            trace("HEALTH", "After \(change): plays through \(outputName(uid)), the Mac's output is \(systemOutputName), "
+                + "routing \(root["routingActive"] ?? "?"), ready \(metric("ready")), private path \(metric("privatePath")), "
+                + "\(metric("outputSampleRate")) Hz, rendered \(metric("renderedFrames")), delivered \(metric("deliveredFrames")), "
+                + "underruns \(metric("underruns")), peaks \(metric("peakLeft")) and \(metric("peakRight")), "
+                + "output volume \(level(physical)), Knob volume \(level(knob)).")
         }
     }
 
@@ -254,6 +313,7 @@ extension KnobModel {
     /// then stops the engine.
     func stopEngine() async {
         guard launcher != nil, connection == .online else { return }
+        trace("POWER", "Stopping the engine and handing the output back.")
         wantsOn = false
         await saveSession()
         _ = await succeeds("activateRouting", ["value": false])
@@ -265,6 +325,7 @@ extension KnobModel {
         connection = .offline
         notice = nil
         startupFailure = nil
+        trace("POWER", "Knob is OFF. The Mac's output is \(systemOutputName).")
     }
 
     func quit() {
@@ -277,7 +338,11 @@ extension KnobModel {
     /// Plays through the output picked in Knob's menu. Switching hands the Mac its old output
     /// back for a moment, so while Knob is ON it takes the output again on the new device.
     func selectOutput(_ device: OutputDevice) {
-        guard !switchingOutput, device.uid != outputUID else { return }
+        guard !switchingOutput, device.uid != outputUID else {
+            trace("OUTPUT", "You picked \(device.name), ignored: \(switchingOutput ? "a switch is still running" : "it is already the output").")
+            return
+        }
+        trace("OUTPUT", "You picked \(device.name), switching from \(outputName(outputUID)).")
         let wasOn = powerOn || wantsOn
         let previous = outputUID
         outputUID = device.uid
@@ -289,7 +354,9 @@ extension KnobModel {
                 // Make it the Mac's output underneath Knob too, so OFF, quitting and the next ON
                 // all use the device picked here, not the one that was playing before.
                 if let hardware = HardwareDevices.device(uid: device.uid) { HardwareDevices.setDefaultOutput(hardware.id) }
+                trace("OUTPUT", "The engine now plays through \(device.name).")
             } else {
+                trace("OUTPUT", "The engine could not switch to \(device.name), staying on \(outputName(previous)).")
                 outputUID = previous
                 notice = "Knob couldn't switch to \(device.name). It is still playing on the previous output."
             }
