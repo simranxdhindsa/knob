@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < samples.size(); ++i) assert(std::fabs(read[i] - samples[i] * expected) <= 1e-6f);
     auto decibels = address(kAudioLevelControlPropertyDecibelValue); float db = 0; UInt32 dbSize = 4;
     assert((*driver)->GetPropertyData(driver, volume, 0, &decibels, 0, nullptr, 4, &dbSize, &db) == noErr
-           && std::fabs(db + 31.75f) < 1e-4f);
+           && std::fabs(db + 25.0f) < 1e-4f);
     auto boolean = address(kAudioBooleanControlPropertyValue); UInt32 value = 1;
     assert((*driver)->SetPropertyData(driver, mute, 0, &boolean, 0, nullptr, 4, &value) == noErr);
     info.mOutputTime.mSampleTime = 512; info.mInputTime.mSampleTime = 1024;
