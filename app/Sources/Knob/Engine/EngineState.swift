@@ -44,10 +44,14 @@ struct OutputDevice: Hashable, Identifiable {
         (json as? [[String: Any]] ?? []).compactMap { device in
             guard let uid = device["uid"] as? String, let name = device["name"] as? String,
                   (device["outputs"] as? NSNumber)?.intValue ?? 0 > 0,
-                  device["virtual"] as? Bool != true else { return nil }
+                  device["virtual"] as? Bool != true, !isSystemHelper(uid) else { return nil }
             return OutputDevice(uid: uid, name: name)
         }
     }
+
+    /// The device macOS makes behind the scenes for an app's own player (KnobShift's): never
+    /// something to pick as an output.
+    static func isSystemHelper(_ uid: String) -> Bool { uid.hasPrefix("CADefaultDeviceAggregate") }
 }
 
 /// The five effects, in the engine's order. `parameter` is the engine's name for it.

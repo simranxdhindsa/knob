@@ -51,68 +51,70 @@ struct KnobShiftQueue: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("QUEUE").font(.system(size: 9, weight: .bold)).tracking(0.9).foregroundStyle(surface.tertiary)
-                if !model.tracks.isEmpty || !model.pending.isEmpty {
-                    Text("\(model.tracks.count + model.pending.count)").font(.system(size: 9, weight: .bold)).foregroundStyle(surface.tertiary)
+                Text(showingPlaylists ? "PLAYLISTS" : "QUEUE").font(.system(size: 9, weight: .bold)).tracking(0.9).foregroundStyle(surface.tertiary)
+                if showingPlaylists {
+                    if !model.playlists.isEmpty {
+                        Text("\(model.playlists.count)").font(.system(size: 9, weight: .bold)).foregroundStyle(surface.tertiary)
+                    }
+                } else if !model.tracks.isEmpty || !model.queuePending.isEmpty {
+                    Text("\(model.tracks.count + model.queuePending.count)").font(.system(size: 9, weight: .bold)).foregroundStyle(surface.tertiary)
                 }
                 Spacer()
-                #if os(macOS)
-                if !model.playlists.isEmpty || !model.removedPlaylists.isEmpty { playlistsButton }
-                #endif
-                Button { model.toggleShuffle() } label: {
-                    Image(systemName: "shuffle")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(model.isShuffled ? Palette.accent : surface.tertiary)
-                        .frame(width: 24, height: 20)
-                        .background(Capsule().fill(model.isShuffled ? Palette.accent.opacity(0.14) : .clear))
-                        .shadow(color: model.isShuffled ? Palette.accentGlow.opacity(0.5) : .clear, radius: 4)
-                }
-                .buttonStyle(.plain)
-                .disabled(model.tracks.count < 2)
-                .help(model.isShuffled ? "Shuffle is on. Click to go back to your order." : "Shuffle the queue")
-                .accessibilityLabel(model.isShuffled ? "Shuffle on" : "Shuffle off")
-                .padding(.trailing, 8)
-                if !selection.isEmpty {
-                    Button { removeSelection() } label: {
-                        Text("REMOVE \(selection.count)").font(.system(size: 9, weight: .bold)).tracking(0.6)
-                            .foregroundStyle(Palette.accent)
+                playlistsButton
+                // Shuffle and the bin are for the queue, so they step aside for Playlists.
+                if !showingPlaylists {
+                    Button { model.toggleShuffle() } label: {
+                        Image(systemName: "shuffle")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(model.isShuffled ? Palette.accent : surface.tertiary)
+                            .frame(width: 24, height: 20)
+                            .background(Capsule().fill(model.isShuffled ? Palette.accent.opacity(0.14) : .clear))
+                            .shadow(color: model.isShuffled ? Palette.accentGlow.opacity(0.5) : .clear, radius: 4)
                     }
                     .buttonStyle(.plain)
-                    .help("Take the selected songs out of the queue. Delete does the same.")
-                    .padding(.trailing, 10)
-                } else if !model.tracks.isEmpty || !model.pending.isEmpty {
-                    Button { confirmingRemoveAll = true } label: {
-                        Image(systemName: "trash").font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(surface.tertiary).frame(width: 22, height: 20)
+                    .disabled(model.tracks.count < 2)
+                    .help(model.isShuffled ? "Shuffle is on. Click to go back to your order." : "Shuffle the queue")
+                    .accessibilityLabel(model.isShuffled ? "Shuffle on" : "Shuffle off")
+                    .padding(.trailing, 8)
+                    if !selection.isEmpty {
+                        Button { removeSelection() } label: {
+                            Text("REMOVE \(selection.count)").font(.system(size: 9, weight: .bold)).tracking(0.6)
+                                .foregroundStyle(Palette.accent)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Take the selected songs out of the queue. Delete does the same.")
+                        .padding(.trailing, 10)
+                    } else if !model.tracks.isEmpty || !model.queuePending.isEmpty {
+                        Button { confirmingRemoveAll = true } label: {
+                            Image(systemName: "trash").font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(surface.tertiary).frame(width: 22, height: 20)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Remove every song from the queue")
+                        .accessibilityLabel("Remove all songs")
+                        .padding(.trailing, 6)
                     }
-                    .buttonStyle(.plain)
-                    .help("Remove every song from the queue")
-                    .accessibilityLabel("Remove all songs")
-                    .padding(.trailing, 6)
                 }
                 addMusic
             }
-            .confirmationDialog("Remove all \(model.tracks.count + model.pending.count) songs from the queue?",
+            .confirmationDialog("Remove all \(model.tracks.count + model.queuePending.count) songs from the queue?",
                                 isPresented: $confirmingRemoveAll) {
                 Button("Remove all", role: .destructive) { selection = []; model.removeAll() }
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("The music files stay on your \(Platform.deviceName), so you can add them again later.")
             }
-            #if os(macOS)
             if showingPlaylists {
-                KnobShiftPlaylistRows(model: model, onSpotify: onSpotify, onYouTube: onYouTube)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-            #endif
-            if model.tracks.isEmpty && model.pending.isEmpty {
+                KnobShiftPlaylistsView(model: model, onSpotify: onSpotify, onYouTube: onYouTube)
+                    .transition(.opacity)
+            } else if model.tracks.isEmpty && model.queuePending.isEmpty {
                 empty
             } else {
                 // A List gives native drag to reorder, in your order and in shuffle alike.
                 List(selection: $selection) {
                     ForEach(model.tracks) { track in queueRow(row(track)) }
                         .onMove { model.move(fromOffsets: $0, toOffset: $1) }
-                    ForEach(model.pending) { song in queueRow(pendingRow(song)) }
+                    ForEach(model.queuePending) { song in queueRow(pendingRow(song)) }
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
@@ -130,8 +132,8 @@ struct KnobShiftQueue: View {
                 }
                 // Songs that left the queue (removed, or finished preparing under a new id) drop
                 // out of the selection.
-                .onChange(of: model.tracks.count + model.pending.count) {
-                    let present = Set(model.tracks.map(\.id)).union(model.pending.map(\.id))
+                .onChange(of: model.tracks.count + model.queuePending.count) {
+                    let present = Set(model.tracks.map(\.id)).union(model.queuePending.map(\.id))
                     selection.formIntersection(present)
                 }
                 // Shuffle animates; mapping every song's id on each change was slow with
@@ -148,11 +150,14 @@ struct KnobShiftQueue: View {
         .screenCard(radius: 16, padding: 14)
     }
 
-    #if os(macOS)
-    /// Shows or hides the Spotify and YouTube playlist rows above the songs. Lit while they show,
-    /// and while a playlist is downloading, so progress is never out of sight unnoticed.
+    /// Switches between the queue and the Playlists view, where imported and synced songs wait
+    /// to be added. Lit while playlists show, and on the Mac while one is downloading.
     private var playlistsButton: some View {
+        #if os(macOS)
         let downloading = !model.spotifyProgress.isEmpty
+        #else
+        let downloading = false
+        #endif
         return Button {
             withAnimation(Motion.gentle) { showingPlaylists.toggle() }
         } label: {
@@ -163,11 +168,10 @@ struct KnobShiftQueue: View {
                 .background(Capsule().fill(showingPlaylists ? Palette.accent.opacity(0.14) : .clear))
         }
         .buttonStyle(.plain)
-        .help(showingPlaylists ? "Hide playlists" : "Show playlists")
-        .accessibilityLabel(showingPlaylists ? "Hide playlists" : "Show playlists")
+        .help(showingPlaylists ? "Back to the queue" : "Playlists")
+        .accessibilityLabel(showingPlaylists ? "Back to the queue" : "Playlists")
         .padding(.trailing, 8)
     }
-    #endif
 
     /// ADD MUSIC: songs on this Mac, or, where Spotify import is available, a dropdown with both
     /// (KnobShiftAddMusic). The header looks the same either way, so it never changes size.

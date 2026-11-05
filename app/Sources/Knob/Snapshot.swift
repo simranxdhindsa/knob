@@ -52,6 +52,18 @@ enum Snapshot {
                     }
                 }
             }
+            // The Playlists view and one playlist opened, from sample songs in a scratch folder.
+            let library = sampleLibrary()
+            for (schemeName, scheme) in [("dark", ColorScheme.dark), ("light", ColorScheme.light)] {
+                render(KnobShiftPlaylistsView(model: library).padding(14).frame(width: 360, height: 300)
+                    .background(SurfaceBackground(radius: 16)).padding(12).background(Palette.of(scheme).panelBottom)
+                    .environment(\.surface, .glass).environment(\.colorScheme, scheme), scheme: scheme,
+                       to: folder.appendingPathComponent("knobshift-playlists-\(schemeName).png"))
+                render(KnobShiftPlaylistDetail(model: library, playlist: library.playlists[0], onBack: {}).padding(14).frame(width: 360, height: 420)
+                    .background(SurfaceBackground(radius: 16)).padding(12).background(Palette.of(scheme).panelBottom)
+                    .environment(\.surface, .glass).environment(\.colorScheme, scheme), scheme: scheme,
+                       to: folder.appendingPathComponent("knobshift-playlist-\(schemeName).png"))
+            }
             // The Spotify sheet: its one time notice, and the form logged in with a status line.
             let spotify = KnobShiftModel(restoresQueue: false)
             spotify.showSpotifyPreviewForSnapshot()
@@ -167,6 +179,42 @@ enum Snapshot {
             exit(0)
         }
         app.run()
+    }
+
+    /// Two playlists for the Playlists snapshots: three songs downloaded, one on its way and one
+    /// not found, in a scratch folder that KNOB_SPOTIFY_ROOT points the playlists at.
+    @MainActor
+    private static func sampleLibrary() -> KnobShiftModel {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("knob-snapshot-playlists/Spotify")
+        setenv("KNOB_SPOTIFY_ROOT", root.path, 1)
+        let ids = ["7gBjvaMxE92ezPBMljMAcq", "5tEdOJbKBTR8vibjz1cHTF", "2uBAFvIOvyOm4Glz7LwehN", "0lfiPRY2oD5cj4z4xG3DTL", "26pvjgrXe1GDLHWAZ6VNFE"]
+        let road = KnobShiftPlaylist(id: "demoroad", name: "Punjabi Road Trip", link: "", kind: .playlist,
+                                     folderName: "Punjabi Road Trip", spotifyOrder: ids, addedAt: Date())
+        let liked = KnobShiftPlaylist(id: "liked", name: "Liked Songs", link: "saved", kind: .liked,
+                                      folderName: "Liked Songs", spotifyOrder: [], addedAt: Date())
+        let folder = KnobShiftPlaylists.folder(for: road)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        for (index, name) in ["Do Gallan - Garry Sandhu", "Ghostface Killah - Sidhu Moose Wala", "No Luck - TEJAY, K28"].enumerated() {
+            FileManager.default.createFile(atPath: folder.appendingPathComponent("\(index + 1) \(name) [\(ids[index])].m4a").path, contents: Data())
+        }
+        let model = KnobShiftModel(restoresQueue: false)
+        model.playlists = [road, liked]
+        var coming = KnobShiftModel.PendingSong(url: folder.appendingPathComponent("\(ids[3]).pending"))
+        coming.spotifyId = ids[3]
+        coming.playlistId = road.id
+        coming.spotifyName = "Sardaari"
+        coming.spotifyArtist = "Himmat Sandhu"
+        coming.waitingForDownload = true
+        coming.joinsQueue = false
+        coming.stage = "Downloading"
+        var missing = coming
+        missing.spotifyId = ids[4]
+        missing.spotifyName = "Zindagi"
+        missing.spotifyArtist = "Prem Dhillon"
+        missing.stage = nil
+        missing.failure = "Not found"
+        model.pending = [coming, missing]
+        return model
     }
 
     private static func render<V: View>(_ view: V, scheme: ColorScheme, to url: URL) {

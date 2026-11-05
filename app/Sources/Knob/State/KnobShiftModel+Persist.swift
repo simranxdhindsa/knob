@@ -101,7 +101,7 @@ extension KnobShiftModel {
     /// them back.
     func persistQueueNow() {
         let paths = (isShuffled ? unshuffled : tracks).map { $0.url.path }
-            + pending.filter { !$0.waitingForDownload }.map { $0.url.path }
+            + pending.filter { !$0.waitingForDownload && $0.joinsQueue }.map { $0.url.path }
         UserDefaults.standard.set(paths, forKey: PersistKey.knobShiftQueue.rawValue)
         rememberNowPlaying()
     }

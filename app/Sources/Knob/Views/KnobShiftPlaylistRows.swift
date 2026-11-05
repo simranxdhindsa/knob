@@ -10,6 +10,10 @@ struct KnobShiftPlaylistRows: View {
     /// Open the Add sheets: the song picker for an update lives there.
     var onSpotify: () -> Void = {}
     var onYouTube: () -> Void = {}
+    /// In the Playlists view the rows take the whole height and open a playlist when clicked;
+    /// otherwise up to three show and more scroll.
+    var fills = false
+    var onOpen: ((KnobShiftPlaylist) -> Void)? = nil
     @State private var confirmRemove: KnobShiftPlaylist?
     @State private var confirmDelete: KnobShiftRemovedPlaylist?
     @State private var showRemoved = false
@@ -25,8 +29,8 @@ struct KnobShiftPlaylistRows: View {
                 }
             }
             .scrollIndicators(.never)
-            .frame(maxHeight: model.playlists.count + (showRemoved ? model.removedPlaylists.count : 0) > 3 ? 150 : nil)
-            .fixedSize(horizontal: false, vertical: model.playlists.count + (showRemoved ? model.removedPlaylists.count : 0) <= 3)
+            .frame(maxHeight: !fills && model.playlists.count + (showRemoved ? model.removedPlaylists.count : 0) > 3 ? 150 : nil)
+            .fixedSize(horizontal: false, vertical: !fills && model.playlists.count + (showRemoved ? model.removedPlaylists.count : 0) <= 3)
             .confirmationDialog("Remove \(confirmRemove?.name ?? "this playlist")?", isPresented: Binding(
                 get: { confirmRemove != nil }, set: { if !$0 { confirmRemove = nil } }), titleVisibility: .visible) {
                 Button("Remove", role: .destructive) { if let playlist = confirmRemove { model.removePlaylist(playlist) } }
@@ -47,22 +51,30 @@ struct KnobShiftPlaylistRows: View {
     private func service(_ playlist: KnobShiftPlaylist) -> String { playlist.source == .youtube ? "YouTube" : "Spotify" }
 
     private func row(_ playlist: KnobShiftPlaylist) -> some View {
-        let count = model.songCount(in: playlist)
+        let count = model.playlistCount(playlist)
         let progress = model.spotifyProgress[playlist.id]
         let failed = progress == nil ? model.failedCount(in: playlist) : 0
         return HStack(spacing: 10) {
-            Image(systemName: icon(playlist.kind)).font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.accent)
-                .frame(width: 16)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(playlist.name).font(.system(size: 11, weight: .semibold)).foregroundStyle(surface.text).lineLimit(1)
-                if let progress {
-                    KnobShiftImportBar(progress: progress, compact: true)
-                } else {
-                    Text(failed > 0 ? "\(count.ready) of \(count.total) ready, \(failed) not downloaded" : "\(count.total) song\(count.total == 1 ? "" : "s") from \(service(playlist))")
-                        .font(.system(size: 9.5)).foregroundStyle(surface.tertiary).lineLimit(1)
+            HStack(spacing: 10) {
+                Image(systemName: KnobShiftPlaylistDetail.icon(playlist.kind)).font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.accent)
+                    .frame(width: 16)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(playlist.name).font(.system(size: 11, weight: .semibold)).foregroundStyle(surface.text).lineLimit(1)
+                    if let progress {
+                        KnobShiftImportBar(progress: progress, compact: true)
+                    } else {
+                        Text(failed > 0 ? "\(count.ready) of \(count.total) ready, \(failed) not downloaded" : "\(count.total) song\(count.total == 1 ? "" : "s") from \(service(playlist))")
+                            .font(.system(size: 9.5)).foregroundStyle(surface.tertiary).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 4)
+                if onOpen != nil {
+                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(surface.tertiary)
                 }
             }
-            Spacer(minLength: 4)
+            .contentShape(Rectangle())
+            .onTapGesture { onOpen?(playlist) }
+            .help(onOpen == nil ? "" : "Open \(playlist.name) to add its songs")
             if progress != nil {
                 Button { model.cancelDownload(playlist) } label: {
                     Image(systemName: "stop.fill").font(.system(size: 9, weight: .bold))
@@ -135,14 +147,5 @@ struct KnobShiftPlaylistRows: View {
         }
         .padding(.horizontal, 10)
         .frame(height: 36)
-    }
-
-    private func icon(_ kind: KnobShiftPlaylist.Kind) -> String {
-        switch kind {
-        case .playlist: return "music.note.list"
-        case .album: return "square.stack"
-        case .song: return "music.note"
-        case .liked: return "heart.fill"
-        }
     }
 }
