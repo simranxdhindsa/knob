@@ -14,7 +14,12 @@ struct KnobShiftPlaylistsView: View {
 
     var body: some View {
         Group {
-            if let playlist = model.playlists.first(where: { $0.id == openId }) {
+            if openId == Self.allSongs {
+                KnobShiftPlaylistDetail(model: model, playlist: nil) {
+                    withAnimation(Motion.gentle) { openId = nil }
+                }
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+            } else if let playlist = model.playlists.first(where: { $0.id == openId }) {
                 KnobShiftPlaylistDetail(model: model, playlist: playlist) {
                     withAnimation(Motion.gentle) { openId = nil }
                 }
@@ -25,7 +30,11 @@ struct KnobShiftPlaylistsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(.top, 4)
             } else {
-                list.transition(.opacity)
+                VStack(spacing: 6) {
+                    if !model.playlists.isEmpty { allSongsRow }
+                    list
+                }
+                .transition(.opacity)
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)
@@ -48,6 +57,29 @@ struct KnobShiftPlaylistsView: View {
         Haptics.tick()
         withAnimation(Motion.gentle) { openId = playlist.id }
     }
+
+    /// Opens every playlist's songs together, in the same screen as a single playlist.
+    private var allSongsRow: some View {
+        Button {
+            Haptics.tick()
+            withAnimation(Motion.gentle) { openId = Self.allSongs }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "music.note").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.accent).frame(width: 18)
+                Text("All Songs").font(.system(size: 12, weight: .semibold)).foregroundStyle(surface.text)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(surface.tertiary)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 36)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(surface.fill))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("All Songs")
+    }
+
+    private static let allSongs = "all songs"
 
     #if os(iOS)
     private func phoneRow(_ playlist: KnobShiftPlaylist) -> some View {
@@ -86,8 +118,11 @@ struct KnobShiftPlaylistsView: View {
 /// downloaded say why. Tapping a song adds it; its menu also plays it now.
 struct KnobShiftPlaylistDetail: View {
     @ObservedObject var model: KnobShiftModel
-    let playlist: KnobShiftPlaylist
+    /// nil lists every playlist's songs together, with shuffle in the header.
+    let playlist: KnobShiftPlaylist?
     var onBack: () -> Void
+    /// The song whose YouTube matches are open, one at a time.
+    @State private var pasting: String?
     @Environment(\.surface) private var surface
 
     #if os(iOS)
@@ -97,7 +132,7 @@ struct KnobShiftPlaylistDetail: View {
     #endif
 
     var body: some View {
-        let songs = model.playlistSongs(playlist)
+        let songs = playlist.map(model.playlistSongs) ?? model.allPlaylistSongs()
         let ready = songs.filter { $0.url != nil }
         let fresh = ready.filter { !model.isQueued($0.url!) }
         VStack(alignment: .leading, spacing: 10) {
@@ -109,10 +144,33 @@ struct KnobShiftPlaylistDetail: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("All playlists")
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(Self.title(playlist)).font(.system(size: Self.nameSize + 1, weight: .semibold)).foregroundStyle(surface.text).lineLimit(1)
+                    Text(playlist.map(Self.title) ?? "All Songs").font(.system(size: Self.nameSize + 1, weight: .semibold)).foregroundStyle(surface.text).lineLimit(1)
                     Text("\(ready.count) of \(songs.count) songs ready").font(.system(size: Self.detailSize)).foregroundStyle(surface.tertiary)
                 }
                 Spacer(minLength: 0)
+                #if os(macOS)
+                let failed = songs.filter(\.isFailed).count
+                if failed > 0 {
+                    Button("RETRY \(failed)") {
+                        if let playlist { model.retryFailed(playlist) } else { model.retryAllFailed() }
+                    }
+                    .buttonStyle(.plain).font(.system(size: 9, weight: .bold)).foregroundStyle(Palette.accent)
+                    .help("Try every song that did not download again")
+                }
+                #endif
+                if playlist == nil {
+                    Button {
+                        Haptics.mark()
+                        Task { await model.shuffleAll(ready) }
+                    } label: {
+                        Image(systemName: "shuffle").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.accent)
+                            .frame(width: 30, height: 28).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(ready.count < 2)
+                    .help("Shuffle all songs and play")
+                    .accessibilityLabel("Shuffle all songs and play")
+                }
             }
             HStack(spacing: 8) {
                 action("PLAY ALL", symbol: "play.fill", filled: true) { Task { await model.play(ready) } }
@@ -126,6 +184,13 @@ struct KnobShiftPlaylistDetail: View {
                 LazyVStack(spacing: 2) {
                     ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
                         row(song, number: index + 1)
+                        #if os(macOS)
+                        if pasting == song.id {
+                            KnobShiftSongMatches(model: model, song: song) {
+                                withAnimation(Motion.gentle) { pasting = nil }
+                            }
+                        }
+                        #endif
                     }
                 }
             }
@@ -197,10 +262,21 @@ struct KnobShiftPlaylistDetail: View {
         case .failed(let reason):
             HStack(spacing: 8) {
                 Text(reason).font(.system(size: Self.detailSize - 0.5)).foregroundStyle(Palette.accent).lineLimit(1)
-                if let row = model.pending.first(where: { $0.playlistId == playlist.id && $0.spotifyId == song.id }) {
+                if let row = model.pending.first(where: { (playlist == nil || $0.playlistId == playlist?.id) && $0.spotifyId == song.id }) {
                     Button("RETRY") { model.retry(row) }
                         .buttonStyle(.plain).font(.system(size: 9, weight: .bold)).foregroundStyle(Palette.accent)
                 }
+                #if os(macOS)
+                Button {
+                    withAnimation(Motion.gentle) { pasting = pasting == song.id ? nil : song.id }
+                } label: {
+                    Image(systemName: "link").font(.system(size: 10, weight: .bold)).foregroundStyle(Palette.accent)
+                        .frame(width: 20, height: 24).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Find this song on YouTube")
+                .accessibilityLabel("Find \(song.name) on YouTube")
+                #endif
             }
         }
     }

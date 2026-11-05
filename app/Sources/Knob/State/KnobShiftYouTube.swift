@@ -70,17 +70,28 @@ final class KnobShiftYouTube: @unchecked Sendable {
         return read
     }
 
+    /// The top YouTube matches for a song, for the person to pick from.
+    func matches(for query: String, id: UUID) async throws -> [KnobShiftYouTubeParsing.Match] {
+        let result = await run(KnobShiftYouTubeParsing.matchArguments(query), id: id, idleLimit: 60) { _ in }
+        if result.cancelled { throw CancellationError() }
+        if result.stalled { throw KnobShiftYouTubeParsing.Failure.stalled }
+        guard let json = result.lines.last(where: { $0.hasPrefix("{") }) else {
+            throw KnobShiftYouTubeParsing.classify(result.lines) ?? .failed
+        }
+        return KnobShiftYouTubeParsing.matches(from: Data(json.utf8))
+    }
+
     /// Downloads one song into `folder`, or with `search` the closest match YouTube finds for its
     /// artist and name. Each line of yt-dlp's output goes to `onLine` as it arrives.
     func download(_ song: KnobShiftSpotDL.Song, into folder: URL, search: Bool, id: UUID, browser: KnobShiftYouTubeBrowser? = nil,
-                  onLine: @escaping @Sendable (String) -> Void) async -> KnobShiftHelperProcess.Result {
-        guard let ffmpeg = KnobShiftSpotDL.ffmpeg, KnobShiftYouTubeParsing.isVideoId(song.song_id) else {
+                  video: String? = nil, onLine: @escaping @Sendable (String) -> Void) async -> KnobShiftHelperProcess.Result {
+        guard let ffmpeg = KnobShiftSpotDL.ffmpeg, KnobShiftYouTubeParsing.isVideoId(video ?? song.song_id) else {
             return KnobShiftHelperProcess.Result(status: -1, lines: [], cancelled: false, stalled: false)
         }
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let arguments = search
             ? KnobShiftYouTubeParsing.searchArguments(for: song, into: folder, ffmpeg: ffmpeg.path, browser: browser)
-            : KnobShiftYouTubeParsing.downloadArguments(for: song, into: folder, ffmpeg: ffmpeg.path, browser: browser)
+            : KnobShiftYouTubeParsing.downloadArguments(for: song, into: folder, ffmpeg: ffmpeg.path, browser: browser, video: video)
         return await run(arguments, id: id, idleLimit: 300, browser: browser, onLine: onLine)
     }
 

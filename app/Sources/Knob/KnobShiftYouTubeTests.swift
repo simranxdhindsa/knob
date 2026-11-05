@@ -159,6 +159,20 @@ enum KnobShiftYouTubeTests {
         let download = KnobShiftYouTubeParsing.downloadArguments(for: song, into: folder, ffmpeg: "/x/ffmpeg")
         expect(download.suffix(2) == ["--", "https://www.youtube.com/watch?v=fOT0BUpITw8"], "the link comes last, after --, so it is never read as an option")
         expect(!download.contains("--cookies") && !download.contains("--cookies-from-browser"), "downloads never use any browser's sign in")
+        let onThisMac = KnobShiftYouTubeBrowser.choices(current: .off) { $0 == "com.apple.Safari" || $0 == "com.vivaldi.Vivaldi" }
+        expect(onThisMac == [.off, .safari, .vivaldi], "the picker offers only browsers this Mac has")
+        expect(KnobShiftYouTubeBrowser.choices(current: .opera) { _ in false } == [.off, .opera], "and keeps a choice whose browser was removed")
+        expect(KnobShiftSpotDL.browserArguments(.vivaldi) == ["--yt-dlp-args", "--cookies-from-browser vivaldi"], "a new browser reaches the downloader")
+        let spotifyId = "7HHFm8uZroJeawy7cmxXXl"
+        let spotifySong = KnobShiftSpotDL.Song(name: "Song", artists: ["Artist"], artist: "Artist", album_name: nil, duration: 1,
+                                               song_id: spotifyId, url: "https://open.spotify.com/track/\(spotifyId)", list_name: nil, list_position: 1)
+        let handPicked = KnobShiftYouTubeParsing.downloadArguments(for: spotifySong, into: folder, ffmpeg: "/x/ffmpeg", video: "fOT0BUpITw8")
+        expect(handPicked.last == "https://www.youtube.com/watch?v=fOT0BUpITw8", "a pasted video is what gets downloaded")
+        expect(KnobShiftPlaylists.songId(inFileName: KnobShiftYouTubeParsing.fileName(for: spotifySong)) == spotifyId, "and it is saved under the Spotify song")
+        expect(KnobShiftYouTubeParsing.videoId(inLink: "https://youtu.be/fOT0BUpITw8") == "fOT0BUpITw8", "a short link gives its video")
+        expect(KnobShiftYouTubeParsing.videoId(inLink: "https://www.youtube.com/watch?v=fOT0BUpITw8&list=PLabc") == "fOT0BUpITw8", "a video inside a playlist gives that video")
+        expect(KnobShiftYouTubeParsing.videoId(inLink: "https://www.youtube.com/playlist?list=PLabc") == nil, "a whole playlist is refused")
+        expect(KnobShiftYouTubeParsing.videoId(inLink: "https://example.com/watch?v=fOT0BUpITw8") == nil, "another site is refused")
         let signedIn = KnobShiftYouTubeParsing.downloadArguments(for: song, into: folder, ffmpeg: "/x/ffmpeg", browser: .firefox)
         expect(signedIn.contains("--cookies-from-browser") && signedIn.contains("firefox") && signedIn.suffix(2).first == "--",
                "with a browser turned on, its sign in is used and the link still comes last")
