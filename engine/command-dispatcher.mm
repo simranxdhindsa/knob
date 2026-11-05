@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 #include "command-dispatcher.h"
+#include "engine-log.h"
 #include "ipc-server.h"
 
 namespace knob {
@@ -50,9 +51,14 @@ std::string dispatchCommand(const std::string& request, AudioBridge& bridge, Rou
                 if (next == virtualUID) throw std::runtime_error("virtual device is not a physical output");
                 findDevice(next, false);
                 const auto previous = outputUID;
-                if (!routing.restore()) throw std::runtime_error("restore physical output before switching devices");
+                engineLog("switching output from " + previous + " to " + next);
+                if (!routing.restore()) {
+                    engineLog("switch refused: the physical output could not be restored first");
+                    throw std::runtime_error("restore physical output before switching devices");
+                }
                 try { dsp.prepare(bridge, next); bridge.start(next); outputUID = next; }
-                catch (...) {
+                catch (const std::exception& error) {
+                    engineLog(std::string("switch failed, going back to ") + previous + ": " + error.what());
                     try { dsp.prepare(bridge, previous); bridge.start(previous); } catch (...) {}
                     throw;
                 }
@@ -63,8 +69,12 @@ std::string dispatchCommand(const std::string& request, AudioBridge& bridge, Rou
                 if (!boolean(object[@"value"])) throw std::runtime_error("routing value must be boolean");
                 const bool requested = [object[@"value"] boolValue];
                 if (requested && !bridge.ready()) throw std::runtime_error("engine is not ready; output was not changed");
+                engineLog(requested ? "Knob becomes the Mac's output" : "handing the Mac's output back");
                 if (requested) routing.activate(bridge.inputDevice());
-                else if (!routing.restore()) throw std::runtime_error("physical output restoration failed; retry before stopping engine");
+                else if (!routing.restore()) {
+                    engineLog("handing back failed: the physical output could not be restored");
+                    throw std::runtime_error("physical output restoration failed; retry before stopping engine");
+                }
                 activate = requested;
                 return success();
             }

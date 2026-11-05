@@ -1,4 +1,5 @@
 #include "audio-bridge.h"
+#include "engine-log.h"
 #include "command-dispatcher.h"
 #include "ipc-server.h"
 #include "routing-guard.h"
@@ -66,9 +67,11 @@ int main(int argc, char** argv) {
                 return knob::dispatchCommand(request, bridge, routing, dsp, outputUID, activate, shutdown);
             });
             if (routing.owned() && knob::deviceUID(knob::defaultOutput()) != knob::virtualUID) {
+                knob::engineLog("the Mac's output moved to " + knob::deviceUID(knob::defaultOutput()) + ", so Knob lets go of it");
                 activate = false; routing.restore();
             }
             if (bridge.changed()) {
+                knob::engineLog("an audio device changed (unplugged, or a new sample rate), restarting audio on " + outputUID);
                 routing.restore(); dsp.prepare(bridge, outputUID); bridge.start(outputUID);
             }
             if (activate && !routing.owned() && bridge.ready()) routing.activate(bridge.inputDevice());

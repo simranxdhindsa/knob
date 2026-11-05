@@ -1,4 +1,5 @@
 #include "audio-bridge.h"
+#include "engine-log.h"
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
@@ -78,6 +79,8 @@ void AudioBridge::start(const std::string& outputUID) {
         captured_ = rendered_ = delivered_ = overruns_ = underruns_ = hostTime_ = 0; driftPPM_ = 0; changed_ = false;
         captureTick_ = renderTick_ = aliveTick_ = 0;
         const bool privately = shared_.open(input_);
+        engineLog("audio starting to " + outputUID + " at " + std::to_string(int(outputRate_)) + " Hz through " +
+                  (privately ? "the private path" : "input capture (the driver has no private path, or it could not attach)"));
         if (!privately) checkAudio(AudioDeviceCreateIOProcID(input_, capture, this, &captureID_), "create capture IOProc");
         checkAudio(AudioDeviceCreateIOProcID(output_, render, this, &renderID_), "create render IOProc");
         disableInputStreams(output_, renderID_);
@@ -96,6 +99,10 @@ void AudioBridge::start(const std::string& outputUID) {
     } catch (...) { stop(); throw; }
 }
 void AudioBridge::stop() noexcept {
+    if (renderID_ || captureID_) {
+        try { engineLog("audio stopping after " + std::to_string(rendered_.load()) + " frames rendered, " + std::to_string(delivered_.load()) +
+                        " delivered, " + std::to_string(underruns_.load()) + " underruns"); } catch (...) {}
+    }
     if (captureID_) { AudioDeviceStop(input_, captureID_); AudioDeviceDestroyIOProcID(input_, captureID_); captureID_ = nullptr; }
     if (renderID_) { AudioDeviceStop(output_, renderID_); AudioDeviceDestroyIOProcID(output_, renderID_); renderID_ = nullptr; }
     shared_.close(input_);
