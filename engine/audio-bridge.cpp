@@ -76,12 +76,14 @@ void AudioBridge::start(const std::string& outputUID) {
         tickNanoseconds_ = double(timebase.numer) / timebase.denom;
         ring_.reset(); resampler_.prepare(outputRate_);
         captured_ = rendered_ = delivered_ = overruns_ = underruns_ = hostTime_ = 0; driftPPM_ = 0; changed_ = false;
-        captureTick_ = renderTick_ = 0;
-        checkAudio(AudioDeviceCreateIOProcID(input_, capture, this, &captureID_), "create capture IOProc");
+        captureTick_ = renderTick_ = aliveTick_ = 0;
+        const bool privately = shared_.open(input_);
+        if (!privately) checkAudio(AudioDeviceCreateIOProcID(input_, capture, this, &captureID_), "create capture IOProc");
         checkAudio(AudioDeviceCreateIOProcID(output_, render, this, &renderID_), "create render IOProc");
         disableInputStreams(output_, renderID_);
         listeners(true);
         checkAudio(AudioDeviceStart(output_, renderID_), "start render");
+        if (privately) return;
         // Restarting capture right after stopping it (switching outputs) can race the HAL's
         // asynchronous stop of the previous IO, and Knob's device refuses the overlapping start.
         // Control thread only, so a short wait and retry is safe.
@@ -96,6 +98,7 @@ void AudioBridge::start(const std::string& outputUID) {
 void AudioBridge::stop() noexcept {
     if (captureID_) { AudioDeviceStop(input_, captureID_); AudioDeviceDestroyIOProcID(input_, captureID_); captureID_ = nullptr; }
     if (renderID_) { AudioDeviceStop(output_, renderID_); AudioDeviceDestroyIOProcID(output_, renderID_); renderID_ = nullptr; }
+    shared_.close(input_);
     if (listening_) listeners(false);
     input_ = output_ = 0;
 }
@@ -113,6 +116,18 @@ OSStatus AudioBridge::capture(AudioDeviceID, const AudioTimeStamp*, const AudioB
     if (stamp && (stamp->mFlags & kAudioTimeStampHostTimeValid)) self.hostTime_.store(stamp->mHostTime, std::memory_order_relaxed);
     return noErr;
 }
+template <class Ring> UInt32 AudioBridge::pull(Ring& ring, UInt32 frames, bool& missing) noexcept {
+    resampler_.update(ring.available(), frames);
+    driftPPM_.store(resampler_.ppm(), std::memory_order_relaxed);
+    UInt32 delivered = 0;
+    for (UInt32 i = 0; i < frames; ++i) {
+        StereoFrame frame;
+        bool valid = resampler_.next(ring, frame);
+        missing |= !valid; delivered += valid ? 1 : 0;
+        renderScratch_[i * 2] = frame.left; renderScratch_[i * 2 + 1] = frame.right;
+    }
+    return delivered;
+}
 OSStatus AudioBridge::render(AudioDeviceID, const AudioTimeStamp*, const AudioBufferList*,
                             const AudioTimeStamp*, AudioBufferList* output, const AudioTimeStamp*, void* context) {
     auto& self = *static_cast<AudioBridge*>(context);
@@ -122,15 +137,19 @@ OSStatus AudioBridge::render(AudioDeviceID, const AudioTimeStamp*, const AudioBu
             if (output->mBuffers[i].mData) std::memset(output->mBuffers[i].mData, 0, output->mBuffers[i].mDataByteSize);
         self.underruns_.fetch_add(1, std::memory_order_relaxed); return noErr;
     }
-    self.resampler_.update(self.ring_.available(), frames);
-    self.driftPPM_.store(self.resampler_.ppm(), std::memory_order_relaxed);
     bool missing = false; UInt32 delivered = 0;
-    for (UInt32 i = 0; i < frames; ++i) {
-        StereoFrame frame;
-        bool valid = self.resampler_.next(self.ring_, frame);
-        missing |= !valid; delivered += valid ? 1 : 0;
-        self.renderScratch_[i * 2] = frame.left; self.renderScratch_[i * 2 + 1] = frame.right;
+    const bool privately = self.shared_.active();
+    if (privately) {
+        self.shared_.trim(4096, 1024);
+        // Nothing playing on the Mac is silence here, not a fault.
+        const bool silent = self.shared_.available() == 0;
+        delivered = self.pull(self.shared_, frames, missing);
+        if (silent) missing = false;
+        self.captured_.store(self.shared_.written(), std::memory_order_relaxed);
+    } else {
+        delivered = self.pull(self.ring_, frames, missing);
     }
+    self.aliveTick_.store(mach_absolute_time(), std::memory_order_relaxed);
     if (self.processor_) self.processor_(self.processorContext_, self.renderScratch_.data(), frames);
     float peakLeft = 0, peakRight = 0;
     for (UInt32 i = 0; i < frames; ++i) {
@@ -147,6 +166,12 @@ OSStatus AudioBridge::render(AudioDeviceID, const AudioTimeStamp*, const AudioBu
 }
 bool AudioBridge::ready() const noexcept {
     const auto now = mach_absolute_time(), capture = captureTick_.load(), render = renderTick_.load();
+    // On the private path a silent Mac sends nothing at all, so a running speaker callback is
+    // what counts: audio goes through it the moment any app plays.
+    if (shared_.active()) {
+        const auto alive = aliveTick_.load();
+        return renderID_ && alive && now >= alive && (now - alive) * tickNanoseconds_ < 500000000;
+    }
     const bool fresh = capture && render && now >= capture && now >= render &&
                        (now - capture) * tickNanoseconds_ < 500000000 && (now - render) * tickNanoseconds_ < 500000000;
     return fresh && captured_.load() >= AdaptiveResampler::targetFrames && delivered_.load() > 0 && hostTime_.load() != 0 && captureID_ && renderID_;
@@ -169,7 +194,8 @@ std::string AudioBridge::metricsJSON() const {
     out << "{\"capturedFrames\":" << captured_.load() << ",\"renderedFrames\":" << rendered_.load()
         << ",\"deliveredFrames\":" << delivered_.load()
         << ",\"overruns\":" << overruns_.load() << ",\"underruns\":" << underruns_.load()
-        << ",\"occupancyFrames\":" << ring_.available() << ",\"driftPPM\":" << driftPPM_.load()
+        << ",\"occupancyFrames\":" << (shared_.active() ? shared_.available() : ring_.available()) << ",\"driftPPM\":" << driftPPM_.load()
+        << ",\"privatePath\":" << (shared_.active() ? "true" : "false")
         << ",\"captureHostTime\":" << hostTime_.load() << ",\"outputSampleRate\":" << outputRate_
         << ",\"peakLeft\":" << peakLeft_.load() << ",\"peakRight\":" << peakRight_.load()
         << ",\"targetQueueMs\":" << (AdaptiveResampler::targetFrames * 1000.0 / 48000)

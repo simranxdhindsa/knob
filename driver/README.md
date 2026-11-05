@@ -34,7 +34,9 @@ Plugin ID 1 owns device ID 2. The device owns input 3, output 4, output volume 5
 
 Volume is software gain applied once to mixed output before publication, with scalar [0,1] and decibel [−96,0] control views. Mute returns zero-valued loopback audio. Stream active flags are independently writable. Changed controls and running state notify the host outside realtime IO. Data source has one item, `Knob`; it is a stub selector, not physical-device routing.
 
-Custom device selector `'knvr'` is a read-only CFString `"1"`, registered via CustomPropertyInfoList. It identifies the stream/handshake contract version, not an engine-presence flag. CFString custom marshalling follows the SDK; no private shared-memory channel is used. Rates/formats are fixed and read-only, so configuration changes are not requested and configuration-change callbacks reject unsupported actions.
+Custom device selector `'knvr'` is a read-only CFString `"2"`, registered via CustomPropertyInfoList. It identifies the stream/handshake contract version, not an engine-presence flag. CFString custom marshalling follows the SDK.
+
+Custom device selector `'knsh'` is the private path to the engine (`src/loopback-shared.h`): the engine creates a shared memory block under a random name, writes that name here, and removes the name once the driver sets `attached`. It reads back empty; writing an empty string detaches. While attached, `WriteMix` also pushes the mixed output into the block's single-producer ring, so the engine needs no input IOProc and macOS shows no microphone indicator. A full ring drops the new block and counts it. Slots are always masked, so the engine's read index cannot reach outside the block. A replaced block stays mapped for four more attaches, because the audio thread may still hold it. The input stream stays for older engines. Rates/formats are fixed and read-only, so configuration changes are not requested and configuration-change callbacks reject unsupported actions.
 
 ## Provenance and verification limits
 

@@ -38,7 +38,9 @@ OSStatus kn_device_value(AudioObjectID o,const AudioObjectPropertyAddress* a,
     case kAudioDevicePropertyLatency: v=input?KN_DELAY:0; break;
     case kAudioDevicePropertySafetyOffset: v=0; break;
     case kAudioDevicePropertyZeroTimeStampPeriod: v=KN_PERIOD; break;
-    case KN_VERSION: return kn_string(n,out,CFSTR("1"));
+    case KN_VERSION: return kn_string(n,out,CFSTR("2"));
+    /* Write only: the private block's name is never read back. */
+    case KN_ATTACH: return kn_string(n,out,CFSTR(""));
     case kAudioDevicePropertyNominalSampleRate: {
         Float64 rate=48000; return kn_copy(n,out,&rate,sizeof(rate));
     }
@@ -66,10 +68,10 @@ OSStatus kn_device_value(AudioObjectID o,const AudioObjectPropertyAddress* a,
         AudioBufferList buffers={1,{{2,0,NULL}}}; return kn_copy(n,out,&buffers,sizeof(buffers));
     }
     case kAudioObjectPropertyCustomPropertyInfoList: {
-        AudioServerPlugInCustomPropertyInfo info={KN_VERSION,
-            kAudioServerPlugInCustomPropertyDataTypeCFString,
-            kAudioServerPlugInCustomPropertyDataTypeNone};
-        return kn_copy(n,out,&info,sizeof(info));
+        AudioServerPlugInCustomPropertyInfo info[]={
+            {KN_VERSION,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone},
+            {KN_ATTACH,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone}};
+        return kn_copy(n,out,info,sizeof(info));
     }
     default: return kAudioHardwareUnknownPropertyError;
     }

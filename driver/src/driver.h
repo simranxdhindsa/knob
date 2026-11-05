@@ -18,7 +18,7 @@ static inline float kn_db_to_scalar(float db) { return db <= KN_MIN_DB ? 0 : fmi
 static inline float kn_scalar_to_gain(float s) { return s <= 0 ? 0 : powf(10, kn_scalar_to_db(s) / 20); }
 
 enum { KN_DEVICE=2, KN_INPUT=3, KN_OUTPUT=4, KN_VOLUME=5, KN_MUTE=6, KN_SOURCE=7 };
-enum { KN_CAPACITY=32768, KN_PERIOD=512, KN_DELAY=512, KN_VERSION='knvr' };
+enum { KN_CAPACITY=32768, KN_PERIOD=512, KN_DELAY=512, KN_VERSION='knvr', KN_ATTACH='knsh' };
 extern AudioServerPlugInDriverRef kn_driver;
 extern AudioServerPlugInHostRef kn_host;
 extern _Atomic UInt32 kn_running, kn_gain_bits, kn_muted, kn_input_active, kn_output_active;
