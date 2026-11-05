@@ -1,3 +1,4 @@
+import SwiftUI
 import AppKit
 import Foundation
 
@@ -17,6 +18,8 @@ enum KnobShiftSpotifyCheck {
                 await selfTest(files: Array(arguments.dropFirst()))
             } else if arguments.first == "embed", let link = arguments.dropFirst().first {
                 await readEmbed(link)
+            } else if arguments.first == "cover", arguments.count >= 3 {
+                await coverCheck(URL(fileURLWithPath: arguments[1]), saveTo: URL(fileURLWithPath: arguments[2]))
             } else if arguments.first == "uat" {
                 await uat(count: Int(arguments.dropFirst().first ?? "") ?? 40)
             } else if let link = arguments.first {
@@ -41,6 +44,26 @@ enum KnobShiftSpotifyCheck {
             print("KnobShift embed check failed: \(error)")
             exit(1)
         }
+    }
+
+    /// `cover SONG PNG`: the real cover view in a real window, offscreen. It reads the song's cover,
+    /// fetches the sharp one from Spotify, and saves what it drew.
+    private static func coverCheck(_ song: URL, saveTo picture: URL) async {
+        let pixels = { (image: PlatformImage?) in image?.representations.first.map { "\($0.pixelsWide) x \($0.pixelsHigh)" } ?? "none" }
+        print("In the file:", pixels(await KnobShiftArtwork.load(song)))
+        let view = NSHostingView(rootView: AlbumArtwork(url: song, size: 400).padding(20))
+        view.frame = NSRect(x: 0, y: 0, width: 440, height: 440)
+        let window = NSWindow(contentRect: NSRect(x: -3000, y: -3000, width: 440, height: 440), styleMask: .borderless, backing: .buffered, defer: false)
+        window.contentView = view
+        window.orderFrontRegardless()
+        for _ in 0..<150 where KnobShiftArtwork.cachedSharp(song) == nil { try? await Task.sleep(for: .milliseconds(100)) }
+        try? await Task.sleep(for: .seconds(1))
+        print("Sharp:", pixels(KnobShiftArtwork.cachedSharp(song)))
+        if let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            try? bitmap.representation(using: .png, properties: [:])?.write(to: picture)
+        }
+        exit(0)
     }
 
     private static func selfTest(files: [String]) async {

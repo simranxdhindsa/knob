@@ -82,6 +82,10 @@ extension KnobShiftSpotifyCheck {
         expect(KnobShiftSpotDL.classify(["requests.exceptions.ConnectionError: Max retries exceeded"]) == .offline, "offline")
         expect(KnobShiftSpotDL.classify(["OSError: [Errno 28] No space left on device"]) == .noSpace, "disk full")
         expect(KnobShiftSpotDL.classify(["Saved 3 songs"]) == nil, "a normal run is no failure")
+        let thumbnail = "https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e0201ea9f0d1cc7c6a67766b7bd"
+        expect(KnobShiftArtwork.sharpLink(fromThumbnail: thumbnail)?.absoluteString == "https://i.scdn.co/image/ab67616d000082c101ea9f0d1cc7c6a67766b7bd",
+               "a cover's link gives its largest size")
+        expect(KnobShiftArtwork.sharpLink(fromThumbnail: "https://example.com/image/notacover") == nil, "anything else gives no link")
         // YouTube says this once, early in a long run, and hundreds of lines follow it.
         let long = KnobShiftHelperProcess.LineCollector { _ in }
         long.append(Data("Sign in to confirm you're not a bot\n".utf8))

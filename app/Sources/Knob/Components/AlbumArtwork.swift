@@ -18,6 +18,9 @@ struct AlbumArtwork: View {
     private var realOnly = false
     private var holdsGrey = false
 
+    /// Covers this big, in points, swap to the sharp version; smaller ones gain nothing from it.
+    private static let sharpFrom: CGFloat = 200
+
     /// `reveal` brings the cover up from grey when it first appears: a song that has just been
     /// prepared. `greyed` holds it there, while the song is prepared. A cover already read is
     /// there from the first frame, so its stand in never flashes.
@@ -28,7 +31,7 @@ struct AlbumArtwork: View {
         self.lit = lit
         self.animated = animated
         self.corner = corner
-        _image = State(initialValue: url.flatMap(KnobShiftArtwork.cached))
+        _image = State(initialValue: url.flatMap { (size >= Self.sharpFrom ? KnobShiftArtwork.cachedSharp($0) : nil) ?? KnobShiftArtwork.cached($0) })
         _shown = State(initialValue: !reveal && !greyed)
         realOnly = greyed
         holdsGrey = greyed
@@ -64,11 +67,13 @@ struct AlbumArtwork: View {
         }
         .task(id: url) {
             guard let url else { image = nil; return }
-            image = KnobShiftArtwork.cached(url)
+            image = (size >= Self.sharpFrom ? KnobShiftArtwork.cachedSharp(url) : nil) ?? KnobShiftArtwork.cached(url)
             // Only a cover read just now fades in, so scrolling past cached ones stays instant.
             if image == nil, let loaded = await KnobShiftArtwork.load(url) {
                 withAnimation(Motion.artworkReveal) { image = loaded }
             }
+            // The same picture only sharper, so it swaps in with nothing to see but the detail.
+            if size >= Self.sharpFrom, let sharp = await KnobShiftArtwork.sharp(url), !Task.isCancelled { image = sharp }
         }
         .accessibilityHidden(true)
     }
