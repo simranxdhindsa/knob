@@ -198,6 +198,49 @@ extension KnobShiftSpotifyCheck {
             expect(shuffledBack.isShuffled, "shuffle is still on after reopening")
             expect(shuffledBack.tracks.map(\.url.path) == shuffled, "in the same shuffled order")
             expect(shuffledBack.unshuffled.map(\.url.path) == ownOrder, "and turning it off still gives your own order")
+
+            lag.phase("step 9")
+            print("10. All Songs: every playlist's songs in one list, Shuffle All keeps your own order")
+            let library = KnobShiftModel(restoresQueue: false)
+            let all = library.allPlaylistSongs().filter { $0.url != nil }
+            expect(Set(all.map(\.id)).count == all.count && all.count >= 4, "each song listed once (\(all.count))")
+            await library.shuffleAll(all, plays: false)
+            expect(library.isShuffled && library.tracks.count == all.count, "they all join the queue with shuffle on (\(library.tracks.count))")
+            expect(library.unshuffled.map(\.url.path) == all.compactMap(\.url?.path), "and turning it off gives their own order")
+
+            lag.phase("step 10")
+            print("11. A song not found gets its YouTube link pasted by hand")
+            // yt-dlp gets a clean environment, so the stand in carries its test audio with it.
+            let fakeDownloader = work.appendingPathComponent("fake-yt-dlp.sh")
+            try? """
+            #!/bin/sh
+            out=""
+            while [ $# -gt 0 ]; do
+                case "$1" in
+                    --dump-single-json) echo '{"entries":[{"id":"fOT0BUpITw8","title":"Song","channel":"Artist","duration":200},{"id":"aaaaaaaaaaa","title":"Long mix","duration":3600}]}'; exit 0 ;;
+                    --output) out="$2"; shift ;;
+                esac
+                shift
+            done
+            cp "\(audio.path)" "$(printf '%s' "$out" | sed 's/%(ext)s/m4a/; s/%%/%/g')"
+            """.write(to: fakeDownloader, atomically: true, encoding: .utf8)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fakeDownloader.path)
+            setenv("KNOB_YTDLP", fakeDownloader.path, 1)
+            let picked = KnobShiftModel(restoresQueue: true)
+            await waitUntil(seconds: 30) { picked.pending.contains { $0.failure == "Not found" } }
+            if let row = picked.pending.first(where: { $0.failure == "Not found" }), let id = row.spotifyId, let list = picked.playlists.first(where: { $0.id == row.playlistId }) {
+                expect(picked.useYouTubeLink("https://www.youtube.com/playlist?list=PLabc", forSong: id) != nil, "a playlist link is refused with a reason")
+                let found = (try? await KnobShiftYouTube.shared.matches(for: "Artist Song", id: UUID())) ?? []
+                expect(found.map(\.id) == ["fOT0BUpITw8"], "the search lists the song and leaves out a long mix (\(found.count))")
+                expect(picked.useYouTubeVideo(found.first?.id ?? "", forSong: id) == nil, "clicking a match starts its download")
+                let folder = KnobShiftPlaylists.folder(for: list)
+                await waitUntil(seconds: 30) { KnobShiftPlaylists.files(in: folder)[id] != nil && !picked.pending.contains { $0.spotifyId == id && $0.waitingForDownload } }
+                expect(KnobShiftPlaylists.files(in: folder)[id] != nil, "the video is saved under that song")
+                expect(picked.playlistSongs(list).first { $0.id == id }?.url != nil, "and the song is ready in its playlist")
+                expect(picked.playlists.first { $0.id == list.id }?.unavailable?.contains(id) != true, "and is no longer marked not found")
+            } else {
+                expect(false, "a not found song to test with")
+            }
         }
 
         await finishUAT(lag)

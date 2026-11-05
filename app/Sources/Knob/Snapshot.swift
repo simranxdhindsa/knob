@@ -63,6 +63,20 @@ enum Snapshot {
                     .background(SurfaceBackground(radius: 16)).padding(12).background(Palette.of(scheme).panelBottom)
                     .environment(\.surface, .glass).environment(\.colorScheme, scheme), scheme: scheme,
                        to: folder.appendingPathComponent("knobshift-playlist-\(schemeName).png"))
+                let sample = KnobShiftPlaylistSong(id: "sample", name: "Zindagi", artist: "Sucha Yaar", state: .failed("Not found"))
+                let found: [KnobShiftYouTubeParsing.Match] = [
+                    .init(id: "aaaaaaaaaaa", title: "Zindagi (Official Audio) Sucha Yaar", channel: "Sucha Yaar", duration: 214),
+                    .init(id: "bbbbbbbbbbb", title: "Zindagi | Sucha Yaar | New Punjabi Song", channel: "Punjabi Hits", duration: 221)]
+                for (name, preset) in [("matches", Optional(found)), ("matches-loading", nil)] {
+                    render(KnobShiftSongMatches(model: library, song: sample, onDone: {}, preset: preset, staysLoading: preset == nil).padding(14).frame(width: 360, height: 300, alignment: .top)
+                        .background(SurfaceBackground(radius: 16)).padding(12).background(Palette.of(scheme).panelBottom)
+                        .environment(\.surface, .glass).environment(\.colorScheme, scheme), scheme: scheme,
+                           to: folder.appendingPathComponent("knobshift-\(name)-\(schemeName).png"))
+                }
+                render(KnobShiftPlaylistDetail(model: library, playlist: nil, onBack: {}).padding(14).frame(width: 360, height: 300)
+                    .background(SurfaceBackground(radius: 16)).padding(12).background(Palette.of(scheme).panelBottom)
+                    .environment(\.surface, .glass).environment(\.colorScheme, scheme), scheme: scheme,
+                       to: folder.appendingPathComponent("knobshift-allsongs-\(schemeName).png"))
             }
             // The Spotify sheet: its one time notice, and the form logged in with a status line.
             let spotify = KnobShiftModel(restoresQueue: false)

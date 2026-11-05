@@ -41,7 +41,7 @@ struct KnobShiftBrowserChoice: View {
                 Text("If YouTube blocks downloads, use my sign in from")
                     .font(.system(size: 11, weight: .medium)).foregroundStyle(Screen.textSecondary)
                 Spacer(minLength: 4)
-                PillMenu(items: KnobShiftYouTubeBrowser.allCases, selection: browser, title: \.title, placeholder: "Off") { chosen = $0.rawValue }
+                PillMenu(items: KnobShiftYouTubeBrowser.choices(current: browser), selection: browser, title: \.title, placeholder: "Off") { chosen = $0.rawValue }
                     .frame(width: 100)
             }
             if browser != .off {

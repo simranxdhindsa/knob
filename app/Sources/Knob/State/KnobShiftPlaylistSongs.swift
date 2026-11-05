@@ -19,6 +19,11 @@ struct KnobShiftPlaylistSong: Identifiable, Equatable {
         if case .ready(let url) = state { return url }
         return nil
     }
+
+    var isFailed: Bool {
+        if case .failed = state { return true }
+        return false
+    }
 }
 
 /// The playlists' songs, read from their folders, so they show and can be added whether or not
@@ -47,6 +52,31 @@ extension KnobShiftModel {
             let split = Track.split(url.deletingPathExtension().lastPathComponent)
             return KnobShiftPlaylistSong(id: id, name: row?.spotifyName ?? split.name, artist: row?.spotifyArtist ?? split.artist, state: .ready(url))
         }
+    }
+
+    /// Every playlist's songs in one list, a song that is in two playlists only once.
+    func allPlaylistSongs() -> [KnobShiftPlaylistSong] {
+        var seen = Set<String>()
+        return playlists.flatMap(playlistSongs).filter { seen.insert($0.id).inserted }
+    }
+
+    /// Shuffle is turned on and a random song plays at once, while the rest prepare behind it in
+    /// shuffled order. Turning shuffle off afterwards gives the songs in their own order.
+    func shuffleAll(_ songs: [KnobShiftPlaylistSong], plays: Bool = true) async {
+        let ready = songs.filter { $0.url != nil }
+        guard !ready.isEmpty else { return }
+        if !isShuffled { toggleShuffle() }
+        let own = unshuffled.map(\.url.standardizedFileURL.path) + ready.compactMap { $0.url?.standardizedFileURL.path }
+        if plays {
+            await play(ready.shuffled())
+        } else {
+            enqueueFiles(ready.shuffled().compactMap(\.url))
+            await processPending()
+        }
+        guard isShuffled else { return }
+        let rank = Dictionary(own.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+        unshuffled.sort { rank[$0.url.standardizedFileURL.path] ?? .max < rank[$1.url.standardizedFileURL.path] ?? .max }
+        persistQueue()
     }
 
     /// How many of the playlist's songs are here, out of all it lists that are here or coming.
