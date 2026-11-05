@@ -50,8 +50,11 @@ final class Updater: NSObject, ObservableObject, SPUUpdaterDelegate, SPUStandard
                                                   userDriverDelegate: self)
     }
 
+    /// The quiet check, not Sparkle's window: a dialog takes focus from the menu bar panel and
+    /// closes it. The panel's header shows the result, and an update downloads and installs as
+    /// it does on the regular checks.
     func checkForUpdates() {
-        controller?.checkForUpdates(nil)
+        controller?.updater.checkForUpdatesInBackground()
     }
 
     private func set(_ new: UpdateStatus) {

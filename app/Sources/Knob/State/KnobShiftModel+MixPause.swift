@@ -16,6 +16,10 @@ extension KnobShiftModel {
         /// reliable place, so it is cancelled at the pause and started afresh on resume.
         var restartIncoming: ((AVAudioTime) -> Void)?
         var restartStems: ((AVAudioTime) -> Void)?
+        /// The whole engine was paused, which keeps every part on the same sample. Not used while
+        /// a part still waits to start: a start time set after the engine restarts lands late by
+        /// the length of the pause.
+        var engineHeld = false
         /// What was left of those waits at the pause.
         var incomingLeft: TimeInterval = 0
         var stemsLeft: TimeInterval = 0
@@ -30,12 +34,17 @@ extension KnobShiftModel {
         mixPause.since = now
         mixPause.incomingLeft = max(mixPause.incomingStarts.timeIntervalSince(now), 0)
         mixPause.stemsLeft = max(mixPause.stemsStart.timeIntervalSince(now), 0)
-        if mixPause.incomingLeft > 0 { secondaryDeck.stop() }
-        if mixPause.stemsLeft > 0 {
-            primaryDeck.musicStem.stop()
-            primaryDeck.voice.stop()
+        mixPause.engineHeld = mixPause.incomingLeft <= 0 && mixPause.stemsLeft <= 0
+        if mixPause.engineHeld {
+            audioEngine.pause()
+        } else {
+            if mixPause.incomingLeft > 0 { secondaryDeck.stop() }
+            if mixPause.stemsLeft > 0 {
+                primaryDeck.musicStem.stop()
+                primaryDeck.voice.stop()
+            }
+            primaryDeck.pause()
         }
-        audioEngine.pause()
         progressTask?.cancel()
         isPlaying = false
         rememberNowPlaying()
@@ -43,15 +52,25 @@ extension KnobShiftModel {
 
     func resumeMix() throws {
         try startEngineIfNeeded()
+        // Everything restarts from one moment, so what was in time stays in time.
+        let lead = mixPause.engineHeld ? 0 : 0.05
+        if !mixPause.engineHeld {
+            let startAt = KnobShiftDeck.startTime(after: lead)
+            primaryDeck.player.play(at: startAt)
+            if mixPause.stemsLeft <= 0 {
+                primaryDeck.voice.play(at: startAt)
+                primaryDeck.musicStem.play(at: startAt)
+            }
+        }
         if mixPause.incomingLeft > 0 {
-            mixPause.restartIncoming?(KnobShiftDeck.startTime(after: mixPause.incomingLeft))
-            mixPause.incomingStarts = Date().addingTimeInterval(mixPause.incomingLeft)
+            mixPause.restartIncoming?(KnobShiftDeck.startTime(after: lead + mixPause.incomingLeft))
+            mixPause.incomingStarts = Date().addingTimeInterval(lead + mixPause.incomingLeft)
         }
         if mixPause.stemsLeft > 0 {
-            mixPause.restartStems?(KnobShiftDeck.startTime(after: mixPause.stemsLeft))
-            mixPause.stemsStart = Date().addingTimeInterval(mixPause.stemsLeft)
+            mixPause.restartStems?(KnobShiftDeck.startTime(after: lead + mixPause.stemsLeft))
+            mixPause.stemsStart = Date().addingTimeInterval(lead + mixPause.stemsLeft)
         }
-        if let since = mixPause.since { mixPause.total += Date().timeIntervalSince(since) }
+        if let since = mixPause.since { mixPause.total += Date().timeIntervalSince(since) + lead }
         mixPause.since = nil
         log("PLAY", String(format: "Resumed the mix %.0f%% in, at %@.", blendProgress * 100, Self.seconds(playbackTime)))
         isPlaying = true
