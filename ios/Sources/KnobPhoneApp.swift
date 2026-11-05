@@ -53,13 +53,20 @@ final class PhoneApp: ObservableObject {
     /// that sheet, and KNOB_PHONE_SYNC=1 syncs with Knob on the Mac
     /// (a number of seconds instead waits that long first). KNOB_PHONE_QUEUE=1 opens the queue (or
     /// after that many seconds), KNOB_PHONE_MIX=n asks for a KnobMix and KNOB_PHONE_PAUSE=n pauses,
-    /// both after n seconds.
+    /// both after n seconds. KNOB_PHONE_HOLD and KNOB_PHONE_SHUFFLE are explained where they run.
     private static func runChecks(_ model: KnobModel) async {
         let environment = ProcessInfo.processInfo.environment
         PhoneEffectUnit.silent = environment["KNOB_PHONE_SILENT"] == "1"
-        if environment["KNOB_PHONE_ADD"] == "1" {
+        // KNOB_PHONE_ADD=2 carries on while the songs prepare, so the queue can be seen doing it.
+        if let add = environment["KNOB_PHONE_ADD"], add == "1" || add == "2" {
             let files = (try? FileManager.default.contentsOfDirectory(at: PhoneLibrary.folder, includingPropertiesForKeys: nil)) ?? []
-            await model.knobShift.addTracks(files.filter { !$0.lastPathComponent.hasPrefix(".") }.sorted { $0.path < $1.path })
+            let songs = files.filter { !$0.lastPathComponent.hasPrefix(".") }.sorted { $0.path < $1.path }
+            if add == "1" {
+                await model.knobShift.addTracks(songs)
+            } else {
+                model.knobShift.enqueueFiles(songs)
+                Task { await model.knobShift.processPending() }
+            }
         }
         if environment["KNOB_PHONE_PLAY"] == "1" {
             // The saved queue comes back in the background: wait for it.
@@ -79,6 +86,20 @@ final class PhoneApp: ObservableObject {
         if let wait = environment["KNOB_PHONE_PAUSE"].flatMap(Double.init) {
             try? await Task.sleep(for: .seconds(wait))
             model.knobShift.pauseOrResume()
+        }
+        // KNOB_PHONE_HOLD=n pauses n seconds into the mix and resumes 3 seconds later.
+        if let wait = environment["KNOB_PHONE_HOLD"].flatMap(Double.init) {
+            for _ in 0..<1800 where model.knobShift.mixState != .mixing { try? await Task.sleep(for: .milliseconds(50)) }
+            try? await Task.sleep(for: .seconds(wait))
+            model.knobShift.pauseOrResume()
+            try? await Task.sleep(for: .seconds(3))
+            model.knobShift.pauseOrResume()
+        }
+        // KNOB_PHONE_SHUFFLE=1 turns shuffle on once two songs are ready.
+        if environment["KNOB_PHONE_SHUFFLE"] == "1" {
+            for _ in 0..<1200 where model.knobShift.tracks.count < 2 { try? await Task.sleep(for: .milliseconds(50)) }
+            if !model.knobShift.isShuffled { model.knobShift.toggleShuffle() }
+            model.knobShift.persistQueueNow()
         }
         if let sheet = environment["KNOB_PHONE_MAC"].flatMap(PhoneMacSheet.Source.init(rawValue:)) { PhoneSheets.shared.mac = sheet }
         if let wait = environment["KNOB_PHONE_SYNC"].flatMap(Double.init) {
