@@ -41,6 +41,9 @@ enum KnobShiftWindow {
             created.maxSize = KnobShiftPlayerView.maximumSize
             created.setContentSize(KnobShiftPlayerView.initialSize)
             created.center()
+            // Comes back where it was left, at the size it was left.
+            created.setFrameUsingName("KnobShiftWindow")
+            created.setFrameAutosaveName("KnobShiftWindow")
             created.delegate = stateDelegate
             window = created
         }

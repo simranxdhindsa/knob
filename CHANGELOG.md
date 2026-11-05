@@ -15,6 +15,10 @@ Knob 4.1 keeps the orange microphone dot away, makes low volumes easier to hear,
 
 ### Fixes
 
+- Check for Updates shows its result in the panel instead of a window, so the panel stays open
+- Pausing during a mix now freezes both songs, and Play carries the same mix on from that moment
+- Shuffle stays on after you restart Knob, in the same order, and turning it off still gives your own order
+- The KnobShift window comes back where you left it, at the size you left it
 - KnobShift on your Mac spreads the real colours of the cover across the whole window, and black and white covers no longer turn pink
 - On iPhone in light mode, the background keeps the cover's own colours instead of turning pale yellow or pink
 - New headphones and speakers show in Knob as soon as you connect them, with no need to restart it
