@@ -18,12 +18,14 @@ bundle="$out/Knob.app"
 objects="$out/objects"
 mkdir -p "$objects"
 
+echo "==> Building the sound effects"
 # 1. Knob's effects library for this SDK.
 cmake -S "$repo_dir/dsp/portable" -B "$out/dsp" -G "Unix Makefiles" -DCMAKE_SYSTEM_NAME=iOS \
   -DCMAKE_OSX_SYSROOT="$sdk" -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=17.0 \
   -DCMAKE_BUILD_TYPE=Release > "$out/dsp-configure.log"
 cmake --build "$out/dsp" --target knob-dsp -j8 > "$out/dsp-build.log"
 
+echo "==> Building the sound engine"
 # 2. The engine's DSPController and the iPhone bridge to it.
 sysroot="$(xcrun --sdk "$sdk" --show-sdk-path)"
 for source in "$repo_dir"/engine/dsp-controller.cpp "$repo_dir"/engine/dsp-controller-controls.cpp \
@@ -33,8 +35,10 @@ for source in "$repo_dir"/engine/dsp-controller.cpp "$repo_dir"/engine/dsp-contr
     -c "$source" -o "$objects/$(basename "$source" .cpp).o"
 done
 
+echo "==> Checking the iPhone colours"
 "$repo_dir/ios/check-theme.sh"
 
+echo "==> Building the app, this is the long step"
 # 3. Swift: the shared code, without what only the Mac can do (system wide sound, Spotify and
 #    YouTube downloads, windows, updates), plus the iPhone's own files.
 shared="$repo_dir/app/Sources/Knob"
@@ -56,6 +60,7 @@ xcrun --sdk "$sdk" swiftc -target "$target" -sdk "$sysroot" -swift-version 5 -On
   -framework AVFoundation -framework AVKit -framework AudioToolbox -framework MediaPlayer -framework SwiftUI -framework UIKit \
   -o "$out/Knob"
 
+echo "==> Packing and signing the app"
 # 4. The app: binary, Info.plist, factory presets and icon.
 rm -rf "$bundle"
 mkdir -p "$bundle/presets"
