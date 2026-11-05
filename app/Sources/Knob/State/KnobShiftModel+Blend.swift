@@ -240,6 +240,12 @@ extension KnobShiftModel {
             secondaryDeck.bassCut = 1
             secondaryDeck.startOffset = lock.incomingStart
             blendHasStems = scheduleIncoming(next, file: file, from: lock.incomingStart, startFrame: startFrame, frames: frames)
+            mixPause.restartIncoming = { [weak self] startAt in
+                guard let self else { return }
+                _ = self.scheduleIncoming(next, file: file, from: lock.incomingStart, startFrame: startFrame, frames: frames)
+                self.secondaryDeck.player.play(at: startAt)
+                self.secondaryDeck.voice.play(at: startAt)
+            }
             outgoingOnStems = false
             _ = switchOutgoingToStems(current)
             // With its voice held back separately, the new song's melody can come through too.
@@ -310,6 +316,7 @@ extension KnobShiftModel {
             // On the host clock, even with no wait, so the new song's separated music and voice start
             // together. Never on a sample count: a part's clock runs at the speed of the stretch
             // after it, so the decks' clocks drift apart and one deck started seconds off the other.
+            mixPause.incomingStarts = Date().addingTimeInterval(max(wait, 0.05))
             let startAt = KnobShiftDeck.startTime(after: max(wait, 0.05))
             secondaryDeck.player.play(at: startAt)
             secondaryDeck.voice.play(at: startAt)
@@ -324,8 +331,7 @@ extension KnobShiftModel {
                 for step in 0...steps {
                     // Each step waits for its own deadline from the blend start, so small sleep
                     // overshoots never add up and the handoff lands on the planned end.
-                    let delay = duration * Double(step) / Double(steps) - Date().timeIntervalSince(started)
-                    if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+                    await self?.waitForMix(until: duration * Double(step) / Double(steps), from: started)
                     guard let self, !Task.isCancelled else { return }
                     let progress = Double(step) / Double(steps)
                     self.applyBlend(progress, pivot: entryShare, voiceDone: wordsShare, keyframes: keyframes, length: duration, sync: mixSync,
@@ -343,11 +349,11 @@ extension KnobShiftModel {
                     let bucket = Int(progress * 20)
                     if bucket != lastLogged, !voiceThrow {
                         lastLogged = bucket
-                        self.logBlendStep(progress: progress, pivot: tempoAt, elapsed: Date().timeIntervalSince(started), sync: sync)
+                        self.logBlendStep(progress: progress, pivot: tempoAt, elapsed: self.mixElapsed(since: started), sync: sync)
                     }
                 }
                 guard let self, !Task.isCancelled else { return }
-                self.log("KNOBMIX", String(format: "Envelope took %.2fs (planned %.2fs).", Date().timeIntervalSince(started), duration))
+                self.log("KNOBMIX", String(format: "Envelope took %.2fs (planned %.2fs).", self.mixElapsed(since: started), duration))
                 self.finishBlend(to: next)
             }
         } catch {

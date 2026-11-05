@@ -20,7 +20,7 @@ extension KnobShiftModel {
         guard !isProcessing else { return }
         isProcessing = true
         isPreparing = true
-        if !isPlaying { mixState = .analyzing }
+        if !isPlaying, !isMixPaused { mixState = .analyzing }
         defer {
             isProcessing = false
             isPreparing = false
@@ -31,7 +31,7 @@ extension KnobShiftModel {
             await prepare(batch)
         }
         for track in tracks where track.voiceUnread && !track.voiceRetried { await reread(track) }
-        if !tracks.isEmpty, !isPlaying {
+        if !tracks.isEmpty, !isPlaying, !isMixPaused {
             mixState = .ready
             transitionDescription = "Ready. Choose a song to begin."
             log("READY", "Prepared \(tracks.count) song(s).")
