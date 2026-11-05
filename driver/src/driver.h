@@ -12,8 +12,8 @@
    do. kn_gain_bits holds that 0...1 volume; the audio is scaled by kn_scalar_to_gain of it. (A
    plain multiplier made 10% sound about 37 dB louder than the speakers at 10%.) The speakers'
    own range starts at -63.5 dB, but Knob attenuates digitally with them at 100%, and the same
-   numbers felt too quiet at low volumes, so Knob's range starts higher, at -50 dB. */
-#define KN_MIN_DB (-50.0f)
+   numbers felt too quiet at low volumes, so Knob's range starts higher, at -40 dB. */
+#define KN_MIN_DB (-40.0f)
 static inline float kn_scalar_to_db(float s) { return s <= 0 ? KN_MIN_DB : KN_MIN_DB * (1 - fminf(s, 1)); }
 static inline float kn_db_to_scalar(float db) { return db <= KN_MIN_DB ? 0 : fminf(1, 1 - db / KN_MIN_DB); }
 static inline float kn_scalar_to_gain(float s) { return s <= 0 ? 0 : powf(10, kn_scalar_to_db(s) / 20); }
