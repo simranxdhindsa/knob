@@ -70,6 +70,43 @@ enum KnobShiftYouTubeParsing {
 
     private static func isListId(_ text: String) -> Bool { (2...80).contains(text.count) && text.allSatisfy(isIdCharacter) }
 
+    /// One video a search found for a song, for the person to pick.
+    struct Match: Identifiable, Equatable {
+        let id: String
+        let title: String
+        let channel: String?
+        let duration: TimeInterval?
+    }
+
+    /// Lists the top matches without downloading anything. The query comes last, after "--".
+    static func matchArguments(_ query: String) -> [String] {
+        baseArguments + ["--flat-playlist", "--dump-single-json", "--", "ytsearch5:\(query)"]
+    }
+
+    /// The matches yt-dlp listed; anything over 15 minutes is a long mix, not the song.
+    static func matches(from data: Data) -> [Match] {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let entries = json["entries"] as? [[String: Any]] else { return [] }
+        return entries.compactMap { entry in
+            guard let id = entry["id"] as? String, isVideoId(id), let title = entry["title"] as? String else { return nil }
+            let duration = entry["duration"] as? Double
+            if let duration, duration >= 900 { return nil }
+            return Match(id: id, title: title, channel: (entry["channel"] ?? entry["uploader"]) as? String, duration: duration)
+        }
+    }
+
+    /// The one video a pasted link means, even if it was opened inside a playlist.
+    static func videoId(inLink text: String) -> String? {
+        guard let link = parseLink(text) else { return nil }
+        if link.kind == .song, link.id.hasPrefix(KnobShiftPlaylists.youtubePrefix) {
+            let id = String(link.id.dropFirst(KnobShiftPlaylists.youtubePrefix.count))
+            if isVideoId(id) { return id }
+        }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let components = URLComponents(string: trimmed.contains("://") ? trimmed : "https://" + trimmed)
+        return components?.queryItems?.first { $0.name == "v" }?.value.flatMap { isVideoId($0) ? $0 : nil }
+    }
+
     /// What a pasted link points to: a video, a playlist, a YouTube Music album, or Liked videos.
     /// A video opened inside a playlist means the playlist, except a mix ("RD..."), which never
     /// ends. Nil for anything that is not a YouTube link, including look alike sites.
@@ -266,7 +303,9 @@ enum KnobShiftYouTubeParsing {
         let text = "\(name) - \(artist)"
             .components(separatedBy: CharacterSet(charactersIn: "/:\\\0\n\r")).joined(separator: " ")
         let position = song.list_position.map { String(format: "%02d ", $0) } ?? ""
-        return "\(position)\(text) [yt-\(song.song_id)]"
+        // A Spotify song given a video by hand keeps its own id, so its row finds the file.
+        let tag = isVideoId(song.song_id) ? "yt-\(song.song_id)" : song.song_id
+        return "\(position)\(text) [\(tag)]"
     }
 
     /// The file name as a yt-dlp output template: "%" means a field there, so it is doubled.
@@ -293,9 +332,9 @@ enum KnobShiftYouTubeParsing {
     /// file is already there are not downloaded again. The link is rebuilt from the video id
     /// alone (callers check it is one), never taken from saved data.
     static func downloadArguments(for song: KnobShiftSpotDL.Song, into folder: URL, ffmpeg: String,
-                                  browser: KnobShiftYouTubeBrowser? = nil) -> [String] {
+                                  browser: KnobShiftYouTubeBrowser? = nil, video: String? = nil) -> [String] {
         audioArguments(for: song, into: folder, ffmpeg: ffmpeg) + browserArguments(browser)
-            + ["--no-playlist", "--", "https://www.youtube.com/watch?v=\(song.song_id)"]
+            + ["--no-playlist", "--", "https://www.youtube.com/watch?v=\(video ?? song.song_id)"]
     }
 
     /// For a video that is gone or blocked: the closest match found by searching YouTube for the
