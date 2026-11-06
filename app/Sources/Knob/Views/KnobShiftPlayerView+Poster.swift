@@ -22,7 +22,7 @@ extension KnobShiftPlayerView {
                 VStack(spacing: 0) {
                     titleRow(wide: wide, scale: layout.scale, song: vinyl ? deckSong : nil)
                         .frame(height: KnobShiftPlayerLayout.title * layout.scale)
-                    PlayerTimeline(model: model, clock: model.clock, scrub: scrub, textSize: 12 * layout.scale, showsMixAhead: true)
+                    PlayerTimeline(model: model, clock: model.clock, scrub: scrub, textSize: 12 * layout.scale)
                         .frame(height: KnobShiftPlayerLayout.timeline * layout.scale)
                     PlayerTransport(model: model, scrub: scrub, dialSize: KnobShiftPlayerLayout.dial * layout.scale, scale: layout.scale)
                         .frame(height: KnobShiftPlayerLayout.dial * layout.scale)
