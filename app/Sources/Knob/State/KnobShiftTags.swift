@@ -12,6 +12,10 @@ enum KnobShiftTags {
 
     static func read(_ url: URL) async -> Tags? {
         await Task.detached(priority: .utility) { () -> Tags? in
+            if KnobShiftFlacTags.isFlac(url) {
+                guard let found = KnobShiftFlacTags.read(url) else { return nil }
+                return tags(title: found.all("TITLE").first, artists: found.all("ARTIST"), album: found.all("ALBUM").first)
+            }
             let asset = AVURLAsset(url: url)
             guard let items = try? await asset.load(.commonMetadata) else { return nil }
             func values(_ key: AVMetadataKey) async -> [String] {
@@ -24,15 +28,18 @@ enum KnobShiftTags {
                 }
                 return found
             }
-            let title = await values(.commonKeyTitle).first
-            // Several artist tags, or one with "/" between names, show joined like Spotify does.
-            let artists = await values(.commonKeyArtist)
-                .flatMap { $0.components(separatedBy: "/") }
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
-            let album = await values(.commonKeyAlbumName).first
-            guard title != nil || !artists.isEmpty else { return nil }
-            return Tags(title: title, artist: artists.isEmpty ? nil : artists.joined(separator: ", "), album: album)
+            return tags(title: await values(.commonKeyTitle).first, artists: await values(.commonKeyArtist),
+                        album: await values(.commonKeyAlbumName).first)
         }.value
+    }
+
+    /// Several artist tags, or one with "/" between names, show joined like Spotify does.
+    static func tags(title: String?, artists: [String], album: String?) -> Tags? {
+        let names = artists
+            .flatMap { $0.components(separatedBy: "/") }
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard title != nil || !names.isEmpty else { return nil }
+        return Tags(title: title, artist: names.isEmpty ? nil : names.joined(separator: ", "), album: album)
     }
 }

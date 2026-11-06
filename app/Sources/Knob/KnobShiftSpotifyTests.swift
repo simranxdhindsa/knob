@@ -44,8 +44,8 @@ extension KnobShiftSpotifyCheck {
         expect(skipped == [ids[5], ids[6], ids[8], ids[9]], "unticked songs remembered, queued ones never")
         let rows = KnobShiftImport.newRows(songs: list + [list[1]], selected: Set(ids), queued: [ids[0]])
         expect(rows.map(\.song_id) == Array(ids.dropFirst()), "new rows: in order, once each, none already queued")
-        expect(KnobShiftImport.hasRoom(for: 100, available: 2_000_000_000), "room for 100 songs in 2 GB")
-        expect(!KnobShiftImport.hasRoom(for: 1_000, available: 2_000_000_000), "no room for 1000 songs in 2 GB")
+        expect(KnobShiftImport.hasRoom(for: 40, available: 2_000_000_000), "room for 40 songs in 2 GB")
+        expect(!KnobShiftImport.hasRoom(for: 100, available: 2_000_000_000), "no room for 100 songs in 2 GB")
         expect(KnobShiftImport.hasRoom(for: 1_000, available: nil), "unknown space does not block")
 
         print("Save files")

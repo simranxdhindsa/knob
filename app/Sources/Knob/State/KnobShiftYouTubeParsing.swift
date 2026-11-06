@@ -328,7 +328,14 @@ enum KnobShiftYouTubeParsing {
         baseArguments + ["--flat-playlist", "--dump-single-json", "--", url]
     }
 
-    /// Downloads one song's audio as m4a with its cover, named by `fileName(for:)`. Songs whose
+    /// Which audio to fetch: YouTube's best, 256 kbps with a Premium sign in (774, 141), otherwise
+    /// Opus (251), which keeps more treble than the m4a. It is saved as FLAC because Apple's Opus
+    /// decoder plays up to 200 ms of wrong sound after every jump, which a mix would make heard.
+    /// FLAC stores the decoded sound as it is, and 16 bits halve the size with nothing to hear.
+    static let qualityArguments = ["--format", "774/141/251/bestaudio/best", "--extract-audio", "--audio-format", "flac",
+                                   "--postprocessor-args", "ExtractAudio:\(KnobShiftSpotDL.flacBits)"]
+
+    /// Downloads one song's best audio with its cover, named by `fileName(for:)`. Songs whose
     /// file is already there are not downloaded again. The link is rebuilt from the video id
     /// alone (callers check it is one), never taken from saved data.
     static func downloadArguments(for song: KnobShiftSpotDL.Song, into folder: URL, ffmpeg: String,
@@ -357,8 +364,7 @@ enum KnobShiftYouTubeParsing {
 
     private static func audioArguments(for song: KnobShiftSpotDL.Song, into folder: URL, ffmpeg: String) -> [String] {
         let output = folder.path.replacingOccurrences(of: "%", with: "%%") + "/" + outputTemplate(for: song)
-        return baseArguments + ["--newline",
-                "--format", "bestaudio[ext=m4a]/bestaudio/best", "--extract-audio", "--audio-format", "m4a", "--audio-quality", "0",
+        return baseArguments + ["--newline"] + qualityArguments + [
                 "--ffmpeg-location", ffmpeg, "--embed-thumbnail", "--convert-thumbnails", "jpg",
                 "--retries", "3", "--sleep-requests", "1", "--no-mtime",
                 "--print", "after_move:\(doneMarker) %(id)s", "--no-simulate",

@@ -21,6 +21,8 @@ enum KnobShiftYouTubeTests {
         playlists()
         arguments()
         problems()
+        quality()
+        flacTags()
         KnobShiftYouTubeAPITests.run(expect)
         print(failures == 0 ? "KnobShift YouTube self test passed" : "KnobShift YouTube self test: \(failures) failure(s)")
     }
@@ -211,5 +213,51 @@ enum KnobShiftYouTubeTests {
         expect(classify(["ERROR: Postprocessing: [Errno 28] No space left on device"]) == .noSpace, "disk full")
         expect(classify(["[download] 100% of 3.5MiB"]) == nil, "a normal run is no failure")
         expect(!KnobShiftYouTubeParsing.Failure.botCheck.message.contains("-"), "messages have no dashes")
+    }
+
+    private static func quality() {
+        print("Audio quality")
+        let list = KnobShiftYouTubeParsing.qualityArguments
+        func value(_ flag: String) -> String? { list.firstIndex(of: flag).map { list[$0 + 1] } }
+        expect(value("--format") == "774/141/251/bestaudio/best", "Premium first, then Opus")
+        expect(value("--audio-format") == "flac", "saved as FLAC, which jumps exactly")
+        expect(value("--postprocessor-args") == "ExtractAudio:-sample_fmt s16", "at 16 bits")
+    }
+
+    private static func flacTags() {
+        print("FLAC tags")
+        func little(_ value: Int) -> [UInt8] { (0..<4).map { UInt8((value >> ($0 * 8)) & 255) } }
+        func big(_ value: Int) -> [UInt8] { little(value).reversed() }
+        func comment(_ text: String) -> [UInt8] { little(text.utf8.count) + Array(text.utf8) }
+        func block(_ type: UInt8, _ body: [UInt8], last: Bool = false) -> [UInt8] {
+            [type | (last ? 0x80 : 0), UInt8(body.count >> 16 & 255), UInt8(body.count >> 8 & 255), UInt8(body.count & 255)] + body
+        }
+        func comments(_ list: [String]) -> [UInt8] { comment("vendor") + little(list.count) + list.flatMap(comment) }
+        func picture(type: Int, _ data: [UInt8]) -> [UInt8] {
+            big(type) + big(10) + Array("image/jpeg".utf8) + big(0) + [UInt8](repeating: 0, count: 16) + big(data.count) + data
+        }
+        let magic = Array("fLaC".utf8)
+        let image = [UInt8](repeating: 7, count: 40_000)
+        let info = block(0, [UInt8](repeating: 0, count: 34))
+        let tags = block(4, comments(["title=ਸੁਫ਼ਨਾ", "ARTIST=Harvi", "ARTIST=Ikky", "ALBUM=Sufna = Banke", "no equals sign"]))
+        let whole = magic + info + tags + block(6, picture(type: 4, [1])) + block(6, picture(type: 3, image)) + block(1, [0, 0], last: true)
+        let found = KnobShiftFlacTags.parse(whole + [9, 9, 9])
+        expect(found?.all("TITLE") == ["ਸੁਫ਼ਨਾ"], "Gurmukhi title, any letter case")
+        expect(found?.all("ARTIST") == ["Harvi", "Ikky"], "several artists")
+        expect(found?.all("ALBUM") == ["Sufna = Banke"], "an equals sign inside a value")
+        expect(found?.cover == Data(image), "the front cover, not the first picture")
+        expect(KnobShiftTags.tags(title: "A", artists: ["Harvi/Ikky"], album: nil)?.artist == "Harvi, Ikky", "artists joined like Spotify")
+        expect(KnobShiftFlacTags.parse(magic + info + tags + block(6, picture(type: 0, [5]), last: true))?.cover == Data([5]), "any picture when none is the front cover")
+        for cut in stride(from: 0, to: whole.count, by: 1_009) { _ = KnobShiftFlacTags.parse(Array(whole[..<cut])) }
+        expect(true, "a cut off file never crashes")
+        expect(KnobShiftFlacTags.parse(Array(whole[..<(magic.count + info.count + tags.count + 20)]))?.all("ARTIST").count == 2, "a cut off file keeps what came first")
+        let lying = block(4, comment("vendor") + [255, 255, 255, 255], last: true)
+        expect(KnobShiftFlacTags.parse(magic + lying)?.comments.isEmpty == true, "a comment count that is a lie stops at the end")
+        let hugeComment = block(4, [255, 255, 255, 255], last: true)
+        expect(KnobShiftFlacTags.parse(magic + hugeComment)?.comments.isEmpty == true, "a size past the end is refused")
+        let hugeImage = block(6, big(3) + big(0) + big(0) + [UInt8](repeating: 0, count: 16) + [255, 255, 255, 255], last: true)
+        expect(KnobShiftFlacTags.parse(magic + hugeImage)?.cover == nil, "an image bigger than its file is refused")
+        expect(KnobShiftFlacTags.parse(Array("not a flac file at all, just some words".utf8)) == nil, "not a FLAC file")
+        expect(KnobShiftFlacTags.isFlac(URL(fileURLWithPath: "/a/b.FLAC")) && !KnobShiftFlacTags.isFlac(URL(fileURLWithPath: "/a/b.m4a")), "known by extension")
     }
 }
