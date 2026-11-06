@@ -7,6 +7,8 @@ import AVFoundation
 @MainActor
 enum KnobShiftTogetherCheck {
     static func run(_ arguments: [String]) {
+        // Line by line, so a check stopped halfway still shows how far it got.
+        setvbuf(stdout, nil, _IOLBF, 0)
         if arguments.first == "selftest" { KnobShiftTogetherTests.run() }
         if arguments.first == "pair", arguments.count >= 3 {
             let app = NSApplication.shared
@@ -35,7 +37,9 @@ enum KnobShiftTogetherCheck {
     /// The host half of two real processes talking over a real connection.
     private static func pair(_ first: URL, _ second: URL) async {
         let model = KnobShiftModel(restoresQueue: false)
+        print("Adding songs")
         await model.addTracks([first, second])
+        print("Songs added: \(model.tracks.count)")
         guard let track = model.tracks.first else { print("FAIL could not add the songs"); exit(1) }
         model.playForCheck(volume: 0, bySelecting: track)
         let sound = KnobModel(engine: DemoEngine(), volume: DemoVolume())
@@ -47,8 +51,9 @@ enum KnobShiftTogetherCheck {
         sound.setEffect(.clarity, 7)
         sound.setEQ(band: 2, 0.5)
         print("Host set Clarity 7 and EQ band 3 to 0.5")
-        try? await Task.sleep(for: .seconds(20))
+        try? await Task.sleep(for: .seconds(26))
         print("Host sees Ambience \(sound.effects[EffectSlot.ambience.rawValue])")
+        print("Host now on \(model.nowPlaying?.name ?? "none"), at \(Int(model.playbackTime))s, shuffled \(model.isShuffled), preset \(sound.currentPreset?.name ?? "none")")
         print("People at the end: \(session.people)")
         session.leave()
         try? await Task.sleep(for: .seconds(1))
@@ -64,7 +69,7 @@ enum KnobShiftTogetherCheck {
         sound.setEffect(.surround, 2)
         let session = KnobShiftTogetherSession.shared
         session.startLooking()
-        for _ in 0..<40 where session.nearby.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
+        for _ in 0..<120 where session.nearby.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
         guard let found = session.nearby.first else { print("FAIL nobody found"); exit(1) }
         print("Found \(found.name)")
         session.join(found, model: model)
@@ -80,6 +85,20 @@ enum KnobShiftTogetherCheck {
         }
         print("Cover received: \(session.cover != nil)")
         print("Guest sees Clarity \(sound.effects[EffectSlot.clarity.rawValue]), EQ band 3 \(sound.eq[2]), Surround \(sound.effects[EffectSlot.surround.rawValue])")
+        print("Guest sees queue: \(session.queue.map(\.title))")
+        session.send(.seek, time: 60)
+        try? await Task.sleep(for: .seconds(2))
+        print("After seek, host at \(Int(session.state?.time ?? 0))s")
+        session.send(.shuffle)
+        try? await Task.sleep(for: .seconds(1))
+        print("After shuffle: \(session.state?.isShuffled as Any)")
+        if let other = session.queue.first(where: { $0.id != session.state?.song }) {
+            session.send(.pick, song: other.id)
+            try? await Task.sleep(for: .seconds(2))
+            print("Picked \(other.title), host now playing \(session.state?.title ?? "none")")
+        }
+        print("Can mix: \(session.state?.canMix as Any), preset here \(session.presetName ?? "none")")
+        sound.showSharedPreset(named: Preset.all().first?.name)
         sound.setEffect(.ambience, 3)
         print("Guest set Ambience 3")
         try? await Task.sleep(for: .seconds(2))

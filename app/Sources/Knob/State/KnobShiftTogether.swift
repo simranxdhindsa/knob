@@ -27,7 +27,7 @@ enum KnobShiftTogether {
     static let longestMessage = 512 * 1024
 
     enum Kind: UInt8 {
-        case hello = 1, sound = 2, anchor = 3, state = 4, command = 5, cover = 6, effects = 7
+        case hello = 1, sound = 2, anchor = 3, state = 4, command = 5, cover = 6, effects = 7, queue = 8
     }
 
     /// What a listener may send: small, and never sound.
@@ -52,14 +52,28 @@ enum KnobShiftTogether {
         var duration: Double
         var isPlaying: Bool
         var ended: Bool?
+        var song: String?
+        var isShuffled: Bool?
+        var canMix: Bool?
     }
 
+    /// One row of the host's queue. Only names travel, never a file or its path.
+    struct Song: Codable, Equatable, Identifiable {
+        var id: String
+        var title: String
+        var artist: String?
+    }
+
+    /// More than this and the rest of the host's queue isn't shown on the others.
+    static let longestQueue = 1_000
+
     /// A fixed list: anything else from a listener is ignored.
-    enum Action: String, Codable { case playPause, next, previous, seek }
+    enum Action: String, Codable { case playPause, next, previous, seek, shuffle, mixNow, pick }
 
     struct Command: Codable, Equatable {
         var action: Action
         var time: Double?
+        var song: String?
     }
 
     /// Knob's own sound for the whole session: it can't travel in the mix, because each device
@@ -67,15 +81,16 @@ enum KnobShiftTogether {
     struct Effects: Codable, Equatable {
         var effects: [Double]
         var eq: [Double]
+        var preset: String?
 
         /// Only sane values from another device: known lengths, and each within its range.
         var isValid: Bool {
-            effects.count <= 16 && eq.count <= 64 && effects.allSatisfy { $0.isFinite && $0 >= 0 && $0 <= 10 }
+            effects.count <= 16 && eq.count <= 64 && (preset?.count ?? 0) <= 120 && effects.allSatisfy { $0.isFinite && $0 >= 0 && $0 <= 10 }
                 && eq.allSatisfy { $0.isFinite && abs($0) <= 1 }
         }
 
         func isClose(to other: Effects) -> Bool {
-            effects.count == other.effects.count && eq.count == other.eq.count
+            preset == other.preset && effects.count == other.effects.count && eq.count == other.eq.count
                 && zip(effects + eq, other.effects + other.eq).allSatisfy { abs($0 - $1) < 0.001 }
         }
     }

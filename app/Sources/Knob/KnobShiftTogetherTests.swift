@@ -36,13 +36,14 @@ enum KnobShiftTogetherTests {
         }
         for _ in 0..<150 { ping(&clock, &random) }
         let error = abs((clock.offset ?? 0) - truth)
-        expect(error < 1_000_000, "within 1 ms through 7 to 150 ms replies (\(Double(error) / 1e6) ms)")
+        // The most any clock can promise: it can't be wrong by more than half its quickest trip.
+        expect(error <= (clock.bestTrip ?? 0) / 2, "within half the quickest trip through 7 to 150 ms replies (\(Double(error) / 1e6) ms)")
         expect((clock.bestTrip ?? 0) < 8_000_000, "best trip found")
         var drifting = KnobShiftTogetherClock()
         var drift: Int64 = 0
         for _ in 0..<1_500 { ping(&drifting, drift: drift, &random); drift += 6_000 } // 30 parts per million
         let late = abs((drifting.offset ?? 0) - (truth + drift))
-        expect(late < 1_000_000, "follows a clock 30 parts per million off for 5 minutes (\(Double(late) / 1e6) ms)")
+        expect(late <= (drifting.bestTrip ?? 0) / 2, "follows a clock 30 parts per million off for 5 minutes (\(Double(late) / 1e6) ms)")
         var stale = KnobShiftTogetherClock()
         stale.add(sent: 0, hostAnswered: 1_000_000, received: 2_000_000)
         stale.add(sent: 20_000_000_000, hostAnswered: 20_050_000_000 + 7, received: 20_100_000_000)
@@ -206,12 +207,16 @@ enum KnobShiftTogetherTests {
         expect(!Wire.Effects(effects: [Double](repeating: 1, count: 17), eq: []).isValid, "too many effects refused")
         expect(good.isClose(to: Wire.Effects(effects: [7.0001, 3, 0, 10], eq: [0.5, -1, 0])), "rounding is not a change")
         expect(!good.isClose(to: Wire.Effects(effects: [6, 3, 0, 10], eq: [0.5, -1, 0])), "a real change is")
+        expect(!Wire.Effects(effects: [], eq: [], preset: String(repeating: "x", count: 121)).isValid, "a name too long refused")
+        expect(!good.isClose(to: Wire.Effects(effects: good.effects, eq: good.eq, preset: "Party")), "a new preset is a change")
+        let unknown = #"{"action":"eraseEverything"}"#
+        expect((try? JSONDecoder().decode(Wire.Command.self, from: Data(unknown.utf8))) == nil, "a command not on the list is refused")
         var long = Wire.Reader()
         do { _ = try long.add(Data([0xFF, 0xFF, 0xFF, 0xFF])); expect(false, "too long refused") } catch { expect(error as? Wire.Reader.Failure == .tooLong, "too long refused") }
         var empty = Wire.Reader()
         do { _ = try empty.add(Data([0, 0, 0, 0])); expect(false, "empty refused") } catch { expect(error as? Wire.Reader.Failure == .empty, "empty refused") }
         var future = Wire.Reader()
-        let unknown = Data([0, 0, 0, 2, 200, 9]) + Wire.encode(hello)
-        expect((try? future.add(unknown)) == [hello], "a kind from a newer Knob is skipped")
+        let newer = Data([0, 0, 0, 2, 200, 9]) + Wire.encode(hello)
+        expect((try? future.add(newer)) == [hello], "a kind from a newer Knob is skipped")
     }
 }

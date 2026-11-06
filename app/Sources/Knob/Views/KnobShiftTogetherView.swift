@@ -6,6 +6,8 @@ struct KnobShiftTogetherView: View {
     @ObservedObject var model: KnobShiftModel
     @ObservedObject private var session = KnobShiftTogetherSession.shared
     @Environment(\.dismiss) private var dismiss
+    /// Where a drag on the seek bar has reached, 0...1, until the finger lifts.
+    @State private var scrub: Double?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -19,7 +21,7 @@ struct KnobShiftTogetherView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close")
             }
-            if session.role == .off { start } else { running }
+            if session.role == .off { start } else { ScrollView { running } }
             if let status = session.status {
                 Text(status).font(.system(size: 13)).foregroundStyle(Glass.secondary).fixedSize(horizontal: false, vertical: true)
             }
@@ -59,12 +61,20 @@ struct KnobShiftTogetherView: View {
                     Text(heading).font(.system(size: 12)).foregroundStyle(Palette.accent).lineLimit(1)
                 }
             }
-            HStack(spacing: 28) {
+            seekBar
+            HStack(spacing: 16) {
+                control("shuffle", session.state?.isShuffled == true ? "Turn Shuffle Off" : "Shuffle", on: session.state?.isShuffled == true) { session.send(.shuffle) }
                 Spacer()
                 control("backward.fill", "Previous") { session.send(.previous) }
                 control(session.state?.isPlaying == true ? "pause.fill" : "play.fill", session.state?.isPlaying == true ? "Pause" : "Play") { session.send(.playPause) }
                 control("forward.fill", "Next") { session.send(.next) }
                 Spacer()
+                control("arrow.left.arrow.right", "KnobMix Now") { session.send(.mixNow) }
+                    .disabled(session.state?.canMix != true)
+                    .opacity(session.state?.canMix == true ? 1 : 0.4)
+            }
+            if let preset = session.presetName {
+                Text("Preset: \(preset)").font(.system(size: 12)).foregroundStyle(Glass.secondary).lineLimit(1)
             }
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
@@ -83,7 +93,55 @@ struct KnobShiftTogetherView: View {
                 ForEach(session.people, id: \.self) { name in row(name, action: "Remove") { session.remove(name) } }
             }
             wide(session.role == .hosting ? "End for Everyone" : "Leave", icon: "xmark.circle") { session.leave() }
+            if !session.queue.isEmpty {
+                Text("QUEUE").font(.system(size: 11, weight: .bold)).foregroundStyle(Glass.tertiary)
+                LazyVStack(spacing: 4) {
+                    ForEach(session.queue) { song in queueRow(song) }
+                }
+            }
         }
+    }
+
+    private var seekBar: some View {
+        let duration = max(session.state?.duration ?? 0, 0.001)
+        let time = session.state?.time ?? 0
+        let shown = scrub.map { $0 * duration } ?? time
+        return VStack(spacing: 2) {
+            KnobGroove(value: shown / duration, showsCap: true, accessibilityLabel: "Song position",
+                       accessibilityValue: KnobShiftNowPlaying.clock(shown),
+                       onChange: { scrub = $0 },
+                       onEnd: {
+                           if let scrub { session.send(.seek, time: scrub * duration) }
+                           scrub = nil
+                       })
+            .disabled(session.state?.title == nil)
+            HStack {
+                Text(KnobShiftNowPlaying.clock(shown))
+                Spacer()
+                Text("-" + KnobShiftNowPlaying.clock(max(0, duration - shown)))
+            }
+            .font(.system(size: 12).monospacedDigit())
+            .foregroundStyle(Glass.secondary)
+        }
+    }
+
+    private func queueRow(_ song: KnobShiftTogether.Song) -> some View {
+        let playing = song.id == session.state?.song
+        return Button { session.send(.pick, song: song.id) } label: {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(song.title).font(.system(size: 14, weight: playing ? .semibold : .regular))
+                    .foregroundStyle(playing ? Palette.accent : Glass.text).lineLimit(1)
+                if let artist = song.artist {
+                    Text(artist).font(.system(size: 12)).foregroundStyle(Glass.secondary).lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .padding(.horizontal, 12)
+            .background(Glass.fill, in: RoundedRectangle(cornerRadius: 10))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(playing ? "\(song.title), playing" : "Play \(song.title)")
     }
 
     private var heading: String {
@@ -109,9 +167,9 @@ struct KnobShiftTogetherView: View {
         .accessibilityHidden(true)
     }
 
-    private func control(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
+    private func control(_ icon: String, _ label: String, on: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: 20)).foregroundStyle(Glass.text).frame(width: 44, height: 44).contentShape(Rectangle())
+            Image(systemName: icon).font(.system(size: 20)).foregroundStyle(on ? Palette.accent : Glass.text).frame(width: 44, height: 44).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)

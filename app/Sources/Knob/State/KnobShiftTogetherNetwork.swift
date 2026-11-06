@@ -23,6 +23,7 @@ final class KnobShiftTogetherHost: @unchecked Sendable {
     private var lastState: KnobShiftTogether.Message?
     private var lastCover: KnobShiftTogether.Message?
     private var lastEffects: KnobShiftTogether.Message?
+    private var lastQueue: KnobShiftTogether.Message?
     var onPeople: (@Sendable ([String]) -> Void)?
     var onCommand: (@Sendable (KnobShiftTogether.Command) -> Void)?
     var onEffects: (@Sendable (KnobShiftTogether.Effects) -> Void)?
@@ -86,6 +87,7 @@ final class KnobShiftTogetherHost: @unchecked Sendable {
         if message.kind == .state { lastState = message }
         if message.kind == .cover { lastCover = message }
         if message.kind == .effects { lastEffects = message }
+        if message.kind == .queue { lastQueue = message }
         let ready = clients.values.filter(\.joined)
         lock.unlock()
         let data = KnobShiftTogether.encode(message)
@@ -155,7 +157,7 @@ final class KnobShiftTogetherHost: @unchecked Sendable {
             lock.lock()
             client.name = String(hello.name.prefix(60))
             client.joined = true
-            let waiting = [lastState, lastCover, lastEffects].compactMap { $0 }
+            let waiting = [lastState, lastCover, lastEffects, lastQueue].compactMap { $0 }
             lock.unlock()
             for message in waiting { push(KnobShiftTogether.encode(message), to: client, counted: false) }
             announce()
@@ -219,6 +221,7 @@ final class KnobShiftTogetherGuest: @unchecked Sendable {
     var onState: (@Sendable (KnobShiftTogether.State) -> Void)?
     var onCover: (@Sendable (Data) -> Void)?
     var onEffects: (@Sendable (KnobShiftTogether.Effects) -> Void)?
+    var onQueue: (@Sendable ([KnobShiftTogether.Song]) -> Void)?
     var onEnd: (@Sendable (Ending) -> Void)?
     var onHello: (@Sendable (String) -> Void)?
 
@@ -316,6 +319,9 @@ final class KnobShiftTogetherGuest: @unchecked Sendable {
         case .effects:
             guard let effects = try? JSONDecoder().decode(KnobShiftTogether.Effects.self, from: message.body), effects.isValid else { return }
             onEffects?(effects)
+        case .queue:
+            guard let songs = try? JSONDecoder().decode([KnobShiftTogether.Song].self, from: message.body) else { return }
+            onQueue?(Array(songs.prefix(KnobShiftTogether.longestQueue)))
         case .command: break
         }
     }
