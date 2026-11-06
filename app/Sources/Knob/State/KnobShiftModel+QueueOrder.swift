@@ -47,7 +47,7 @@ extension KnobShiftModel {
         queueReordered()
     }
 
-    private func arrangeByMix() {
+    func arrangeByMix() {
         tracks = KnobShiftMixOrder.arranged(tracks, playingIndex: playingIndex)
     }
 
@@ -67,6 +67,7 @@ extension KnobShiftModel {
         let at = playing.flatMap { rest.firstIndex(of: $0) }.map { $0 + 1 } ?? 0
         rest.insert(contentsOf: moving, at: at)
         tracks = rest
+        if !isArranged { orderBeforeSort = nil }
         if playing == nil { currentIndex = 0 }
         log("QUEUE", "Play next: " + moving.map(\.name).joined(separator: ", ") + ".")
         queueReordered()
@@ -90,6 +91,16 @@ extension KnobShiftModel {
         orderBeforeSort = nil
         replaceOwnOrder(with: saved.filter { present.contains($0.id) } + tracks.filter { !known.contains($0.id) })
         log("QUEUE", "Back to the order from before sorting.")
+    }
+
+    /// An empty queue has no order to hold or go back to.
+    func clearOrderModes() {
+        shuffleToRestore = nil
+        mixOrderToRestore = false
+        isShuffled = false
+        isMixOrdered = false
+        unshuffled = []
+        orderBeforeSort = nil
     }
 
     /// A new order of the user's own, so shuffle and Mix Order go off. The playing song keeps

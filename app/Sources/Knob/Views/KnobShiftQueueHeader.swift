@@ -66,7 +66,8 @@ struct KnobShiftQueueHeader: View {
                 .shadow(color: on ? Palette.accentGlow.opacity(0.5) : .clear, radius: 4)
         }
         .buttonStyle(.plain)
-        .disabled(model.tracks.count < 2)
+        // Once on it can always be turned off, even after removing all but one song.
+        .disabled(model.tracks.count < 2 && !on)
         .padding(.trailing, 4)
     }
 

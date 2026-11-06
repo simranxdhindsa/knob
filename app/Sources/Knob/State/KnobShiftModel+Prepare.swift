@@ -182,6 +182,8 @@ extension KnobShiftModel {
         if at <= currentIndex, !tracks.isEmpty, nowPlaying != nil { currentIndex += 1 }
         tracks.insert(track, at: at)
         if isShuffled || isMixOrdered { unshuffled.insert(track, at: index(in: unshuffled)) }
+        // Mix Order stays true to its name: the new song goes where it mixes best.
+        if isMixOrdered { arrangeByMix() }
     }
 
     private func setProgress(_ value: Double, for id: UUID) {

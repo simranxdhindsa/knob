@@ -58,13 +58,19 @@ struct StandbySong: Codable, Equatable {
 enum StandbyActions {
     enum Kind { case playPause, previous, next }
     @MainActor static var handler: ((Kind) -> Void)?
+
+    /// Runs a button. iOS can start Knob just to run one, so it gives the app a moment to be ready.
+    @MainActor static func run(_ kind: Kind) async {
+        for _ in 0..<30 where handler == nil { try? await Task.sleep(for: .milliseconds(100)) }
+        handler?(kind)
+    }
 }
 
 struct StandbyPlayPauseIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Play or pause"
     static var isDiscoverable = false
     func perform() async throws -> some IntentResult {
-        await MainActor.run { StandbyActions.handler?(.playPause) }
+        await StandbyActions.run(.playPause)
         return .result()
     }
 }
@@ -73,7 +79,7 @@ struct StandbyPreviousIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Previous song"
     static var isDiscoverable = false
     func perform() async throws -> some IntentResult {
-        await MainActor.run { StandbyActions.handler?(.previous) }
+        await StandbyActions.run(.previous)
         return .result()
     }
 }
@@ -83,7 +89,7 @@ struct StandbyNextIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Next song"
     static var isDiscoverable = false
     func perform() async throws -> some IntentResult {
-        await MainActor.run { StandbyActions.handler?(.next) }
+        await StandbyActions.run(.next)
         return .result()
     }
 }

@@ -34,7 +34,11 @@ final class PhoneStandby {
         StandbyActions.handler = { [weak self] kind in self?.run(kind) }
         Self.drawRecord()
         // A card left from an earlier run is ended: this run starts its own.
-        Task { for old in Activity<KnobStandbyAttributes>.activities { await old.end(nil, dismissalPolicy: .immediate) } }
+        Task { [weak self] in
+            for old in Activity<KnobStandbyAttributes>.activities where old.id != self?.activity?.id {
+                await old.end(nil, dismissalPolicy: .immediate)
+            }
+        }
 
         model.$nowPlaying.removeDuplicates { $0?.id == $1?.id }
             .combineLatest(model.$isPlaying.removeDuplicates())
@@ -93,13 +97,18 @@ final class PhoneStandby {
             title: Self.short(track.name), artist: track.artist.map(Self.short), isPlaying: model.isPlaying,
             started: Date().addingTimeInterval(-elapsed), duration: track.duration, elapsed: elapsed, cover: coverName)
         if let sent, !Self.changed(sent, state) { return }
-        if let activity, activity.activityState == .active {
+        // While paused the card holds still as long as it likes. It only goes out of date if the
+        // song should have ended and Knob has gone, and a late update brings it back.
+        let content = ActivityContent(state: state, staleDate: state.isPlaying ? state.ends.addingTimeInterval(90) : nil)
+        if let activity, activity.activityState == .active || activity.activityState == .stale {
             sent = state
-            let content = ActivityContent(state: state, staleDate: state.ends.addingTimeInterval(90))
             Task { await activity.update(content) }
         } else if UIApplication.shared.applicationState == .active {
-            // Only allowed while Knob is on screen.
-            let content = ActivityContent(state: state, staleDate: state.ends.addingTimeInterval(90))
+            // Only allowed while Knob is on screen. Whatever is left of the last card goes first.
+            if let old = activity {
+                activity = nil
+                Task { await old.end(nil, dismissalPolicy: .immediate) }
+            }
             do {
                 activity = try Activity.request(attributes: KnobStandbyAttributes(), content: content, pushType: nil)
                 sent = state
@@ -134,9 +143,14 @@ final class PhoneStandby {
     /// enough for the extension, under a new name, and removes the old ones.
     private static func saveCover(for url: URL) async -> String? {
         guard let folder = StandbyGroup.folder else { return nil }
-        let image = await KnobShiftArtwork.load(url) ?? Self.drawnCover(for: url)
-        guard let image, let data = Self.shrunk(image).jpegData(compressionQuality: 0.82) else { return nil }
+        guard let image = await KnobShiftArtwork.load(url) ?? Self.drawnCover(for: url) else { return nil }
         let name = "cover-\(UInt32(truncatingIfNeeded: url.path.hashValue))-\(Int(Date().timeIntervalSince1970)).jpg"
+        // Shrinking and writing happen off the main thread, so skipping through songs stays smooth.
+        return await Task.detached(priority: .utility) { Self.write(image, as: name, in: folder) }.value
+    }
+
+    private nonisolated static func write(_ image: UIImage, as name: String, in folder: URL) -> String? {
+        guard let data = shrunk(image).jpegData(compressionQuality: 0.82) else { return nil }
         try? data.write(to: folder.appendingPathComponent(name), options: .atomic)
         for old in (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? [] where old.hasPrefix("cover-") && old != name {
             try? FileManager.default.removeItem(at: folder.appendingPathComponent(old))
@@ -150,7 +164,7 @@ final class PhoneStandby {
         return renderer.uiImage
     }
 
-    private static func shrunk(_ image: UIImage) -> UIImage {
+    private nonisolated static func shrunk(_ image: UIImage) -> UIImage {
         let side: CGFloat = 360
         guard max(image.size.width, image.size.height) > side else { return image }
         let format = UIGraphicsImageRendererFormat(); format.scale = 1

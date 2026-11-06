@@ -271,6 +271,22 @@ enum KnobShiftQueueCheck {
         changed.tracks.append(added)
         changed.restoreOrderBeforeSort()
         expect(names(changed.tracks) == ["Slow", "Fast", "Other", "New"], "taking a sort back leaves out removed songs and keeps added ones")
+        let nexted = model(handMade, playing: 0)
+        nexted.sortQueue(by: .bpm)
+        nexted.playNext(ids: [handMade[1].id])
+        expect(nexted.orderBeforeSort == nil, "Play Next after a sort makes that the user's order, so going back can't undo it")
+        let growing = model([song("Slow", 80), song("Mid", 120), song("Fast", 170)], playing: 0)
+        growing.toggleMixOrder()
+        growing.place(song("Near Mid", 121), at: nil)
+        let at = growing.tracks.firstIndex { $0.title == "Near Mid" } ?? 0
+        expect(at < growing.tracks.count - 1 && growing.isMixOrdered && growing.unshuffled.count == 4,
+               "a song added during Mix Order goes where it mixes, not last (at \(at) of \(growing.tracks.count))")
+        let emptied = model(handMade, playing: 0)
+        emptied.sortQueue(by: .bpm)
+        emptied.toggleMixOrder()
+        emptied.removeAll()
+        expect(!emptied.isMixOrdered && !emptied.isShuffled && emptied.orderBeforeSort == nil && emptied.unshuffled.isEmpty,
+               "Remove all leaves no order behind")
         let dragged = model(handMade, playing: 0)
         dragged.sortQueue(by: .bpm)
         dragged.move(fromOffsets: IndexSet(integer: 3), toOffset: 1)

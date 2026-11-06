@@ -89,6 +89,7 @@ extension KnobShiftModel {
         }
         log("QUEUE", "Removed \(leaving) song(s) and \(waiting) still preparing.")
         currentIndex = min(currentIndex, max(0, tracks.count - 1))
+        if tracks.isEmpty { clearOrderModes() }
         persistQueue()
         if tracks.isEmpty {
             mixState = .idle
