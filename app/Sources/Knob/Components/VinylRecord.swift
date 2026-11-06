@@ -7,6 +7,8 @@ import SwiftUI
 struct VinylRecord: View {
     @ObservedObject var turntable: KnobShiftTurntable
     @ObservedObject var model: KnobShiftModel
+    /// The song on the label, which only changes while the record is in its sleeve.
+    let url: URL?
     let diameter: CGFloat
     /// A hand can't move a record that is still coming out of its sleeve.
     var movable = true
@@ -20,7 +22,7 @@ struct VinylRecord: View {
         TimelineView(.animation(paused: !(model.isPlaying || turntable.isActive))) { context in
             let angle = turntable.recordAngle(at: context.date)
             ZStack {
-                RecordFace(url: model.nowPlaying?.url, diameter: diameter)
+                RecordFace(url: url, diameter: diameter)
                     .rotationEffect(.degrees(angle))
                 VinylTexture.light(diameter)
                     .frame(width: diameter, height: diameter)

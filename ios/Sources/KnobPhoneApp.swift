@@ -47,6 +47,41 @@ final class PhoneApp: ObservableObject {
     }
 
     #if DEBUG
+    /// KNOB_PHONE_SWAP=n turns the phone on its side after n seconds, then changes song every way
+    /// there is, so the record's change can be timed: next, previous, three quick nexts, a KnobMix.
+    private static func swapCheck(_ shift: KnobShiftModel, after seconds: Double) async {
+        try? await Task.sleep(for: .seconds(seconds))
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
+        try? await Task.sleep(for: .seconds(4))
+        shift.log("VINYL", "CASE next")
+        shift.next()
+        try? await Task.sleep(for: .seconds(4))
+        // Past three seconds in, the first press restarts the song and the second goes back.
+        shift.log("VINYL", "CASE previous")
+        shift.previous()
+        try? await Task.sleep(for: .milliseconds(300))
+        shift.previous()
+        try? await Task.sleep(for: .seconds(4))
+        shift.log("VINYL", "CASE three quick nexts")
+        for _ in 0..<3 {
+            shift.next()
+            try? await Task.sleep(for: .milliseconds(180))
+        }
+        try? await Task.sleep(for: .seconds(4))
+        shift.log("VINYL", "CASE KnobMix")
+        shift.mixNow()
+        var waited = 0
+        while shift.mixState != .mixing, waited < 400 {
+            try? await Task.sleep(for: .milliseconds(100))
+            waited += 1
+        }
+        shift.log("VINYL", "CASE the mix began")
+        while shift.mixState == .mixing {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        shift.log("VINYL", "CASE the mix ended")
+    }
+
     /// KNOB_PHONE_TURN=n turns the phone on its side after n seconds, then drives the record deck
     /// the way hands do: the song's position is logged through the turn, then a hand turns the
     /// record one full turn forward and half a turn back, and the arm is moved to 70 percent.
@@ -144,6 +179,9 @@ final class PhoneApp: ObservableObject {
         let environment = ProcessInfo.processInfo.environment
         if let seconds = environment["KNOB_PHONE_TURN"].flatMap(Double.init) {
             Task { await vinylCheck(model.knobShift, after: seconds) }
+        }
+        if let seconds = environment["KNOB_PHONE_SWAP"].flatMap(Double.init) {
+            Task { await swapCheck(model.knobShift, after: seconds) }
         }
         PhoneEffectUnit.silent = environment["KNOB_PHONE_SILENT"] == "1"
         // KNOB_PHONE_ADD=2 carries on while the songs prepare, so the queue can be seen doing it.
