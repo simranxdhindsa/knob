@@ -23,7 +23,7 @@ struct KnobPlayingActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    StandbyRecord(cover: context.state.cover, diameter: 72, turn: context.state.turn)
+                    StandbyRecord(cover: context.state.cover, diameter: 72, turn: context.state.turn, moving: context.state.isPlaying)
                         .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.center) {
@@ -33,7 +33,7 @@ struct KnobPlayingActivity: Widget {
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 8) {
                         StandbyProgress(state: context.state, size: 11)
-                        StandbyButtons(isPlaying: context.state.isPlaying, size: 17)
+                        StandbyButtons(isPlaying: context.state.isPlaying, mixing: context.state.mixing, size: 17)
                     }
                     .padding(.horizontal, 6)
                 }

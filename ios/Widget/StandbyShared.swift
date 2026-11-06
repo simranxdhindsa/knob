@@ -23,6 +23,8 @@ struct KnobStandbyAttributes: ActivityAttributes {
         /// How far the record has turned, in degrees, and the song after this one.
         var turn: Double = 0
         var next: String?
+        /// A KnobMix is running, or waiting for its beat.
+        var mixing = false
 
         var ends: Date { started.addingTimeInterval(duration) }
         var range: ClosedRange<Date> { started...max(ends, started.addingTimeInterval(1)) }
@@ -59,7 +61,7 @@ struct StandbySong: Codable, Equatable {
 /// What the card's buttons ask for. The app sets `handler` and the intents call it, which only
 /// happens inside the app: a Live Activity button runs in Knob, never in the extension.
 enum StandbyActions {
-    enum Kind { case playPause, previous, next }
+    enum Kind { case playPause, previous, next, mix }
     @MainActor static var handler: ((Kind) -> Void)?
 
     /// Runs a button. iOS can start Knob just to run one, so it gives the app a moment to be ready.
@@ -87,7 +89,16 @@ struct StandbyPreviousIntent: LiveActivityIntent {
     }
 }
 
-/// Next while playing is a KnobMix into the next song, like everywhere else in Knob.
+/// KnobMix Now: a beat matched mix into the next song, from its own button as in the player.
+struct StandbyMixIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "KnobMix Now"
+    static var isDiscoverable = false
+    func perform() async throws -> some IntentResult {
+        await StandbyActions.run(.mix)
+        return .result()
+    }
+}
+
 struct StandbyNextIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Next song"
     static var isDiscoverable = false

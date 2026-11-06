@@ -64,9 +64,9 @@ final class PhoneStandby {
         switch kind {
         case .playPause: model.pauseOrResume()
         case .previous: model.previous()
-        case .next:
-            // Like Apple's player: a KnobMix while playing, a plain step when paused.
-            if model.isPlaying, model.tracks.count > 1 { model.mixNow() } else { model.next() }
+        case .next: model.next()
+        case .mix:
+            if model.isPlaying, model.tracks.count > 1, model.mixState != .mixing { model.mixNow() }
         }
         DispatchQueue.main.async { [weak self] in self?.update() }
     }
@@ -102,7 +102,7 @@ final class PhoneStandby {
         let state = KnobStandbyAttributes.ContentState(
             title: Self.short(track.name), artist: track.artist.map(Self.short), isPlaying: model.isPlaying,
             started: Date().addingTimeInterval(-elapsed), duration: track.duration, elapsed: elapsed, cover: coverName,
-            turn: turn, next: model.upNext.map { Self.short($0.name) })
+            turn: turn, next: model.upNext.map { Self.short($0.name) }, mixing: model.mixState == .mixing || model.mixNowWaiting)
         if let sent, !Self.changed(sent, state) { return }
         // While paused the card holds still as long as it likes. It only goes out of date if the
         // song should have ended and Knob has gone, and a late update brings it back.
@@ -129,7 +129,7 @@ final class PhoneStandby {
     /// A new song, a play or pause, a jump of more than a second, or a different cover.
     private static func changed(_ old: KnobStandbyAttributes.ContentState, _ new: KnobStandbyAttributes.ContentState) -> Bool {
         if old.title != new.title || old.artist != new.artist || old.isPlaying != new.isPlaying || old.cover != new.cover { return true }
-        if old.turn != new.turn || old.next != new.next { return true }
+        if old.turn != new.turn || old.next != new.next || old.mixing != new.mixing { return true }
         if new.isPlaying { return abs(old.started.timeIntervalSince(new.started)) > 1 }
         return abs(old.elapsed - new.elapsed) > 0.5
     }

@@ -11,6 +11,8 @@ struct StandbyRecord: View {
     let cover: String?
     let diameter: CGFloat
     var turn: Double = 0
+    /// Only a playing record moves: paused, it holds still even if the card catches up late.
+    var moving = true
     @Environment(\.isLuminanceReduced) private var dim
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -24,7 +26,7 @@ struct StandbyRecord: View {
                 Circle().fill(Vinyl.discCore).frame(width: diameter * 0.03, height: diameter * 0.03)
             }
             .rotationEffect(.degrees(reduceMotion ? 0 : turn))
-            .animation(reduceMotion ? nil : Motion.standbyTurn, value: turn)
+            .animation(reduceMotion || !moving ? nil : Motion.standbyTurn, value: turn)
             VinylTexture.liveLight.allowsHitTesting(false)
         }
         .frame(width: diameter, height: diameter)
@@ -67,7 +69,7 @@ struct StandbyRingedRecord: View {
                 .progressViewStyle(.circular)
                 .tint(Palette.accent)
                 .frame(width: diameter, height: diameter)
-            StandbyRecord(cover: state.cover, diameter: diameter - Self.gap, turn: state.turn)
+            StandbyRecord(cover: state.cover, diameter: diameter - Self.gap, turn: state.turn, moving: state.isPlaying)
         }
         .frame(width: diameter, height: diameter)
     }
@@ -153,10 +155,11 @@ struct StandbyTimeLeft: View {
 /// Previous, play or pause, next. They run in Knob, so they work with the phone locked.
 struct StandbyButtons: View {
     let isPlaying: Bool
+    var mixing = false
     var size: CGFloat = 22
 
     var body: some View {
-        HStack(spacing: size * 1.3) {
+        HStack(spacing: size * 1.1) {
             Button(intent: StandbyPreviousIntent()) {
                 Image(systemName: "backward.fill").font(.system(size: size * 0.8))
             }
@@ -173,6 +176,13 @@ struct StandbyButtons: View {
                 Image(systemName: "forward.fill").font(.system(size: size * 0.8))
             }
             .accessibilityLabel("Next song")
+            Button(intent: StandbyMixIntent()) {
+                Image(systemName: "arrow.left.arrow.right")
+                    .font(.system(size: size * 0.7, weight: .bold))
+                    .foregroundStyle(mixing ? Palette.accent : Vinyl.shine)
+                    .opacity(isPlaying || mixing ? 1 : 0.45)
+            }
+            .accessibilityLabel("KnobMix Now")
         }
         .buttonStyle(.plain)
         .foregroundStyle(Vinyl.shine)
@@ -189,11 +199,11 @@ struct StandbyCard: View {
 
     var body: some View {
         HStack(spacing: fullscreen ? 18 : 16) {
-            StandbyRecord(cover: state.cover, diameter: fullscreen ? 132 : 104, turn: state.turn)
+            StandbyRecord(cover: state.cover, diameter: fullscreen ? 132 : 104, turn: state.turn, moving: state.isPlaying)
             VStack(spacing: fullscreen ? 8 : 10) {
                 StandbyTitles(state: state, size: fullscreen ? 20 : 17, showsNext: fullscreen)
                 StandbyProgress(state: state, size: fullscreen ? 13 : 12)
-                StandbyButtons(isPlaying: state.isPlaying, size: fullscreen ? 18 : 20)
+                StandbyButtons(isPlaying: state.isPlaying, mixing: state.mixing, size: fullscreen ? 18 : 20)
             }
         }
         .padding(fullscreen ? 12 : 14)
@@ -205,7 +215,9 @@ struct StandbyCard: View {
     /// The cover's colours, spread soft behind the card, as the player does. Gone at night.
     @ViewBuilder private var wash: some View {
         if let picture = StandbyRecord.picture(StandbyGroup.coverFile(state.cover)) {
+            // Fading out before the card's edge, so no box shows on StandBy's black.
             Image(uiImage: picture).resizable().scaledToFill().blur(radius: 40).opacity(0.35).clipped()
+                .mask(RadialGradient(colors: [Bedside.night, .clear], center: .center, startRadius: 30, endRadius: 200))
         }
     }
 }
