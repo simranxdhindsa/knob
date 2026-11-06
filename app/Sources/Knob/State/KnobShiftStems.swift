@@ -30,7 +30,11 @@ enum KnobShiftStems {
     static func separate(_ url: URL, from start: TimeInterval, length: TimeInterval) throws -> Stems {
         let began = Date()
         let model = try loadModel()
-        let (channels, first) = try read(url, from: start, length: length)
+        // The model only knows 44.1 kHz. A song at another rate is separated from a converted
+        // copy, then its voice goes back to the song's rate and the music is what remains, so
+        // the two parts still add up to the file exactly.
+        let (original, first, rate) = try read(url, from: start, length: length)
+        let channels = rate == sampleRate ? original : try original.map { try resample($0, from: rate, to: sampleRate) }
         let samples = channels[0].count
         let transform = Transform()
         let spectra = channels.map { transform.forward($0) }
@@ -40,18 +44,20 @@ enum KnobShiftStems {
             let part = try voiceShare(model: model, spectra: spectra, from: chunkStart, frames: min(chunk, frames - chunkStart))
             for channel in 0..<2 { masks[channel].append(contentsOf: part[channel]) }
         }
-        let outFormat = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)!
-        guard let vocals = AVAudioPCMBuffer(pcmFormat: outFormat, frameCapacity: AVAudioFrameCount(samples)),
-              let music = AVAudioPCMBuffer(pcmFormat: outFormat, frameCapacity: AVAudioFrameCount(samples)) else {
+        let outSamples = original[0].count
+        let outFormat = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 2)!
+        guard let vocals = AVAudioPCMBuffer(pcmFormat: outFormat, frameCapacity: AVAudioFrameCount(outSamples)),
+              let music = AVAudioPCMBuffer(pcmFormat: outFormat, frameCapacity: AVAudioFrameCount(outSamples)) else {
             throw StemError.modelFailed
         }
-        vocals.frameLength = AVAudioFrameCount(samples)
-        music.frameLength = AVAudioFrameCount(samples)
+        vocals.frameLength = AVAudioFrameCount(outSamples)
+        music.frameLength = AVAudioFrameCount(outSamples)
         for channel in 0..<2 {
-            let voice = transform.inverse(spectra[channel], masks: masks[channel], length: samples)
-            for index in 0..<samples {
+            var voice = transform.inverse(spectra[channel], masks: masks[channel], length: samples)
+            if rate != sampleRate { voice = try resample(voice, from: sampleRate, to: rate, count: outSamples) }
+            for index in 0..<outSamples {
                 vocals.floatChannelData![channel][index] = voice[index]
-                music.floatChannelData![channel][index] = channels[channel][index] - voice[index]
+                music.floatChannelData![channel][index] = original[channel][index] - voice[index]
             }
         }
         return Stems(vocals: vocals, music: music, start: first, seconds: Date().timeIntervalSince(began))
@@ -85,14 +91,15 @@ enum KnobShiftStems {
                                        commonFormat: .pcmFormatFloat32, interleaved: false)
             try file.write(from: buffer)
         }
-        return Prepared(song: url, start: stems.start, length: Double(stems.music.frameLength) / sampleRate,
+        return Prepared(song: url, start: stems.start, length: Double(stems.music.frameLength) / stems.music.format.sampleRate,
                         music: urls[0], vocals: urls[1], seconds: stems.seconds)
     }
 
     /// For checks: how far the transform alone (every share at 1) is from the original sound,
     /// as the largest difference relative to the loudest sample. Near 0 means nothing is lost.
     static func roundTripError(_ url: URL, from start: TimeInterval, length: TimeInterval) throws -> Float {
-        let signal = try read(url, from: start, length: length).channels[0]
+        let part = try read(url, from: start, length: length)
+        let signal = part.rate == sampleRate ? part.channels[0] : try resample(part.channels[0], from: part.rate, to: sampleRate)
         let transform = Transform()
         let spectrum = transform.forward(signal)
         let back = transform.inverse(spectrum, masks: spectrum.map { _ in [Float](repeating: 1, count: bins) }, length: signal.count)
@@ -100,12 +107,13 @@ enum KnobShiftStems {
         return zip(signal, back).map { abs($0 - $1) }.max().map { $0 / max(peak, 1e-9) } ?? 0
     }
 
-    private static func read(_ url: URL, from start: TimeInterval, length: TimeInterval) throws -> (channels: [[Float]], start: TimeInterval) {
+    private static func read(_ url: URL, from start: TimeInterval, length: TimeInterval) throws -> (channels: [[Float]], start: TimeInterval, rate: Double) {
         let file = try AVAudioFile(forReading: url)
         let format = file.processingFormat
-        guard format.sampleRate == sampleRate, format.channelCount >= 1 else { throw StemError.unsupportedFile }
-        let first = AVAudioFramePosition(max(0, start) * sampleRate)
-        let count = AVAudioFrameCount(max(0, min(Double(file.length - first), length * sampleRate)))
+        let rate = format.sampleRate
+        guard rate > 0, format.channelCount >= 1 else { throw StemError.unsupportedFile }
+        let first = AVAudioFramePosition(max(0, start) * rate)
+        let count = AVAudioFrameCount(max(0, min(Double(file.length - first), length * rate)))
         guard count > AVAudioFrameCount(fftSize), let input = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: count) else {
             throw StemError.unsupportedFile
         }
@@ -114,7 +122,37 @@ enum KnobShiftStems {
         guard let data = input.floatChannelData else { throw StemError.unsupportedFile }
         let samples = Int(input.frameLength)
         let channels = (0..<2).map { Array(UnsafeBufferPointer(start: data[min($0, Int(format.channelCount) - 1)], count: samples)) }
-        return (channels, Double(first) / sampleRate)
+        return (channels, Double(first) / rate, rate)
+    }
+
+    /// One channel at another sample rate, lined up with the original from its first sample.
+    /// `count` trims or pads the result to an exact length.
+    private static func resample(_ samples: [Float], from source: Double, to target: Double, count: Int? = nil) throws -> [Float] {
+        guard let input = AVAudioFormat(standardFormatWithSampleRate: source, channels: 1),
+              let output = AVAudioFormat(standardFormatWithSampleRate: target, channels: 1),
+              let converter = AVAudioConverter(from: input, to: output),
+              let whole = AVAudioPCMBuffer(pcmFormat: input, frameCapacity: AVAudioFrameCount(samples.count)) else {
+            throw StemError.unsupportedFile
+        }
+        converter.sampleRateConverterQuality = AVAudioQuality.max.rawValue
+        whole.frameLength = AVAudioFrameCount(samples.count)
+        samples.withUnsafeBufferPointer { whole.floatChannelData![0].update(from: $0.baseAddress!, count: samples.count) }
+        let length = count ?? Int((Double(samples.count) * target / source).rounded())
+        guard let converted = AVAudioPCMBuffer(pcmFormat: output, frameCapacity: AVAudioFrameCount(length + 4_096)) else {
+            throw StemError.unsupportedFile
+        }
+        var given = false
+        var problem: NSError?
+        let status = converter.convert(to: converted, error: &problem) { _, state in
+            state.pointee = given ? .endOfStream : .haveData
+            defer { given = true }
+            return given ? nil : whole
+        }
+        guard status != .error, problem == nil else { throw StemError.unsupportedFile }
+        var result = Array(UnsafeBufferPointer(start: converted.floatChannelData![0], count: Int(converted.frameLength)))
+        if result.count > length { result.removeLast(result.count - length) }
+        if result.count < length { result.append(contentsOf: repeatElement(0, count: length - result.count)) }
+        return result
     }
 
     /// Runs the model on up to `chunk` frames and returns, per channel and frame, the voice's

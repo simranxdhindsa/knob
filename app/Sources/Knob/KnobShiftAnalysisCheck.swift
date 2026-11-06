@@ -105,7 +105,7 @@ enum KnobShiftAnalysisCheck {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             for (name, buffer) in [("vocals", stems.vocals), ("music", stems.music)] {
                 let url = folder.appendingPathComponent("\(file.deletingPathExtension().lastPathComponent) \(name).wav")
-                let settings: [String: Any] = [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: KnobShiftStems.sampleRate,
+                let settings: [String: Any] = [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: buffer.format.sampleRate,
                                                AVNumberOfChannelsKey: 2, AVLinearPCMBitDepthKey: 16]
                 let output = try AVAudioFile(forWriting: url, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
                 try output.write(from: buffer)

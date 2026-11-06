@@ -148,6 +148,9 @@ final class KnobShiftSpotDL: @unchecked Sendable {
         try out.write(to: url, options: .atomic)
     }
 
+    /// FFmpeg's setting for saving songs as 16 bit FLAC.
+    static let flacBits = "-sample_fmt s16"
+
     /// Downloads the songs of a save file into `folder`. Songs already there are skipped, so
     /// running it again only fetches what is missing. Each line of spotDL's output goes to
     /// `onLine` as it arrives.
@@ -157,7 +160,7 @@ final class KnobShiftSpotDL: @unchecked Sendable {
         // A save file carries everything spotDL needs, so downloading asks Spotify nothing: no
         // login, and Spotify pausing its key never stops a download (checked with a broken key).
         let arguments = ["download", saveFile.path,
-                         "--format", "m4a", "--bitrate", "disable",
+                         "--format", "flac", "--bitrate", "disable", "--ffmpeg-args", Self.flacBits,
                          "--output", folder.appendingPathComponent("{list-position} {title} - {artists} [{track-id}].{output-ext}").path,
                          "--threads", "\(KnobShiftImport.Progress.threads)", "--print-errors"]
         return await run(arguments + Self.browserArguments(browser), id: id, browser: browser, onLine: onLine)
