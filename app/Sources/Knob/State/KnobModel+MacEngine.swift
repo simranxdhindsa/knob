@@ -329,10 +329,15 @@ extension KnobModel {
     }
 
     func quit() {
-        Task {
-            await stopEngine()
-            NSApp.terminate(nil)
-        }
+        AppDelegate.quit()
+    }
+
+    /// Quitting ran out of time: gives the speakers their level back, then stops the supervisor,
+    /// which gives the Mac its output back and stops the engine by itself.
+    func abandonEngine() {
+        trace("POWER", "The engine did not stop in time, so Knob quits without it.")
+        VolumeHandoff.giveBack()
+        launcher?.stop()
     }
 
     /// Plays through the output picked in Knob's menu. Switching hands the Mac its old output
