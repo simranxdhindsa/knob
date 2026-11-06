@@ -7,8 +7,9 @@ set -euo pipefail
 repo_dir="$(cd "$(dirname "$0")/.." && pwd)"
 shared="$repo_dir/app/Sources/Knob"
 
-# The analyser, its contents, and the launch icon, which are dark in both themes on purpose.
-analyser='/(InsetScreen|SpectrumView|ScreenSection|KnobShiftScreen|AppIconView)\.swift$'
+# The analyser, its contents, the launch icon and the player's theme, which are dark in both
+# themes on purpose.
+analyser='/(InsetScreen|SpectrumView|ScreenSection|KnobShiftScreen|AppIconView|PhonePlayerTheme)\.swift$'
 
 files=()
 while IFS= read -r file; do files+=("$file"); done < <(
