@@ -54,3 +54,8 @@ enum Motion {
         .timingCurve(0.26, 0.75, 0.38, 0.45, duration: turningOn ? 0.25 : 0.125)
     }
 }
+
+extension Motion {
+    /// Nothing moves for someone who asked for less motion.
+    static func respecting(_ animation: Animation, reduce: Bool) -> Animation? { reduce ? nil : animation }
+}
