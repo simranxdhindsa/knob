@@ -127,14 +127,14 @@ struct KnobShiftPlayerView: View {
         .padding(.bottom, KnobShiftPlayerLayout.bottom)
     }
 
-    func titleRow(wide: Bool) -> some View {
+    func titleRow(wide: Bool, scale: CGFloat = 1) -> some View {
         let track = model.nowPlaying
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(track?.name ?? "Nothing playing")
-                    .font(.system(size: 21, weight: .semibold)).foregroundStyle(Glass.text)
+                    .font(.system(size: 21 * scale, weight: .semibold)).foregroundStyle(Glass.text)
                 Text(track?.artist ?? (track != nil ? "Local music" : (model.tracks.isEmpty ? "Add songs from the dots" : "Press Play to start")))
-                    .font(.system(size: 16)).foregroundStyle(Glass.secondary)
+                    .font(.system(size: 16 * scale)).foregroundStyle(Glass.secondary)
             }
             .lineLimit(1)
             .contentTransition(.opacity)

@@ -12,12 +12,12 @@ extension KnobShiftPlayerView {
                     .padding(.top, layout.top)
                     .padding(.bottom, layout.gap)
                 VStack(spacing: 0) {
-                    titleRow(wide: wide)
-                        .frame(height: KnobShiftPlayerLayout.title)
-                    PlayerTimeline(model: model, clock: model.clock, scrub: scrub)
-                        .frame(height: KnobShiftPlayerLayout.timeline)
-                    PlayerTransport(model: model, scrub: scrub, dialSize: KnobShiftPlayerLayout.dial)
-                        .frame(height: KnobShiftPlayerLayout.dial)
+                    titleRow(wide: wide, scale: layout.scale)
+                        .frame(height: KnobShiftPlayerLayout.title * layout.scale)
+                    PlayerTimeline(model: model, clock: model.clock, scrub: scrub, textSize: 12 * layout.scale)
+                        .frame(height: KnobShiftPlayerLayout.timeline * layout.scale)
+                    PlayerTransport(model: model, scrub: scrub, dialSize: KnobShiftPlayerLayout.dial * layout.scale, scale: layout.scale)
+                        .frame(height: KnobShiftPlayerLayout.dial * layout.scale)
                     Text(model.notice ?? " ")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Palette.accent)
@@ -62,7 +62,10 @@ struct KnobShiftPosterLayout {
     var top: CGFloat { Self.top }
     var gap: CGFloat { Self.gap }
     /// As big as the height allows, and never wider than the deck.
-    var side: CGFloat { min(size.height - Self.top - Self.gap - Self.controls, size.width - 96) }
+    var side: CGFloat { min(size.height - Self.top - Self.gap - Self.controls * scale, size.width - 96) }
+    /// How much the controls grow: not at all on the smallest screens, and by about a fifth on a
+    /// 14 inch MacBook, so they read at full screen distance.
+    var scale: CGFloat { min(max(size.height / 900, 1), 1.6) }
 
     /// A very short screen keeps the window's layout rather than a tiny cover.
     static func fits(_ size: CGSize) -> Bool {

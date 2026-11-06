@@ -7,6 +7,8 @@ struct PlayerTimeline: View {
     @ObservedObject var model: KnobShiftModel
     @ObservedObject var clock: KnobShiftClock
     @ObservedObject var scrub: PlayerScrub
+    /// Full screen's times grow with the screen.
+    var textSize: CGFloat = 12
 
     /// How many seconds ahead a planned mix is announced.
     private static let warning = 5
@@ -23,7 +25,7 @@ struct PlayerTimeline: View {
                     Spacer()
                     Text(playing ? KnobShiftNowPlaying.clock(max(0, clock.duration - time)) + " left" : "0:00")
                 }
-                .font(.system(size: 12, weight: .medium).monospacedDigit())
+                .font(.system(size: textSize, weight: .medium).monospacedDigit())
                 .foregroundStyle(Glass.secondary)
                 chip
             }
