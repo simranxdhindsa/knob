@@ -146,6 +146,7 @@ struct PhoneRoot: View {
             PhonePlayer(model: model.knobShift, knob: model, prepareImports: PhoneLibrary.keep)
                 .environment(\.hidesPlayButton, !landed)
                 .onPreferenceChange(PlayButtonFrame.self) { playButton = $0 }
+                .darkPlayer()
             // A finished sync's "done" card, over the player (KnobDoneCard).
             if let done = link.done {
                 KnobDoneCard(title: done.title, detail: done.detail, onFinished: { link.done = nil })
@@ -158,6 +159,7 @@ struct PhoneRoot: View {
                             onFinished: { launching = false })
             }
         }
+        .darkWindow(after: launching)
         .sheet(isPresented: $sheets.sound) {
                 PhoneSoundSheet(model: model)
                     .presentationDetents([.height(460), .large])
