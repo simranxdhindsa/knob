@@ -12,6 +12,8 @@ struct VinylRecord: View {
     let diameter: CGFloat
     /// A hand can't move a record that is still coming out of its sleeve.
     var movable = true
+    /// Told when a hand has been on the record and let go.
+    var onUsed: () -> Void = {}
     /// Resets by itself if the system takes the touch away, which ends the drag with no word.
     @GestureState private var touching = false
 
@@ -34,7 +36,11 @@ struct VinylRecord: View {
         .shadow(color: Glass.shadow, radius: 16, y: 7)
         .contentShape(Circle())
         .gesture(hand)
-        .onChange(of: touching) { if !touching { turntable.handUp() } }
+        .onChange(of: touching) {
+            guard !touching else { return }
+            turntable.handUp()
+            if movable { onUsed() }
+        }
         .accessibilityElement()
         .accessibilityLabel("Record")
         .accessibilityHint("Turn clockwise to move ahead in the song, anticlockwise to go back.")

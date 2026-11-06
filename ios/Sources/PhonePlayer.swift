@@ -18,6 +18,9 @@ struct PhonePlayer: View {
     @StateObject private var scrub = PlayerScrub()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.hidesPlayButton) private var hidesPlayButton
+    @AppStorage(PersistKey.knobShiftTipsSeen.rawValue) private var tipsSeen = ""
+    /// The player has been up for a moment, so the tip doesn't land on top of its opening.
+    @State private var turnTipReady = false
     @State private var importing = false
 
     var body: some View {
@@ -36,6 +39,10 @@ struct PhonePlayer: View {
             Task { await model.addTracks(prepared) }
         }
         .onChange(of: canTurn, initial: true) { PhoneOrientation.allow(landscape: canTurn) }
+        .task {
+            try? await Task.sleep(for: .seconds(2))
+            turnTipReady = true
+        }
     }
 
     /// The phone can turn to the record deck with a song loaded, and nothing else open.
@@ -65,8 +72,20 @@ struct PhonePlayer: View {
                         .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 18)), removal: .opacity))
                 }
                 controls(layout)
+                if canTurn, turnTipReady, !DeckTip.turn.isSeen(in: tipsSeen) {
+                    VStack(spacing: 14) {
+                        TipTurningPhone(size: 64)
+                            .shadow(color: Glass.shadow, radius: 8, y: 3)
+                        DeckTipBubble(tip: .turn, onClose: { DeckTip.turn.mark(in: &tipsSeen) })
+                            .frame(width: layout.width)
+                    }
+                    .position(x: layout.cover.x, y: layout.cover.y + layout.side * 0.2)
+                    .transition(.opacity)
+                }
             }
             .animation(reduceMotion ? .easeOut(duration: 0.2) : Motion.gentle, value: sheets.queue)
+            .animation(Motion.gentle, value: turnTipReady)
+            .animation(Motion.gentle, value: tipsSeen)
     }
 
     private func cover(_ layout: PhonePlayerLayout) -> some View {

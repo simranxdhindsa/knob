@@ -73,6 +73,36 @@ final class PhoneApp: ObservableObject {
         shift.log("VINYL", "MARK end")
     }
 
+    /// KNOB_PHONE_TIPS=n walks the guide from the start, marking each tip so it can be photographed.
+    private static func tipsCheck(_ shift: KnobShiftModel, after seconds: Double) async {
+        let key = PersistKey.knobShiftTipsSeen.rawValue
+        UserDefaults.standard.removeObject(forKey: key)
+        try? await Task.sleep(for: .seconds(seconds))
+        shift.log("VINYL", "MARK tip turn")
+        try? await Task.sleep(for: .seconds(1.5))
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
+        try? await Task.sleep(for: .seconds(4.5))
+        shift.log("VINYL", "MARK tip record, seen \(UserDefaults.standard.string(forKey: key) ?? "nothing")")
+        try? await Task.sleep(for: .seconds(1.5))
+        for (name, seen) in [("arm", "turn,record"), ("cover", "turn,record,arm")] {
+            UserDefaults.standard.set(seen, forKey: key)
+            try? await Task.sleep(for: .seconds(1.5))
+            shift.log("VINYL", "MARK tip \(name)")
+            try? await Task.sleep(for: .seconds(1.5))
+        }
+        UserDefaults.standard.set("turn,record,arm,cover", forKey: key)
+        try? await Task.sleep(for: .seconds(1.5))
+        shift.log("VINYL", "MARK tip none")
+        try? await Task.sleep(for: .seconds(1.5))
+        PhoneCharger.shared.pretend(plugged: true, percent: 82)
+        try? await Task.sleep(for: .seconds(3))
+        shift.log("VINYL", "MARK tip bedside")
+        try? await Task.sleep(for: .seconds(1.5))
+        PhoneCharger.shared.tapClock()
+        try? await Task.sleep(for: .seconds(1.5))
+        shift.log("VINYL", "MARK tip end, seen \(UserDefaults.standard.string(forKey: key) ?? "nothing")")
+    }
+
     /// KNOB_PHONE_BEDSIDE=n turns the phone on its side after n seconds, plugs it in and walks
     /// Bedside mode, marking each moment so the screen can be photographed there.
     /// KNOB_PHONE_BEDSIDE_TIME=21:05 shows that time on the clock.
@@ -275,6 +305,9 @@ final class PhoneApp: ObservableObject {
         }
         if let seconds = environment["KNOB_PHONE_UX"].flatMap(Double.init) {
             Task { await uxCheck(model.knobShift, after: seconds) }
+        }
+        if let seconds = environment["KNOB_PHONE_TIPS"].flatMap(Double.init) {
+            Task { await tipsCheck(model.knobShift, after: seconds) }
         }
         if let seconds = environment["KNOB_PHONE_BEDSIDE"].flatMap(Double.init) {
             Task { await bedsideCheck(model.knobShift, after: seconds) }

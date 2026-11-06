@@ -57,7 +57,8 @@ enum KnobShiftVinylCheck {
             }
             try? await Task.sleep(for: .milliseconds(300))
             let moved = model.playbackTime - start
-            expect(held && abs(moved - 0.9) < 0.05, String(format: "one turn forward and half back moves the song %.2f s (wanted 0.90)", moved))
+            let halfTurn = 180 / KnobShiftTurntable.degreesPerSecond
+            expect(held && abs(moved - halfTurn) < 0.05, String(format: "one turn forward and half back moves the song %.2f s (wanted %.2f)", moved, halfTurn))
             expect(model.isPlaying, "the song still counts as playing under the hand")
             deck.handUp()
             try? await Task.sleep(for: .seconds(1.5))
