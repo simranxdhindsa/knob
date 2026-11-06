@@ -38,10 +38,17 @@ enum KnobShiftTogetherCheck {
         await model.addTracks([first, second])
         guard let track = model.tracks.first else { print("FAIL could not add the songs"); exit(1) }
         model.playForCheck(volume: 0, bySelecting: track)
+        let sound = KnobModel(engine: DemoEngine(), volume: DemoVolume())
+        sound.eq = [Double](repeating: 0, count: 10)
         let session = KnobShiftTogetherSession.shared
         session.startHosting(model)
         print("Hosting: \(session.role == .hosting), \(session.status ?? "no problem")")
-        try? await Task.sleep(for: .seconds(40))
+        try? await Task.sleep(for: .seconds(14))
+        sound.setEffect(.clarity, 7)
+        sound.setEQ(band: 2, 0.5)
+        print("Host set Clarity 7 and EQ band 3 to 0.5")
+        try? await Task.sleep(for: .seconds(20))
+        print("Host sees Ambience \(sound.effects[EffectSlot.ambience.rawValue])")
         print("People at the end: \(session.people)")
         session.leave()
         try? await Task.sleep(for: .seconds(1))
@@ -52,6 +59,9 @@ enum KnobShiftTogetherCheck {
     private static func guest() async {
         let model = KnobShiftModel(restoresQueue: false)
         model.playForCheck(volume: 0)
+        let sound = KnobModel(engine: DemoEngine(), volume: DemoVolume())
+        sound.eq = [Double](repeating: 0, count: 10)
+        sound.setEffect(.surround, 2)
         let session = KnobShiftTogetherSession.shared
         session.startLooking()
         for _ in 0..<40 where session.nearby.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
@@ -69,7 +79,12 @@ enum KnobShiftTogetherCheck {
                          session.state?.title ?? "none", String(describing: session.state?.isPlaying)))
         }
         print("Cover received: \(session.cover != nil)")
+        print("Guest sees Clarity \(sound.effects[EffectSlot.clarity.rawValue]), EQ band 3 \(sound.eq[2]), Surround \(sound.effects[EffectSlot.surround.rawValue])")
+        sound.setEffect(.ambience, 3)
+        print("Guest set Ambience 3")
+        try? await Task.sleep(for: .seconds(2))
         session.leave()
+        print("After leaving: Clarity \(sound.effects[EffectSlot.clarity.rawValue]), Ambience \(sound.effects[EffectSlot.ambience.rawValue]), EQ band 3 \(sound.eq[2]), Surround \(sound.effects[EffectSlot.surround.rawValue])")
         exit(0)
     }
 

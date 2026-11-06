@@ -106,7 +106,7 @@ enum KnobShiftTogetherTests {
                 let count = Int(due - sent)
                 var samples = [Int16](repeating: 0, count: count * 2)
                 for frame in 0..<count {
-                    let value = Int16(sin(2 * .pi * 440 * Double(sent + Int64(frame)) / sourceRate) * 20_000)
+                    let value = Int16(sin(2 * .pi * 440 * Double(sent + Int64(frame)) / sourceRate) * 10_000)
                     samples[frame * 2] = value
                     samples[frame * 2 + 1] = value
                 }
@@ -156,6 +156,9 @@ enum KnobShiftTogetherTests {
         let moved = KnobShiftTogetherRing()
         _ = play(seconds: 10, sourceRate: 48_000, outputRate: 48_000, parts: 0, ring: moved, jumpAt: (5, 200_000_000))
         expect(moved.shared.pointee.jumps == 1, "a big change jumps instead of crawling")
+        let hot = KnobShiftTogetherRing()
+        [Int16(32_767), 32_767].withUnsafeBufferPointer { hot.write(firstFrame: 0, samples: $0) }
+        expect(hot.left[0] > 1.9, "peaks up to 6 dB over full scale survive the trip")
         let holes = KnobShiftTogetherRing()
         var first = [Int16](repeating: 1_000, count: 200)
         first.withUnsafeMutableBufferPointer { holes.write(firstFrame: 0, samples: UnsafeBufferPointer($0)) }
@@ -195,6 +198,14 @@ enum KnobShiftTogetherTests {
         expect(Wire.readAnchor(Data(count: 3)) == nil, "short anchor refused")
         let nonsense = Wire.anchor(frame: 0, hostNanoseconds: 0, rate: .infinity)
         expect(Wire.readAnchor(nonsense.body) == nil, "impossible rate refused")
+        let good = Wire.Effects(effects: [7, 3, 0, 10], eq: [0.5, -1, 0])
+        expect(good.isValid, "real effects accepted")
+        expect(!Wire.Effects(effects: [11], eq: []).isValid, "an effect past its range refused")
+        expect(!Wire.Effects(effects: [], eq: [2]).isValid, "an EQ band past its range refused")
+        expect(!Wire.Effects(effects: [.nan], eq: []).isValid, "not a number refused")
+        expect(!Wire.Effects(effects: [Double](repeating: 1, count: 17), eq: []).isValid, "too many effects refused")
+        expect(good.isClose(to: Wire.Effects(effects: [7.0001, 3, 0, 10], eq: [0.5, -1, 0])), "rounding is not a change")
+        expect(!good.isClose(to: Wire.Effects(effects: [6, 3, 0, 10], eq: [0.5, -1, 0])), "a real change is")
         var long = Wire.Reader()
         do { _ = try long.add(Data([0xFF, 0xFF, 0xFF, 0xFF])); expect(false, "too long refused") } catch { expect(error as? Wire.Reader.Failure == .tooLong, "too long refused") }
         var empty = Wire.Reader()

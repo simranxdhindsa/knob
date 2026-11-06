@@ -22,8 +22,10 @@ final class KnobShiftTogetherHost: @unchecked Sendable {
     private var clockPort: UInt16?
     private var lastState: KnobShiftTogether.Message?
     private var lastCover: KnobShiftTogether.Message?
+    private var lastEffects: KnobShiftTogether.Message?
     var onPeople: (@Sendable ([String]) -> Void)?
     var onCommand: (@Sendable (KnobShiftTogether.Command) -> Void)?
+    var onEffects: (@Sendable (KnobShiftTogether.Effects) -> Void)?
     var onFailure: (@Sendable () -> Void)?
 
     init(name: String) { self.name = name }
@@ -83,6 +85,7 @@ final class KnobShiftTogetherHost: @unchecked Sendable {
         lock.lock()
         if message.kind == .state { lastState = message }
         if message.kind == .cover { lastCover = message }
+        if message.kind == .effects { lastEffects = message }
         let ready = clients.values.filter(\.joined)
         lock.unlock()
         let data = KnobShiftTogether.encode(message)
@@ -152,13 +155,16 @@ final class KnobShiftTogetherHost: @unchecked Sendable {
             lock.lock()
             client.name = String(hello.name.prefix(60))
             client.joined = true
-            let state = lastState, cover = lastCover
+            let waiting = [lastState, lastCover, lastEffects].compactMap { $0 }
             lock.unlock()
-            for message in [state, cover].compactMap({ $0 }) { push(KnobShiftTogether.encode(message), to: client, counted: false) }
+            for message in waiting { push(KnobShiftTogether.encode(message), to: client, counted: false) }
             announce()
         case .command:
             guard client.joined, let command = try? JSONDecoder().decode(KnobShiftTogether.Command.self, from: message.body) else { return }
             onCommand?(command)
+        case .effects:
+            guard client.joined, let effects = try? JSONDecoder().decode(KnobShiftTogether.Effects.self, from: message.body), effects.isValid else { return }
+            onEffects?(effects)
         default: break // A listener has no business sending anything else.
         }
     }
@@ -212,6 +218,7 @@ final class KnobShiftTogetherGuest: @unchecked Sendable {
     private var finished = false
     var onState: (@Sendable (KnobShiftTogether.State) -> Void)?
     var onCover: (@Sendable (Data) -> Void)?
+    var onEffects: (@Sendable (KnobShiftTogether.Effects) -> Void)?
     var onEnd: (@Sendable (Ending) -> Void)?
     var onHello: (@Sendable (String) -> Void)?
 
@@ -246,6 +253,10 @@ final class KnobShiftTogetherGuest: @unchecked Sendable {
             pinger?.cancel()
             connection.cancel()
         }
+    }
+
+    func send(_ effects: KnobShiftTogether.Effects) {
+        if let message = KnobShiftTogether.json(.effects, effects) { send(message) }
     }
 
     func send(_ command: KnobShiftTogether.Command) {
@@ -302,6 +313,9 @@ final class KnobShiftTogetherGuest: @unchecked Sendable {
             if state.ended == true { finish(.ended) } else { onState?(state) }
         case .cover:
             onCover?(message.body)
+        case .effects:
+            guard let effects = try? JSONDecoder().decode(KnobShiftTogether.Effects.self, from: message.body), effects.isValid else { return }
+            onEffects?(effects)
         case .command: break
         }
     }

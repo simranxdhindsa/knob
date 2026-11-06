@@ -76,6 +76,8 @@ struct KnobShiftTogetherView: View {
                 Text("If this device sounds late, as Bluetooth does, slide right until they match.")
                     .font(.system(size: 12)).foregroundStyle(Glass.tertiary).fixedSize(horizontal: false, vertical: true)
             }
+            Text(session.soundIsOff ? "Effects are shared. Turn Knob on here to hear them." : "Effects are shared. A change on any device reaches everyone.")
+                .font(.system(size: 12)).foregroundStyle(Glass.tertiary).fixedSize(horizontal: false, vertical: true)
             if session.role == .hosting {
                 Text(session.people.isEmpty ? "Waiting for others to join." : "LISTENING").font(.system(size: 11, weight: .bold)).foregroundStyle(Glass.tertiary)
                 ForEach(session.people, id: \.self) { name in row(name, action: "Remove") { session.remove(name) } }

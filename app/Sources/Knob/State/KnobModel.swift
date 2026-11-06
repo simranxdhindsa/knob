@@ -62,11 +62,13 @@ final class KnobModel: ObservableObject {
         self.engine = engine
         self.volumeControl = volume
         self.launcher = launcher
+        KnobShiftTogetherSession.shared.sound = self
     }
     #else
     init(engine: SoundEngine, volume: VolumeControl) {
         self.engine = engine
         self.volumeControl = volume
+        KnobShiftTogetherSession.shared.sound = self
     }
     #endif
 

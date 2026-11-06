@@ -27,6 +27,11 @@ final class KnobShiftTogetherSession: ObservableObject {
     @Published private(set) var cover: PlatformImage?
     @Published var lineUp = 0.0 { didSet { lineUpChanged() } }
 
+    /// Knob's own sound on this device, which every device in a session shares.
+    weak var sound: KnobModel?
+    /// This device's own sound from before it joined, given back when it leaves.
+    private var ownEffects: KnobShiftTogether.Effects?
+    private var sharedEffects: KnobShiftTogether.Effects?
     private weak var model: KnobShiftModel?
     private var browser: NWBrowser?
     private var host: KnobShiftTogetherHost?
@@ -90,6 +95,7 @@ final class KnobShiftTogetherSession: ObservableObject {
         let host = KnobShiftTogetherHost(name: deviceName)
         host.onPeople = { names in Task { @MainActor [weak self] in self?.people = names } }
         host.onCommand = { command in Task { @MainActor [weak self] in self?.run(command) } }
+        host.onEffects = { effects in Task { @MainActor [weak self] in self?.received(effects) } }
         host.onFailure = { Task { @MainActor [weak self] in self?.stop(saying: "Listen Together stopped because the network went away.") } }
         do {
             try host.start()
@@ -117,6 +123,7 @@ final class KnobShiftTogetherSession: ObservableObject {
                 try? await Task.sleep(for: .seconds(1))
             }
         }
+        watchSound()
         model.log("TOGETHER", "Hosting as \(deviceName).")
     }
 
@@ -182,6 +189,8 @@ final class KnobShiftTogetherSession: ObservableObject {
         role = .listening(session.name)
         status = "Joining \(session.name)."
         loadLineUp()
+        ownEffects = currentEffects
+        watchSound()
         connect(session)
         // Playing a song here means leaving: two sounds at once is never what anyone wants.
         model.$isPlaying.dropFirst().sink { [weak self] playing in
@@ -204,6 +213,7 @@ final class KnobShiftTogetherSession: ObservableObject {
         guest.onHello = { _ in Task { @MainActor [weak self] in self?.status = nil; self?.lostAt = nil } }
         guest.onState = { state in Task { @MainActor [weak self] in self?.state = state } }
         guest.onCover = { data in Task { @MainActor [weak self] in self?.cover = PlatformImage(data: data) } }
+        guest.onEffects = { effects in Task { @MainActor [weak self] in self?.received(effects) } }
         guest.onEnd = { ending in Task { @MainActor [weak self] in self?.ended(ending) } }
         self.player = player
         self.guest = guest
@@ -240,6 +250,50 @@ final class KnobShiftTogetherSession: ObservableObject {
 
     func leave() { stop(saying: nil) }
 
+    // MARK: Knob's own sound
+
+    private var currentEffects: KnobShiftTogether.Effects? {
+        sound.map { KnobShiftTogether.Effects(effects: $0.effects, eq: $0.eq) }
+    }
+
+    /// Any change on this device, by knob, fader or preset, goes to everyone.
+    private func watchSound() {
+        guard let sound else { return }
+        if role == .hosting { soundChanged() }
+        sound.$effects.combineLatest(sound.$eq).dropFirst().debounce(for: .milliseconds(80), scheduler: RunLoop.main)
+            .sink { [weak self] _, _ in Task { @MainActor [weak self] in self?.soundChanged() } }
+            .store(in: &watching)
+    }
+
+    private func soundChanged() {
+        guard let current = currentEffects, sharedEffects.map({ !$0.isClose(to: current) }) ?? true else { return }
+        sharedEffects = current
+        if role == .hosting {
+            if let message = KnobShiftTogether.json(.effects, current) { host?.send(message) }
+        } else {
+            guest?.send(current)
+        }
+    }
+
+    /// Another device changed the sound. The host passes it on to everyone else.
+    private func received(_ effects: KnobShiftTogether.Effects) {
+        guard role != .off else { return }
+        sharedEffects = effects
+        apply(effects)
+        if role == .hosting, let message = KnobShiftTogether.json(.effects, effects) { host?.send(message) }
+    }
+
+    private func apply(_ settings: KnobShiftTogether.Effects) {
+        guard let sound else { return }
+        for slot in EffectSlot.allCases where settings.effects.indices.contains(slot.rawValue) {
+            sound.setEffect(slot, settings.effects[slot.rawValue])
+        }
+        for band in settings.eq.indices { sound.setEQ(band: band, settings.eq[band]) }
+    }
+
+    /// Effects only reach the speakers on a Mac while Knob is on.
+    var soundIsOff: Bool { role != .off && sound?.powerOn == false }
+
     // MARK: Changes
 
     private func stop(saying message: String?) {
@@ -253,6 +307,9 @@ final class KnobShiftTogetherSession: ObservableObject {
         }
         guest?.stop()
         player?.detach()
+        if let ownEffects { apply(ownEffects) }
+        ownEffects = nil
+        sharedEffects = nil
         host = nil
         guest = nil
         player = nil

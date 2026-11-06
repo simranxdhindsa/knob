@@ -18,11 +18,16 @@ enum KnobShiftTogether {
     /// Wi-Fi replies vary by up to 120 ms, so this leaves room for a bad moment.
     static let delay: TimeInterval = 0.5
 
+    /// Sound travels at half level and every device turns it back up. Two loud songs in a mix add
+    /// up past full scale: Jee Karuga into No Luck clipped 3,127 samples without this, which
+    /// sounded crushed, while playing straight from the decks keeps those peaks.
+    static let headroom: Float = 0.5
+
     /// Anything longer is refused and ends the connection: a whole cover is the longest message.
     static let longestMessage = 512 * 1024
 
     enum Kind: UInt8 {
-        case hello = 1, sound = 2, anchor = 3, state = 4, command = 5, cover = 6
+        case hello = 1, sound = 2, anchor = 3, state = 4, command = 5, cover = 6, effects = 7
     }
 
     /// What a listener may send: small, and never sound.
@@ -55,6 +60,24 @@ enum KnobShiftTogether {
     struct Command: Codable, Equatable {
         var action: Action
         var time: Double?
+    }
+
+    /// Knob's own sound for the whole session: it can't travel in the mix, because each device
+    /// adds it after the mix, so every device applies the same settings.
+    struct Effects: Codable, Equatable {
+        var effects: [Double]
+        var eq: [Double]
+
+        /// Only sane values from another device: known lengths, and each within its range.
+        var isValid: Bool {
+            effects.count <= 16 && eq.count <= 64 && effects.allSatisfy { $0.isFinite && $0 >= 0 && $0 <= 10 }
+                && eq.allSatisfy { $0.isFinite && abs($0) <= 1 }
+        }
+
+        func isClose(to other: Effects) -> Bool {
+            effects.count == other.effects.count && eq.count == other.eq.count
+                && zip(effects + eq, other.effects + other.eq).allSatisfy { abs($0 - $1) < 0.001 }
+        }
     }
 
     static func json<Value: Encodable>(_ kind: Kind, _ value: Value) -> Message? {

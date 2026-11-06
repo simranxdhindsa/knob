@@ -90,8 +90,8 @@ final class KnobShiftTogetherRing: @unchecked Sendable {
         let skip = max(0, Int(written - firstFrame))
         for frame in skip..<frames {
             let at = Int(firstFrame + Int64(frame)) & mask
-            left[at] = Float(samples[frame * 2]) / 32_768
-            right[at] = Float(samples[frame * 2 + 1]) / 32_768
+            left[at] = Float(samples[frame * 2]) / (32_768 * KnobShiftTogether.headroom)
+            right[at] = Float(samples[frame * 2 + 1]) / (32_768 * KnobShiftTogether.headroom)
         }
         OSMemoryBarrier()
         shared.pointee.written = firstFrame + Int64(frames)

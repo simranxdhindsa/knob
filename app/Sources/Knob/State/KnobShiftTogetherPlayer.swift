@@ -170,8 +170,8 @@ final class KnobShiftTogetherCapture: @unchecked Sendable {
             expectedHost = host + Int64(Double(frames) / rate * 1e9)
             let left = data[0], right = data[buffer.format.channelCount > 1 ? 1 : 0]
             for frame in 0..<frames {
-                scratch[frame * 2] = Int16(max(-1, min(1, left[frame])) * 32_767)
-                scratch[frame * 2 + 1] = Int16(max(-1, min(1, right[frame])) * 32_767)
+                scratch[frame * 2] = Int16(max(-1, min(1, left[frame] * KnobShiftTogether.headroom)) * 32_767)
+                scratch[frame * 2 + 1] = Int16(max(-1, min(1, right[frame] * KnobShiftTogether.headroom)) * 32_767)
             }
             scratch.withUnsafeBufferPointer { all in
                 onBlock(Block(firstFrame: nextFrame, samples: UnsafeBufferPointer(rebasing: all[0..<(frames * 2)]),
