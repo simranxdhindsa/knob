@@ -79,10 +79,11 @@ struct PlayerTimeline: View {
     }
 
     /// How far off the planned mix is, by the song's own position, so it holds still while paused.
+    /// The last few seconds belong to `countdown`, so the two never swap back and forth.
     private var mixAhead: TimeInterval? {
         guard showsMixAhead, let mix = model.nextMix, mix.blends, model.mixState != .mixing, countdown == nil else { return nil }
         let left = mix.startsAt - clock.time
-        return left > 0 ? left : nil
+        return left > Double(Self.warning) ? left : nil
     }
 
     private var chipText: String? {

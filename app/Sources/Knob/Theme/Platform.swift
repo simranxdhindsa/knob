@@ -121,14 +121,27 @@ extension View {
 private struct ListHighlightOff: NSViewRepresentable {
     let selected: Int
 
+    final class Coordinator {
+        weak var table: NSTableView?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeNSView(context: Context) -> NSView { NSView() }
 
     func updateNSView(_ view: NSView, context: Context) {
+        let found = context.coordinator
         DispatchQueue.main.async { [weak view] in
+            // The search only runs until the table is found, not on every update.
+            if let table = found.table, table.window != nil {
+                table.selectionHighlightStyle = .none
+                return
+            }
             var ancestor = view?.superview
             while let current = ancestor {
                 if let table = Self.table(in: current) {
                     table.selectionHighlightStyle = .none
+                    found.table = table
                     return
                 }
                 ancestor = current.superview

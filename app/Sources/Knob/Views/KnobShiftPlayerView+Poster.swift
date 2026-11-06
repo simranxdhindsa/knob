@@ -69,7 +69,7 @@ struct KnobShiftPosterLayout {
 
     /// A very short screen keeps the window's layout rather than a tiny cover.
     static func fits(_ size: CGSize) -> Bool {
-        size.width > KnobShiftPlayerView.maximumSize.width && size.height - top - gap - controls >= smallest
+        size.width > KnobShiftPlayerView.maximumSize.width && KnobShiftPosterLayout(size: size).side >= smallest
     }
 
     /// The queue's width: the window's rule, a little wider on a big full screen.
