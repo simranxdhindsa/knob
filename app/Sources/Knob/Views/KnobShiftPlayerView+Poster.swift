@@ -8,9 +8,17 @@ extension KnobShiftPlayerView {
         GeometryReader { geometry in
             let layout = KnobShiftPosterLayout(size: geometry.size)
             VStack(spacing: 0) {
-                posterCover(layout)
-                    .padding(.top, layout.top)
-                    .padding(.bottom, layout.gap)
+                Group {
+                    if vinyl && model.nowPlaying != nil {
+                        VinylStage(model: model, size: CGSize(width: geometry.size.width - 48, height: layout.side))
+                            .transition(.opacity)
+                    } else {
+                        posterCover(layout)
+                            .transition(.opacity)
+                    }
+                }
+                .padding(.top, layout.top)
+                .padding(.bottom, layout.gap)
                 VStack(spacing: 0) {
                     titleRow(wide: wide, scale: layout.scale)
                         .frame(height: KnobShiftPlayerLayout.title * layout.scale)
@@ -28,6 +36,12 @@ extension KnobShiftPlayerView {
                 Spacer(minLength: 0)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
+            .overlay(alignment: .topTrailing) {
+                VinylSwitch(isOn: $vinyl)
+                    .padding(.top, 14)
+                    .padding(.trailing, 18)
+            }
+            .animation(reduceMotion ? .easeOut(duration: 0.2) : Motion.gentle, value: vinyl)
         }
         .ignoresSafeArea(.container, edges: .top)
     }
@@ -47,6 +61,23 @@ extension KnobShiftPlayerView {
                 .animation(reduceMotion ? .easeOut(duration: 0.2) : Motion.gentle, value: model.isPlaying)
                 .allowsHitTesting(false)
         }
+    }
+}
+
+/// The switch between the cover and the record deck, with a real little record that turns while
+/// the deck is on. Only full screen has one.
+private struct VinylSwitch: View {
+    @Binding var isOn: Bool
+
+    var body: some View {
+        HStack(spacing: 9) {
+            VinylIcon(size: 30, spinning: isOn)
+            PowerSwitch(isOn: $isOn, label: "Record deck")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .playerGlass()
+        .help(isOn ? "Back to the cover" : "Play it on a record")
     }
 }
 

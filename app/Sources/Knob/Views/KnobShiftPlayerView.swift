@@ -17,6 +17,8 @@ struct KnobShiftPlayerView: View {
     @ObservedObject var model: KnobShiftModel
     @StateObject var scrub = PlayerScrub()
     @Environment(\.accessibilityReduceMotion) var reduceMotion
+    /// Full screen shows the record deck instead of the cover, from the switch at its top.
+    @AppStorage(PersistKey.knobShiftVinyl.rawValue) var vinyl = false
     @State private var importing = false
     @State private var showingSpotify = false
     @State private var showingYouTube = false
