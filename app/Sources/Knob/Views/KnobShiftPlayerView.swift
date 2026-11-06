@@ -19,6 +19,7 @@ struct KnobShiftPlayerView: View {
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     /// Full screen shows the record deck instead of the cover, from the switch at its top.
     @AppStorage(PersistKey.knobShiftVinyl.rawValue) var vinyl = false
+    @AppStorage(PersistKey.knobShiftTipsSeen.rawValue) var tipsSeen = ""
     /// The song on the deck, so the name changes with the cover rather than ahead of it.
     @State var deckSong: KnobShiftModel.Track?
     @State private var importing = false
@@ -35,13 +36,14 @@ struct KnobShiftPlayerView: View {
                 if poster {
                     posterDeck(wide: wide)
                 } else {
-                    deck(wide: wide)
+                    deck(wide: wide).overlay(alignment: .top) { fullScreenTip }
                 }
                 if wide {
                     sidebar(poster: poster).frame(width: KnobShiftPosterLayout.sidebar(geometry.size.width, poster: poster))
                 }
             }
             .animation(reduceMotion ? .easeOut(duration: 0.2) : Motion.gentle, value: poster)
+            .onChange(of: poster, initial: true) { if poster { DeckTip.fullScreen.mark(in: &tipsSeen) } }
         }
         .frame(minWidth: Self.minimumSize.width, minHeight: Self.minimumSize.height)
         .background { PlayerAmbient(url: (model.mixingInto ?? model.nowPlaying)?.url).ignoresSafeArea() }
@@ -51,6 +53,18 @@ struct KnobShiftPlayerView: View {
         .fileImporter(isPresented: $importing, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result else { return }
             Task { await model.addTracks(urls) }
+        }
+    }
+
+    /// Full screen is where the record deck is, and nothing in the window says so.
+    @ViewBuilder private var fullScreenTip: some View {
+        if model.nowPlaying != nil, !DeckTip.fullScreen.isSeen(in: tipsSeen) {
+            DeckTipBubble(tip: .fullScreen, action: ("Full screen", { NSApp.keyWindow?.toggleFullScreen(nil) }),
+                          onClose: { DeckTip.fullScreen.mark(in: &tipsSeen) })
+                .frame(maxWidth: 340)
+                .padding(.top, 40)
+                .padding(.horizontal, 16)
+                .transition(.opacity)
         }
     }
 

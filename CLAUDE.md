@@ -225,11 +225,13 @@ If the same UI pattern is needed in 2+ places, extract it into `Components/`; ne
 | `Grain` | Deterministic panel speckle |
 | `UpdateStatusLabel` | Updater state beside the version in the header: short text ("Downloading…"), full sentence as tooltip |
 | `EngravedLabel` | Uppercase control label (in `Views/PanelView.swift`) |
+| `DeckTip`, `DeckTipBubble`, `TipHand` | The first time guide (`Components/DeckGuide.swift`): one tip at a time, in text on glass, with a hand acting out the gesture on the real part. A tip goes for good once it is done or dismissed, kept by name in `PersistKey.knobShiftTipsSeen`, so new installs and updates get the same guide. Add new gestures here rather than a tip of their own |
+| `PhoneBedsideClock`, `PhoneCharger` | iPhone only, in `ios/Sources/PhoneBedside.swift`. Bedside mode: on its side on a charger, `PhoneVinylDeck` keeps the same deck running, dims it (`Bedside` in Palette) and swaps its column for this clock; a tap brings the controls back for 6 seconds. The screen stays on only while Bedside mode shows, and `BedsideDrift` moves everything up to 4 points each minute so nothing stays on the same pixels. Apple's StandBy can't show this: it only allows widgets and Live Activities, which can't spin a record. Test on the simulator with `KNOB_PHONE_BEDSIDE=n`, which fakes the charger, and `KNOB_PHONE_BEDSIDE_TIME=21:05` |
 
 Precision controls and startup recovery: [`docs/precision-and-recovery.md`](docs/precision-and-recovery.md). Knobs and faders support Shift-drag at one-tenth speed. Startup diagnosis must read only the current launch's log bytes, never historical errors. Regression checks: `sh tests/precision-startup-build.sh`.
 
 ### 11. UI copy
-Never use any dash in user-facing text: no hyphens (`-`), en dashes (`–`), em dashes (`—`) or double dashes (`--`) in headings, labels, tips, tooltips, buttons, errors, menu items, anything on screen. Write "beat matched", "Double click", "2:40 left" rather than "beat-matched", "Double-click", "-2:40". Rewrite as two sentences, or join with a comma, "and" or "so". Numeric minus signs on meter scales (-48 dB) are values, not text. This doesn't apply to code, comments, log files or commit messages.
+Never use any dash in user-facing text: no hyphens (`-`), en dashes (`–`), em dashes (`—`) or double dashes (`--`) in headings, labels, tips, tooltips, buttons, errors, menu items, anything on screen. Write "beat matched", "Double click" rather than "beat-matched", "Double-click". Rewrite as two sentences, or join with a comma, "and" or "so". Numeric minus signs are values, not text: meter scales (-48 dB) and the time left in a song, which is always shown as `-0:36`, never "0:36 left". This doesn't apply to code, comments, log files or commit messages.
 
 ## MCP Tools and Connectors
 
@@ -286,3 +288,7 @@ Brief, dated record of what was worked on per day, in the `Knob: <summary>` form
 - Knob: the GitHub page is ready for new visitors: clear description and search topics, a share banner, Discussions, a Sponsor button, guides for contributors and bug report forms
 - Knob: a 15 second demo video at the top of the README, recorded from the real app and re-recordable with one command
 - Knob: KnobMix rebuilt around the last hook; iPhone sync shows live Mac status and real song failures; two songs prepare at once on the Mac; optional browser sign in when YouTube blocks downloads; 4.0 release notes and a README told through animation
+
+### 2026-11-06
+- Knob: a real record deck on the iPhone on its side and in Mac full screen, with the arm, spin to seek, real scratch sound and a song change animation
+- Knob: iPhone Bedside mode: on a charger the deck dims beside a big clock and the screen stays on

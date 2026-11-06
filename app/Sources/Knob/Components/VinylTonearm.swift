@@ -9,6 +9,8 @@ struct VinylTonearm: View {
     @ObservedObject var clock: KnobShiftClock
     let geometry: KnobShiftVinylGeometry
     var resting = false
+    /// Told when the arm has been picked up and set down.
+    var onUsed: () -> Void = {}
     /// Resets by itself if the system takes the touch away, which ends the drag with no word.
     @GestureState private var touching = false
 
@@ -36,6 +38,7 @@ struct VinylTonearm: View {
             guard !touching else { return }
             Haptics.mark()
             turntable.armDropped()
+            onUsed()
         }
         .animation(held ? nil : Motion.gentle, value: resting)
         .animation(held || resting ? nil : .linear(duration: 0.1), value: progress)
