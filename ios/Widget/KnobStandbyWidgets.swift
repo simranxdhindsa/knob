@@ -83,29 +83,3 @@ struct KnobLastSongWidget: Widget {
         .contentMarginsDisabled()
     }
 }
-
-struct LastSongView: View {
-    let song: StandbySong?
-    @Environment(\.isLuminanceReduced) private var dim
-
-    var body: some View {
-        VStack(spacing: 8) {
-            StandbyRecord(cover: song?.cover, diameter: 84)
-            VStack(spacing: 1) {
-                Text(song?.title ?? "Play a song in Knob")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Vinyl.shine)
-                    .lineLimit(1)
-                if let artist = song?.artist {
-                    Text(artist)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Vinyl.shine.opacity(dim ? 0.75 : 0.6))
-                        .lineLimit(1)
-                }
-            }
-            .padding(.horizontal, 10)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .widgetAccentable()
-    }
-}

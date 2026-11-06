@@ -1,5 +1,6 @@
 import AppIntents
 import SwiftUI
+import WidgetKit
 
 /// The still record for the lock screen, StandBy and the Dynamic Island: Knob's own record
 /// (drawn once by the app into the shared folder) with the song's cover on its label. The
@@ -173,5 +174,32 @@ struct StandbyCardHost: View {
         @Environment(\.isActivityFullscreen) private var fullscreen
 
         var body: some View { StandbyCard(state: state, fullscreen: fullscreen) }
+    }
+}
+
+/// The small widget's face: the record with its cover and the song's name.
+struct LastSongView: View {
+    let song: StandbySong?
+    @Environment(\.isLuminanceReduced) private var dim
+
+    var body: some View {
+        VStack(spacing: 8) {
+            StandbyRecord(cover: song?.cover, diameter: 84)
+            VStack(spacing: 1) {
+                Text(song?.title ?? "Play a song in Knob")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Vinyl.shine)
+                    .lineLimit(1)
+                if let artist = song?.artist {
+                    Text(artist)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Vinyl.shine.opacity(dim ? 0.75 : 0.6))
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 10)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .widgetAccentable()
     }
 }
