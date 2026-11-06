@@ -24,6 +24,7 @@ Knob 4.1 keeps the orange microphone dot away, makes low volumes easier to hear,
 
 ### Fixes
 
+- Quit Knob in the menu now always quits, so you never need Force Quit
 - Check for Updates shows its result in the panel instead of a window, so the panel stays open
 - Pausing during a mix now freezes both songs, and Play carries the same mix on from that moment
 - Shuffle stays on after you restart Knob, in the same order, and turning it off still gives your own order

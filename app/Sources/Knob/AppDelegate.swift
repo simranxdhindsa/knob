@@ -5,6 +5,9 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Set by `KnobApp` at launch so quitting can stop the engine first.
     @MainActor static weak var model: KnobModel?
+    /// Longer than stopping the engine can take: three requests of a second or two each.
+    private static let quitLimit: TimeInterval = 8
+    @MainActor private var quitAnswered = false
 
     @MainActor func applicationDidFinishLaunching(_ notification: Notification) {
         DockPresence.apply()
@@ -39,9 +42,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         else { return .terminateNow }
         Task { @MainActor in
             await model.stopEngine()
-            NSApp.reply(toApplicationShouldTerminate: true)
+            answerQuit()
         }
+        // A timer still fires if `terminate` ever started from main actor work, which would hold
+        // the task above back for good. Knob then quits without waiting for the engine.
+        let backstop = Timer(timeInterval: Self.quitLimit, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard self?.quitAnswered == false else { return }
+                model.abandonEngine()
+                self?.answerQuit()
+            }
+        }
+        RunLoop.main.add(backstop, forMode: .common)
         return .terminateLater
+    }
+
+    @MainActor private func answerQuit() {
+        guard !quitAnswered else { return }
+        quitAnswered = true
+        NSApp.reply(toApplicationShouldTerminate: true)
+    }
+
+    /// Quits from Knob's own menu. `terminate` waits for the answer above inside its own event
+    /// loop, and main actor work can't run until whatever called it returns, so calling it from a
+    /// task or a main queue block never finishes: Knob stays open and ignores every later Quit.
+    /// The run loop calls this block outside all of that.
+    @MainActor static func quit() {
+        RunLoop.main.perform(inModes: [.common]) {
+            MainActor.assumeIsolated { NSApp.terminate(nil) }
+        }
     }
 }
 
