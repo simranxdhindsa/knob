@@ -23,6 +23,7 @@ Knob 4.1 keeps the orange microphone dot away, makes low volumes easier to hear,
 - Spotify covers are about three times sharper at full screen, on your Mac and iPhone, even for songs you already have
 - All Songs in Playlists shows every playlist's songs in one list, and one tap shuffles them all and starts playing
 - Low volumes in Knob are louder, so small steps are easier to hear, and 100% stays exactly as loud as before
+- Spotify and YouTube songs now download in the best quality available, with much clearer highs. Each song takes about 23 MB instead of 3 MB. Songs you already have stay as they are until you remove their playlist and add it again
 
 ### Fixes
 
@@ -34,6 +35,8 @@ Knob 4.1 keeps the orange microphone dot away, makes low volumes easier to hear,
 - KnobShift on your Mac spreads the real colours of the cover across the whole window, and black and white covers no longer turn pink
 - On iPhone in light mode, the background keeps the cover's own colours instead of turning pale yellow or pink
 - New headphones and speakers show in Knob as soon as you connect them, with no need to restart it
+- Clean vocal handovers in a mix now work on every song, not only some of them
+- FLAC songs you add yourself now show their names and covers
 
 ## 4.0
 
