@@ -119,9 +119,9 @@ enum KnobShiftImport {
         return songs.filter { selected.contains($0.song_id) && seen.insert($0.song_id).inserted }
     }
 
-    /// About 6 MB a song (KNOB_SONG_MB changes it for the command line checks, whose songs are tiny).
+    /// About 30 MB a song as FLAC (KNOB_SONG_MB changes it for the command line checks, whose songs are tiny).
     static var bytesPerSong: Int64 {
-        Int64((Double(ProcessInfo.processInfo.environment["KNOB_SONG_MB"] ?? "") ?? 6) * 1_000_000)
+        Int64((Double(ProcessInfo.processInfo.environment["KNOB_SONG_MB"] ?? "") ?? 30) * 1_000_000)
     }
 
     static func spaceNeeded(for songs: Int) -> Int64 { Int64(songs) * bytesPerSong + 500_000_000 }

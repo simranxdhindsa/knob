@@ -67,6 +67,7 @@ enum KnobShiftArtwork {
         if let image = cache[url] { return image }
         if missing.contains(url) { return nil }
         let data = await Task.detached(priority: .utility) { () -> Data? in
+            if KnobShiftFlacTags.isFlac(url) { return KnobShiftFlacTags.read(url)?.cover }
             let asset = AVURLAsset(url: url)
             guard let items = try? await asset.load(.commonMetadata) else { return nil }
             for item in items where item.commonKey == .commonKeyArtwork {
