@@ -39,6 +39,10 @@ enum Motion {
     static let bedsideRise = Animation.timingCurve(0.2, 0, 0.2, 1, duration: 0.7)
     static let bedsideStagger = 0.09
 
+    /// The guide: how long the hand takes over one gesture, and the iPhone tipping onto its side.
+    static let tipMoveSeconds = 2.4
+    static let tipTurn = Animation.easeInOut(duration: 0.9).delay(0.5)
+
     /// A song's cover coming up from grey to full colour once it is ready.
     static let artworkReveal = Animation.easeOut(duration: 0.4)
 

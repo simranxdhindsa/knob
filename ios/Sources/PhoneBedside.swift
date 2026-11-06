@@ -94,6 +94,8 @@ struct PhoneBedsideClock: View {
     let percent: Int?
     /// The height there is for it.
     let height: CGFloat
+    /// The first time, it says the controls are a tap away.
+    var showsTip = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var risen = false
 
@@ -166,6 +168,14 @@ struct PhoneBedsideClock: View {
                 .font(.system(size: 12))
                 .foregroundStyle(Glass.secondary)
                 .lineLimit(1)
+            if showsTip {
+                Text(DeckTip.bedside.text)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Palette.accent)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .padding(.top, 6)
+            }
         }
     }
 

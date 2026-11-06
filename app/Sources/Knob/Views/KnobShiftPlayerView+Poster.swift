@@ -37,15 +37,27 @@ extension KnobShiftPlayerView {
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
             .overlay(alignment: .topTrailing) {
-                VinylToggle(isOn: $vinyl, label: "Record deck")
-                    .help(vinyl ? "Back to the cover" : "Play it on a record")
-                    .padding(.top, 14)
-                    .padding(.trailing, 18)
+                VStack(alignment: .trailing, spacing: 10) {
+                    VinylToggle(isOn: $vinyl, label: "Record deck")
+                        .help(vinyl ? "Back to the cover" : "Play it on a record")
+                        .overlay { if showsToggleTip { TipTapHand() } }
+                    if showsToggleTip {
+                        DeckTipBubble(tip: .toggle, onClose: { DeckTip.toggle.mark(in: &tipsSeen) })
+                            .frame(width: 270)
+                            .transition(.opacity)
+                    }
+                }
+                .padding(.top, 14)
+                .padding(.trailing, 18)
+                .animation(Motion.gentle, value: tipsSeen)
             }
+            .onChange(of: vinyl, initial: true) { if vinyl { DeckTip.toggle.mark(in: &tipsSeen) } }
             .animation(reduceMotion ? .easeOut(duration: 0.2) : Motion.gentle, value: vinyl)
         }
         .ignoresSafeArea(.container, edges: .top)
     }
+
+    private var showsToggleTip: Bool { model.nowPlaying != nil && !DeckTip.toggle.isSeen(in: tipsSeen) }
 
     /// Pausing eases the cover back and dims it, as the window does.
     @ViewBuilder private func posterCover(_ layout: KnobShiftPosterLayout) -> some View {

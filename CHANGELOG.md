@@ -15,6 +15,7 @@ Knob 4.1 keeps the orange microphone dot away, makes low volumes easier to hear,
 - Turn your iPhone on its side and the player becomes a real record deck: spin the record to scratch through the song, lift the arm to jump anywhere, tap the cover to pause
 - On the Mac, a switch at the top of full screen brings up the same record deck
 - When the song changes on the record deck, the record slides back into its sleeve, the cover changes and the new record comes out
+- Short tips show you the way to the record deck and how to use it, one at a time, and go away for good once you have tried each thing
 - Put your iPhone on its side on a charger with Knob open and it becomes a bedside clock: the record keeps turning in a dimmed room beside a big clock, the screen stays on, and a tap brings the controls back
 - KnobShift in full screen shows the whole cover, sharp and uncut, with bigger controls
 - The queue opens at the song that's playing and follows it

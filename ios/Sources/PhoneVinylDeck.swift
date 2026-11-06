@@ -17,6 +17,7 @@ struct PhoneVinylDeck: View {
     @ObservedObject var scrub: PlayerScrub
     @ObservedObject private var charger = PhoneCharger.shared
     @AppStorage(PersistKey.knobShiftBedside.rawValue) private var bedsideAllowed = true
+    @AppStorage(PersistKey.knobShiftTipsSeen.rawValue) private var tipsSeen = ""
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     @State private var settled = false
@@ -35,7 +36,7 @@ struct PhoneVinylDeck: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                VinylStage(model: model, size: CGSize(width: proxy.size.width - Self.column, height: proxy.size.height), onSettled: {
+                VinylStage(model: model, size: CGSize(width: proxy.size.width - Self.column, height: proxy.size.height), showsTips: !bedside, onSettled: {
                     withAnimation(Motion.gentle) { settled = true }
                 }, onShowing: { song = $0 })
                 .offset(drift)
@@ -50,7 +51,10 @@ struct PhoneVinylDeck: View {
             }
         }
         .persistentSystemOverlays(bedside ? .hidden : .automatic)
-        .onAppear { charger.start() }
+        .onAppear {
+            charger.start()
+            DeckTip.turn.mark(in: &tipsSeen)
+        }
         .onDisappear {
             charger.stop()
             UIApplication.shared.isIdleTimerDisabled = false
@@ -69,11 +73,12 @@ struct PhoneVinylDeck: View {
     private func column(height: CGFloat) -> some View {
         ZStack {
             if showsClock {
-                PhoneBedsideClock(song: song ?? model.nowPlaying, percent: charger.percent, height: height)
+                PhoneBedsideClock(song: song ?? model.nowPlaying, percent: charger.percent, height: height, showsTip: !DeckTip.bedside.isSeen(in: tipsSeen))
                     .frame(width: Self.column, alignment: .leading)
                     .frame(maxHeight: .infinity)
                     .contentShape(Rectangle())
                     .onTapGesture(perform: wake)
+                    .overlay { if !DeckTip.bedside.isSeen(in: tipsSeen) { TipTapHand() } }
                     .transition(Self.swap)
             } else {
                 details
@@ -140,6 +145,7 @@ struct PhoneVinylDeck: View {
 
     private func wake() {
         Haptics.mark()
+        DeckTip.bedside.mark(in: &tipsSeen)
         awake = true
         touches += 1
     }

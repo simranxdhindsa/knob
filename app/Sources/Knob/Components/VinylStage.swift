@@ -19,6 +19,9 @@ struct VinylStage: View {
     var onSettled: () -> Void = {}
     /// Told which song is on show, so the name beside the deck changes with the cover.
     var onShowing: (KnobShiftModel.Track?) -> Void = { _ in }
+    /// Whether the guide's tips may show here.
+    var showsTips = true
+    @AppStorage(PersistKey.knobShiftTipsSeen.rawValue) private var tipsSeen = ""
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var stage = Stage.sleeve
@@ -27,16 +30,25 @@ struct VinylStage: View {
     /// The last cover, left solid underneath while the new one fades in over it, so the record
     /// hidden behind the sleeve never shows through.
     @State private var leaving: KnobShiftModel.Track?
+    /// The deck has been settled for a moment, so a tip doesn't land on top of its opening.
+    @State private var tipsReady = false
 
     private enum Stage { case sleeve, out, settled, tucked }
 
     /// The song the deck should be showing: in a KnobMix, the one coming in.
     private var wanted: KnobShiftModel.Track? { model.mixingInto ?? model.nowPlaying }
 
-    init(model: KnobShiftModel, size: CGSize, onSettled: @escaping () -> Void = {},
+    /// The next of the deck's tips, once it is quiet enough to show one.
+    private var tip: DeckTip? {
+        guard tipsReady, stage == .settled, model.mixingInto == nil, !turntable.isArmHeld else { return nil }
+        return DeckTip.deck.first { !$0.isSeen(in: tipsSeen) }
+    }
+
+    init(model: KnobShiftModel, size: CGSize, showsTips: Bool = true, onSettled: @escaping () -> Void = {},
          onShowing: @escaping (KnobShiftModel.Track?) -> Void = { _ in }) {
         self.model = model
         self.size = size
+        self.showsTips = showsTips
         self.onSettled = onSettled
         self.onShowing = onShowing
         turntable = .shared(for: model)
@@ -46,13 +58,14 @@ struct VinylStage: View {
         let layout = VinylLayout(size: size)
         let geometry = KnobShiftVinylGeometry(center: layout.record, diameter: layout.diameter)
         ZStack(alignment: .topLeading) {
-            VinylRecord(turntable: turntable, model: model, url: showing?.url, diameter: layout.diameter, movable: stage == .settled && model.mixingInto == nil)
+            VinylRecord(turntable: turntable, model: model, url: showing?.url, diameter: layout.diameter, movable: stage == .settled && model.mixingInto == nil, onUsed: { DeckTip.record.mark(in: &tipsSeen) })
                 // A touch smaller inside the sleeve, which is narrower than the record.
                 .scaleEffect(isInSleeve ? 0.9 : 1)
                 .position(recordPosition(layout))
             sleeve(layout)
-            VinylTonearm(turntable: turntable, clock: model.clock, geometry: geometry, resting: stage != .settled || model.mixingInto != nil)
+            VinylTonearm(turntable: turntable, clock: model.clock, geometry: geometry, resting: stage != .settled || model.mixingInto != nil, onUsed: { DeckTip.arm.mark(in: &tipsSeen) })
                 .opacity(stage == .sleeve ? 0 : 1)
+            guide(layout, geometry: geometry)
         }
         .frame(width: size.width, height: size.height)
         .coordinateSpace(name: Self.space)
@@ -63,10 +76,52 @@ struct VinylStage: View {
         .onDisappear { turntable.stop() }
         .task { await open() }
         .task(id: wanted?.id) { await change() }
+        .task(id: stage == .settled && showsTips) { await waitForTips() }
         .onChange(of: showing, initial: true) { onShowing(showing) }
         .onChange(of: model.nowPlaying) { turntable.follow(model.nowPlaying) }
         // A call or leaving the app takes the touch away too.
         .onChange(of: scenePhase) { if scenePhase != .active { turntable.releaseNow() } }
+    }
+
+    /// The tip sits on the sleeve, which never moves, so it covers nothing being turned or held,
+    /// and a mark on the part it means shows where to look.
+    @ViewBuilder private func guide(_ layout: VinylLayout, geometry: KnobShiftVinylGeometry) -> some View {
+        ZStack(alignment: .topLeading) {
+            if tip == .record {
+                RecordTipMark(center: layout.record, diameter: layout.diameter).transition(.opacity)
+            }
+            if tip == .arm {
+                ArmTipMark(clock: model.clock, geometry: geometry).transition(.opacity)
+            }
+            if tip == .cover {
+                coverHand(layout).transition(.opacity)
+            }
+            if let tip {
+                DeckTipBubble(tip: tip, onClose: { tip.mark(in: &tipsSeen) })
+                    .frame(width: min(layout.sleeve * 0.88, 330))
+                    .position(x: layout.sleeveCenter.x, y: layout.sleeveCenter.y + layout.sleeve * 0.32)
+                    .transition(.opacity)
+            }
+        }
+        .animation(Motion.gentle, value: tip)
+    }
+
+    /// A tap on the cover, then a swipe across it.
+    private func coverHand(_ layout: VinylLayout) -> some View {
+        let spot = CGPoint(x: layout.sleeveCenter.x, y: layout.sleeveCenter.y - layout.sleeve * 0.12)
+        let swipe = layout.sleeve * 0.3
+        return TipHand(moves: [.tap(spot), .slide { CGPoint(x: spot.x + swipe - swipe * 2 * $0, y: spot.y) }])
+    }
+
+    private func waitForTips() async {
+        tipsReady = false
+        guard stage == .settled, showsTips else { return }
+        do {
+            try await Task.sleep(for: .seconds(1.2))
+            tipsReady = true
+        } catch {
+            // The deck moved on before the tip came.
+        }
     }
 
     private var isInSleeve: Bool { stage == .sleeve || stage == .tucked }
@@ -171,11 +226,13 @@ struct VinylStage: View {
             .contentShape(Rectangle())
             .onTapGesture {
                 Haptics.mark()
+                DeckTip.cover.mark(in: &tipsSeen)
                 model.pauseOrResume()
             }
             .gesture(DragGesture(minimumDistance: 24).onEnded { drag in
                 guard abs(drag.translation.width) > abs(drag.translation.height) else { return }
                 Haptics.mark()
+                DeckTip.cover.mark(in: &tipsSeen)
                 if drag.translation.width < 0 { model.next() } else { model.previous() }
             })
             .position(sleevePosition(layout))
