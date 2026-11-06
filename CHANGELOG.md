@@ -16,7 +16,7 @@ Knob 4.1 keeps the orange microphone dot away, makes low volumes easier to hear,
 - On the Mac, a switch at the top of full screen brings up the same record deck
 - KnobShift in full screen shows the whole cover, sharp and uncut, with bigger controls and a countdown to the next KnobMix
 - The queue opens at the song that's playing and follows it
-- Selected songs in the queue are orange, and time left reads 2:48 left
+- Selected songs in the queue are orange
 - Spotify covers are about three times sharper at full screen, on your Mac and iPhone, even for songs you already have
 - All Songs in Playlists shows every playlist's songs in one list, and one tap shuffles them all and starts playing
 - Low volumes in Knob are louder, so small steps are easier to hear, and 100% stays exactly as loud as before
