@@ -39,28 +39,30 @@ struct VinylStage: View {
         }
         .frame(width: size.width, height: size.height)
         .coordinateSpace(name: Self.space)
-        .onAppear(perform: open)
+        .onAppear { turntable.start() }
         .onDisappear { turntable.stop() }
+        .task { await open() }
         .onChange(of: model.nowPlaying) { turntable.follow(model.nowPlaying) }
         // A call or leaving the app takes the touch away too.
         .onChange(of: scenePhase) { if scenePhase != .active { turntable.releaseNow() } }
     }
 
     /// The opening. Reduce Motion goes straight to the settled deck.
-    private func open() {
-        turntable.start()
+    private func open() async {
         guard !reduceMotion else {
             stage = .settled
             onSettled()
             return
         }
-        Task {
+        do {
             // After the phone has finished turning, so the cover is seen on its own first.
-            try? await Task.sleep(for: .milliseconds(620))
+            try await Task.sleep(for: .milliseconds(620))
             withAnimation(Motion.vinylOut) { stage = .out }
-            try? await Task.sleep(for: .milliseconds(760))
+            try await Task.sleep(for: .milliseconds(760))
             withAnimation(Motion.vinylSettle) { stage = .settled }
             onSettled()
+        } catch {
+            // The deck left mid opening, and there is nothing left to open.
         }
     }
 
@@ -126,13 +128,13 @@ struct VinylIcon: View {
         TimelineView(.animation(paused: !spinning)) { context in
             let turn = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.8) / 1.8 * 360
             ZStack {
-                VinylTexture.face(size)
+                VinylTexture.face(size).frame(width: size, height: size)
                 Circle().fill(Palette.accent).frame(width: size * 0.36, height: size * 0.36)
                 Rectangle().fill(Vinyl.shine.opacity(0.75)).frame(width: size * 0.15, height: size * 0.02).offset(x: size * 0.08)
                 Circle().fill(Vinyl.discCore).frame(width: size * 0.08, height: size * 0.08)
             }
             .rotationEffect(.degrees(spinning ? turn : 0))
-            .overlay { VinylTexture.light(size) }
+            .overlay { VinylTexture.light(size).frame(width: size, height: size) }
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)

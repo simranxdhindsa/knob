@@ -17,6 +17,18 @@ enum KnobShiftVinylCheck {
         let app = NSApplication.shared
         app.setActivationPolicy(.prohibited)
         Task { @MainActor in
+            let began = Date()
+            _ = VinylTexture.face(900)
+            _ = VinylTexture.light(900)
+            print(String(format: "  the full screen record takes %.2f s to draw, once", Date().timeIntervalSince(began)))
+            for _ in 0..<120 {
+                _ = VinylTexture.face(900)
+                _ = VinylTexture.light(900)
+                _ = VinylTexture.face(30)
+                _ = VinylTexture.light(30)
+            }
+            expect(VinylTexture.drawn <= 4, "120 frames of the record and the switch icon draw \(VinylTexture.drawn) pictures (wanted 4 at most)")
+
             let model = KnobShiftModel(restoresQueue: false)
             await model.addTracks([first, second])
             guard model.tracks.count == 2 else {
@@ -25,7 +37,11 @@ enum KnobShiftVinylCheck {
             }
             model.playForCheck(volume: 0, bySelecting: model.tracks[0])
             let deck = KnobShiftTurntable.shared(for: model)
+            // Flipping the switch quickly: the new deck appears before the old one has gone.
             deck.start()
+            deck.start()
+            deck.stop()
+            expect(deck.isWired, "the record stays wired when an old deck leaves after a new one came")
             model.seek(to: 30)
             for _ in 0..<60 where !deck.isReady { try? await Task.sleep(for: .milliseconds(100)) }
             expect(deck.isReady, "the song is on the record")
@@ -76,6 +92,7 @@ enum KnobShiftVinylCheck {
             expect(!deck.isActive && model.nowPlaying != song, "the arm dropped at the very end moves to the next song")
 
             deck.stop()
+            expect(!deck.isWired, "the record is unplugged once the last deck has gone")
             print(failed == 0 ? "Vinyl check passed" : "Vinyl check FAILED: \(failed)")
             exit(failed == 0 ? 0 : 1)
         }

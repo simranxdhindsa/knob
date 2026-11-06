@@ -27,10 +27,14 @@ final class KnobShiftTurntable: ObservableObject {
     var isHolding: Bool { holding }
     /// The playing song is in memory, so a hand can take it.
     var isReady: Bool { canHold }
+    var isWired: Bool { attached }
 
     private let scratch: KnobShiftScratch
     private let node: AVAudioSourceNode
     private var attached = false
+    /// How many decks are on screen. A new one can appear before the old one has gone, when a
+    /// switch is flipped quickly, and the old one leaving mustn't unplug the new one.
+    private var decks = 0
     private var loaded: KnobShiftModel.Track?
     private var loading: Task<Void, Never>?
     private var watching: Task<Void, Never>?
@@ -80,6 +84,7 @@ final class KnobShiftTurntable: ObservableObject {
     /// The deck is on screen: wires the record into Knob's sound, after the mixer, so Knob's
     /// volume and effects apply to it like everything else.
     func start() {
+        decks += 1
         guard !attached else { return }
         model.audioEngine.attach(node)
         model.audioEngine.connect(node, to: model.audioEngine.mainMixerNode, format: nil)
@@ -89,7 +94,8 @@ final class KnobShiftTurntable: ObservableObject {
 
     func stop() {
         releaseNow()
-        guard attached else { return }
+        decks = max(decks - 1, 0)
+        guard attached, decks == 0 else { return }
         model.audioEngine.detach(node)
         attached = false
     }

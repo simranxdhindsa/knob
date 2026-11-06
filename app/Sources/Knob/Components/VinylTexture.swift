@@ -9,6 +9,8 @@ import SwiftUI
 enum VinylTexture {
     private static var faces: [Int: Image] = [:]
     private static var lights: [Int: Image] = [:]
+    /// How many pictures have been drawn, for the check that spinning draws none.
+    private(set) static var drawn = 0
 
     static let grooveOuter = 0.975, grooveInner = 0.44, label = 0.35
 
@@ -21,16 +23,30 @@ enum VinylTexture {
     }
 
     private static func cached<V: View>(_ store: inout [Int: Image], _ diameter: CGFloat, @ViewBuilder _ content: () -> V) -> Image {
-        let key = Int(diameter.rounded())
+        // In steps, and stretched the last little way, so a slightly different size draws nothing.
+        let key = max(Int((diameter / 8).rounded(.up)), 1) * 8
         if let image = store[key] { return image }
         let side = CGFloat(key)
         let renderer = ImageRenderer(content: content().frame(width: side, height: side))
-        renderer.scale = 3
+        renderer.scale = scale
         renderer.isOpaque = false
+        drawn += 1
         guard let picture = renderer.cgImage else { return Image(systemName: "circle") }
-        let image = Image(decorative: picture, scale: 3)
-        store = [key: image]
+        let image = Image(decorative: picture, scale: scale).resizable()
+        // The record and the Mac's switch icon are two sizes at once. More than a few means
+        // the deck itself has changed size, and the old pictures can go.
+        if store.count >= 4 { store.removeAll() }
+        store[key] = image
         return image
+    }
+
+    /// A 2x Mac gains nothing from more, and a full screen record is large.
+    private static var scale: CGFloat {
+        #if os(iOS)
+        3
+        #else
+        2
+        #endif
     }
 
     /// The same every time: a record's marks must not change between drawings.

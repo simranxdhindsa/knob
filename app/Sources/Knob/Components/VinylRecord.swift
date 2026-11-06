@@ -23,6 +23,7 @@ struct VinylRecord: View {
                 RecordFace(url: model.nowPlaying?.url, diameter: diameter)
                     .rotationEffect(.degrees(angle))
                 VinylTexture.light(diameter)
+                    .frame(width: diameter, height: diameter)
                     .rotationEffect(.degrees(sin(angle * .pi / 180) * Self.warp))
                     .allowsHitTesting(false)
             }
@@ -59,7 +60,7 @@ private struct RecordFace: View {
 
     var body: some View {
         ZStack {
-            VinylTexture.face(diameter)
+            VinylTexture.face(diameter).frame(width: diameter, height: diameter)
             AlbumArtwork(url: url, size: diameter * VinylTexture.label, corner: 0.5)
             Circle().fill(Vinyl.discCore).frame(width: diameter * 0.03, height: diameter * 0.03)
             Circle().stroke(Vinyl.shine.opacity(0.25), lineWidth: 0.5).frame(width: diameter * 0.03, height: diameter * 0.03)
