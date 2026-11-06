@@ -109,12 +109,13 @@ struct QueueSummaryLine: View {
                 position: model.playbackTime)
             let lead = filteredCount.map { "\($0) of \(total) songs" }
                 ?? "\(total) \(total == 1 ? "song" : "songs"), \(QueueTiming.leftText(left))"
-            let tail = preparing > 0 ? ", \(preparing) preparing" : ""
+            let tail = preparing > 0 && filteredCount == nil ? ", \(preparing) preparing" : ""
+            let ends = filteredCount == nil && model.isPlaying ? QueueTiming.endsText(from: context.date, remaining: left) : nil
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 8) {
-                    Text(lead + tail)
+                    Text(lead + tail).fixedSize()
                     Spacer(minLength: 4)
-                    if filteredCount == nil, model.isPlaying { Text(QueueTiming.endsText(from: context.date, remaining: left)) }
+                    if let ends { Text(ends).fixedSize() }
                 }
                 Text(lead + tail)
             }

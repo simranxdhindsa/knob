@@ -280,6 +280,7 @@ enum Snapshot {
             }
         }
         await selectionShot(of: files, into: folder)
+        await queueShots(of: files, into: folder)
         await vinylShots(of: files, into: folder)
     }
 
@@ -335,6 +336,48 @@ enum Snapshot {
         }
         save(host, to: folder.appendingPathComponent("knobshift-selected-real.png"))
         window.orderOut(nil)
+    }
+
+
+    /// A real sized queue (95 songs, the 41st playing, long titles with their sources): resting,
+    /// one song selected, a search with results, and a search with none.
+    private static func queueShots(of files: [URL], into folder: URL) async {
+        let titles = ["Rabb Khair Kare (From \"Manje Bistre\") - Jubin Nautiyal", "Shokeen - From \"Rabb Da Radio\"", "Zindagi - Arijit Singh",
+                      "Tum Hi Ho [From Aashiqui 2] - Arijit Singh", "Kaali Hoodie - Sidhu Moose Wala", "Baby (Live) - Justin Bieber", "Sardaari - Himmat Sandhu"]
+        for (name, size) in [("compact", CGSize(width: 460, height: 720)), ("wide", CGSize(width: 900, height: 620)), ("full", CGSize(width: 1470, height: 919))] {
+            for state in name == "full" ? ["rest"] : ["rest", "selected", "search", "nomatch"] {
+                let shift = KnobShiftModel(restoresQueue: false)
+                shift.showPreviewForSnapshot(mixing: false)
+                let analysis = shift.tracks[0].analysis
+                shift.tracks = (0..<95).map { i in
+                    KnobShiftModel.Track(url: files[i % files.count], title: i < titles.count ? titles[i] : "Song \(i + 1) - Artist \(i % 9)",
+                                         duration: 200 + Double(i % 7) * 11, tailSilence: 1, analysis: analysis)
+                }
+                shift.currentIndex = 40
+                shift.nowPlaying = shift.tracks[40]
+                shift.isPlaying = true
+                let (host, window) = hosted(KnobShiftPlayerView(model: shift).frame(width: size.width, height: size.height)
+                    .environment(\.colorScheme, .dark), scheme: .dark)
+                window.setFrameOrigin(NSPoint(x: -8000, y: -8000))
+                window.orderFrontRegardless()
+                try? await Task.sleep(for: .seconds(3))
+                if state == "selected", let table = findTable(in: host) {
+                    table.selectRowIndexes(IndexSet(integer: 2), byExtendingSelection: false)
+                } else if state == "search" || state == "nomatch", let field = findField(in: host) {
+                    field.window?.makeFirstResponder(field)
+                    field.stringValue = state == "search" ? "arijit" : "zzzz"
+                    NotificationCenter.default.post(name: NSControl.textDidChangeNotification, object: field.currentEditor() ?? field)
+                    (field.currentEditor() as? NSTextView)?.insertText("", replacementRange: NSRange(location: field.stringValue.count, length: 0))
+                }
+                try? await Task.sleep(for: .seconds(1.5))
+                save(host, to: folder.appendingPathComponent("queue-\(name)-\(state).png"))
+                window.orderOut(nil)
+            }
+        }
+    }
+
+    private static func findField(in view: NSView) -> NSTextField? {
+        (view as? NSTextField).flatMap { $0.isEditable ? $0 : nil } ?? view.subviews.lazy.compactMap(findField).first
     }
 
     private static func findTable(in view: NSView) -> NSTableView? {

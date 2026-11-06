@@ -152,7 +152,7 @@ struct KnobShiftQueue: View {
                     Text("No songs match \u{201C}\(query)\u{201D}. Try part of the song name or the artist.")
                         .font(.system(size: 11)).foregroundStyle(surface.secondary)
                         .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity).padding(.vertical, 24).padding(.horizontal, 12)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity).padding(.horizontal, 12)
                 } else {
                     // A List gives native drag to reorder, in your order and in shuffle alike.
                     List(selection: $selection) {
