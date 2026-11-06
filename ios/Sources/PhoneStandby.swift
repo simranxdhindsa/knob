@@ -32,7 +32,6 @@ final class PhoneStandby {
         guard self.model == nil else { return }
         self.model = model
         StandbyActions.handler = { [weak self] kind in self?.run(kind) }
-        Self.drawRecord()
         // A card left from an earlier run is ended: this run starts its own.
         Task { [weak self] in
             for old in Activity<KnobStandbyAttributes>.activities where old.id != self?.activity?.id {
@@ -171,20 +170,6 @@ final class PhoneStandby {
         return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { _ in
             image.draw(in: CGRect(x: 0, y: 0, width: side, height: side))
         }
-    }
-
-    /// The record without its cover, drawn once by Knob's own texture so the extension only
-    /// has to load a picture.
-    private static func drawRecord() {
-        guard let file = StandbyGroup.recordFile, !FileManager.default.fileExists(atPath: file.path) else { return }
-        let side: CGFloat = 300
-        let renderer = ImageRenderer(content: ZStack {
-            VinylTexture.face(side).frame(width: side, height: side)
-            VinylTexture.light(side).frame(width: side, height: side)
-        }.frame(width: side, height: side))
-        renderer.scale = 3
-        renderer.isOpaque = false
-        try? renderer.uiImage?.pngData()?.write(to: file, options: .atomic)
     }
 
     private func saveLastSong(name: String, artist: String?, cover: String?) {

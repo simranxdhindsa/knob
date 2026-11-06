@@ -2,8 +2,8 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// The still record for the lock screen, StandBy and the Dynamic Island: Knob's own record
-/// (drawn once by the app into the shared folder) with the song's cover on its label. The
+/// The still record for the lock screen, StandBy and the Dynamic Island: a black disc drawn here
+/// from plain shapes, in the deck's colours, with the song's cover on its label. The
 /// layout follows the Music Player Card on 21st.dev (ravikatiyar162): cover, title and artist,
 /// a progress bar with the time, and the three transport buttons, here in Knob's own finish.
 struct StandbyRecord: View {
@@ -13,11 +13,7 @@ struct StandbyRecord: View {
 
     var body: some View {
         ZStack {
-            if let face = Self.picture(StandbyGroup.recordFile) {
-                Image(uiImage: face).resizable()
-            } else {
-                Circle().fill(Vinyl.disc).overlay(Circle().stroke(Vinyl.rim, lineWidth: 1))
-            }
+            StandbyDisc(diameter: diameter)
             label
                 .frame(width: diameter * 0.35, height: diameter * 0.35)
                 .clipShape(Circle())
@@ -45,6 +41,28 @@ struct StandbyRecord: View {
 
     static func picture(_ file: URL?) -> UIImage? {
         file.flatMap { try? Data(contentsOf: $0) }.flatMap { UIImage(data: $0) }
+    }
+}
+
+/// The disc: dark vinyl, rings of grooves and the two soft bands of light a real record catches.
+private struct StandbyDisc: View {
+    private static let grooves = 12
+
+    let diameter: CGFloat
+
+    var body: some View {
+        ZStack {
+            Circle().fill(RadialGradient(colors: [Vinyl.discCore, Vinyl.disc, Vinyl.discCore], center: .center,
+                                         startRadius: 0, endRadius: diameter / 2))
+            ForEach(0..<Self.grooves, id: \.self) { ring in
+                Circle()
+                    .stroke(Vinyl.shine.opacity(ring % 3 == 0 ? 0.12 : 0.06), lineWidth: 0.6)
+                    .frame(width: diameter * (0.94 - CGFloat(ring) * 0.045), height: diameter * (0.94 - CGFloat(ring) * 0.045))
+            }
+            Circle().fill(AngularGradient(colors: [.clear, Vinyl.shine.opacity(0.16), .clear, .clear,
+                                                   Vinyl.shine.opacity(0.12), .clear, .clear], center: .center, angle: .degrees(20)))
+            Circle().stroke(Vinyl.rim, lineWidth: 1)
+        }
     }
 }
 

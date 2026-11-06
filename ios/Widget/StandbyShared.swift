@@ -36,7 +36,6 @@ enum StandbyGroup {
 
     static var folder: URL? { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: id) }
     static var songFile: URL? { folder?.appendingPathComponent("last-song.json") }
-    static var recordFile: URL? { folder?.appendingPathComponent("record.png") }
 
     static func coverFile(_ name: String?) -> URL? { name.flatMap { folder?.appendingPathComponent($0) } }
 }
