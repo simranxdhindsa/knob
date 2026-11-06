@@ -119,6 +119,20 @@ enum KnobShiftScratchCheck {
         let spent = Date().timeIntervalSince(began)
         expect(spent < 3, String(format: "a minute of sound takes %.2f s to make, even in this debug build", spent))
 
+        // A new, shorter song arriving mid scratch must never be read past its end.
+        let swapped = tone(440, seconds: 20)
+        swapped.grab(at: 15, speed: 1)
+        _ = play(swapped, seconds: 0.1)
+        let short = UnsafeMutablePointer<Int16>.allocate(capacity: 44_100 * 2)
+        short.initialize(repeating: 0, count: 44_100 * 2)
+        swapped.use(short, frames: 44_100, rate: 44_100)
+        _ = play(swapped, seconds: 0.1)
+        expect(swapped.time <= 1, String(format: "a shorter song arriving mid scratch is read inside its length (%.2f s)", swapped.time))
+        swapped.grab(at: 0.5, speed: 1)
+        expect(!swapped.isCaughtUp, "moving the record waits for the audio thread")
+        _ = play(swapped, seconds: 0.01)
+        expect(swapped.isCaughtUp && abs(swapped.time - 0.51) < 0.01, "the audio thread picks the move up at its next block")
+
         let deck = KnobShiftVinylGeometry(center: CGPoint(x: 300, y: 200), diameter: 340)
         var roundTrip = 0.0, rightHalf = true
         for step in 0...100 {

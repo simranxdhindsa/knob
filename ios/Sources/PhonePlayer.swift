@@ -40,7 +40,7 @@ struct PhonePlayer: View {
 
     /// The phone can turn to the record deck with a song loaded, and nothing else open.
     private var canTurn: Bool {
-        model.nowPlaying != nil && !hidesPlayButton && !sheets.queue && !sheets.sound && sheets.mac == nil
+        model.nowPlaying != nil && !hidesPlayButton && !sheets.queue && !sheets.sound && sheets.mac == nil && !importing
     }
 
     private func upright(_ geometry: GeometryProxy) -> some View {

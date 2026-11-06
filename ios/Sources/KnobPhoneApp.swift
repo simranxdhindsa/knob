@@ -61,10 +61,7 @@ final class PhoneApp: ObservableObject {
         try? await Task.sleep(for: .seconds(4))
         shift.updatePlaybackTime()
         shift.log("VINYL", "Four seconds later the song is at \(String(format: "%.2f", shift.playbackTime))s, and playing is \(shift.isPlaying).")
-        guard let deck = PhoneTurntable.current else {
-            shift.log("VINYL", "No record deck on screen.")
-            return
-        }
+        let deck = PhoneTurntable.shared(for: shift)
         deck.handDown(at: CGPoint(x: 100, y: 0), center: .zero)
         try? await Task.sleep(for: .milliseconds(400))
         for (degrees, count) in [(12.0, 30), (-12.0, 15)] {
@@ -86,6 +83,43 @@ final class PhoneApp: ObservableObject {
         try? await Task.sleep(for: .seconds(3))
         shift.updatePlaybackTime()
         shift.log("VINYL", "After the arm: song at \(String(format: "%.2f", shift.playbackTime))s of \(String(format: "%.2f", shift.playbackDuration))s, playing is \(shift.isPlaying).")
+        // The review's cases, each from a clean start.
+        // The phone turned upright with the arm in the air.
+        deck.armLifted(progress: 0.4)
+        deck.armMoved(progress: 0.5)
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
+        try? await Task.sleep(for: .seconds(2))
+        shift.updatePlaybackTime()
+        let upright = shift.playbackTime
+        try? await Task.sleep(for: .seconds(2))
+        shift.updatePlaybackTime()
+        shift.log("VINYL", "CASE turned upright holding the arm: two seconds moved \(String(format: "%.2f", shift.playbackTime - upright))s, deck \(shift.primaryDeck.player.isPlaying), playing \(shift.isPlaying).")
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
+        try? await Task.sleep(for: .seconds(1))
+        // A touch the system takes away must let go of the record.
+        deck.handDown(at: CGPoint(x: 100, y: 0), center: .zero)
+        try? await Task.sleep(for: .milliseconds(300))
+        deck.releaseNow()
+        try? await Task.sleep(for: .seconds(1))
+        shift.log("VINYL", "CASE touch taken away: active \(deck.isActive), deck \(shift.primaryDeck.player.isPlaying), playing \(shift.isPlaying).")
+        // Pause under a hand must not play the song twice.
+        deck.handDown(at: CGPoint(x: 100, y: 0), center: .zero)
+        try? await Task.sleep(for: .milliseconds(300))
+        shift.pauseOrResume()
+        shift.log("VINYL", "CASE paused under a hand: active \(deck.isActive), deck \(shift.primaryDeck.player.isPlaying), playing \(shift.isPlaying).")
+        try? await Task.sleep(for: .milliseconds(400))
+        shift.pauseOrResume()
+        deck.handUp()
+        try? await Task.sleep(for: .seconds(2))
+        shift.updatePlaybackTime()
+        shift.log("VINYL", "CASE pause then play under a hand: active \(deck.isActive), deck \(shift.primaryDeck.player.isPlaying), playing \(shift.isPlaying).")
+        // The arm dropped at the very end of the song.
+        let song = shift.nowPlaying?.title ?? ""
+        deck.armLifted(progress: 0.5)
+        deck.armMoved(progress: 1)
+        deck.armDropped()
+        try? await Task.sleep(for: .seconds(3))
+        shift.log("VINYL", "CASE arm at the end: active \(deck.isActive), next song \(shift.nowPlaying?.title != song), playing \(shift.isPlaying).")
         // Round and round: the record's sound is wired in and out each time.
         let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
         shift.updatePlaybackTime()

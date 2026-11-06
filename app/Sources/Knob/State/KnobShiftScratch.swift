@@ -6,21 +6,33 @@ import AVFoundation
 /// because that is simply what happens. A stopped record is silent, not a held note, since a
 /// stylus only makes a sound while the groove moves under it.
 final class KnobShiftScratch {
-    /// What the audio thread and the rest of the app share. Plain numbers only: the audio thread
-    /// takes no locks and allocates nothing, and each side writes its own fields.
-    struct Shared {
-        var samples: UnsafePointer<Int16>?
-        var frames = 0
+    /// One song, never changed once made, so the audio thread gets all of it or none of it.
+    struct Song {
+        let samples: UnsafePointer<Int16>
+        let frames: Int
         /// Song frames per output frame at normal speed.
-        var step = 1.0
-        var position = 0.0
-        var speed = 0.0
+        let step: Double
+    }
+
+    /// What the audio thread and the rest of the app share. The audio thread takes no locks and
+    /// allocates nothing, so each field has one writer. To move the record the app leaves a
+    /// request, which the audio thread picks up at the start of its next block.
+    struct Shared {
+        // Written by the app.
+        var song: UnsafePointer<Song>?
         var targetSpeed = 0.0
         /// How quickly speed follows its target, per output frame.
         var follow = 0.01
-        var level: Float = 0
         var targetLevel: Float = 0
         var levelFollow: Float = 0.002
+        var requestPosition = 0.0
+        var requestSpeed = 0.0
+        var requests = 0
+        // Written by the audio thread.
+        var handled = 0
+        var position = 0.0
+        var speed = 0.0
+        var level: Float = 0
         var left: Float = 0
         var right: Float = 0
     }
@@ -29,6 +41,9 @@ final class KnobShiftScratch {
     static let handSeconds = 0.012, motorSeconds = 0.14, fadeSeconds = 0.03
     /// Below this speed a stylus fades to nothing.
     private static let quietSpeed = 0.12
+    /// Longer than this stays off the record: 20 minutes is about 210 MB, and a long mix in
+    /// memory is the kind of thing the iPhone closes an app for.
+    static let longestSeconds = 1_200.0
 
     let shared: UnsafeMutablePointer<Shared>
     let outputRate: Double
@@ -44,11 +59,14 @@ final class KnobShiftScratch {
 
     deinit {
         buffer?.deallocate()
+        shared.pointee.song?.deallocate()
         shared.deinitialize(count: 1)
         shared.deallocate()
     }
 
-    var isLoaded: Bool { shared.pointee.samples != nil }
+    var isLoaded: Bool { shared.pointee.song != nil }
+    /// The audio thread has picked up the last request, so `time` and `speed` are current.
+    var isCaughtUp: Bool { shared.pointee.handled == shared.pointee.requests }
     var isSounding: Bool { shared.pointee.level > 0.0005 || shared.pointee.targetLevel > 0 }
     var time: TimeInterval { shared.pointee.position / fileRate }
     var speed: Double { shared.pointee.speed }
@@ -75,12 +93,19 @@ final class KnobShiftScratch {
         let file = try AVAudioFile(forReading: url)
         let format = file.processingFormat
         let total = Int(file.length)
+        guard Double(total) / format.sampleRate <= longestSeconds else { throw CocoaError(.fileReadTooLarge) }
         guard total > 0, let chunk = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 65_536) else { throw CocoaError(.fileReadCorruptFile) }
         let samples = UnsafeMutablePointer<Int16>.allocate(capacity: total * 2)
         var written = 0
         let channels = Int(format.channelCount)
         while written < total {
-            do { try file.read(into: chunk, frameCount: 65_536) } catch { samples.deallocate(); throw error }
+            do {
+                try Task.checkCancellation()
+                try file.read(into: chunk, frameCount: 65_536)
+            } catch {
+                samples.deallocate()
+                throw error
+            }
             let count = Int(chunk.frameLength)
             guard count > 0, let data = chunk.floatChannelData else { break }
             let left = data[0], right = data[channels > 1 ? 1 : 0]
@@ -94,31 +119,42 @@ final class KnobShiftScratch {
         return (samples, min(written, total), format.sampleRate)
     }
 
-    /// Takes a decoded song. Only when silent, so the audio thread is not reading the old one.
+    /// Takes a decoded song, in one step. The old one is only let go a second later, long after
+    /// the audio thread can still be reading it.
     func use(_ samples: UnsafeMutablePointer<Int16>, frames: Int, rate: Double) {
-        let old = buffer
-        shared.pointee.samples = nil
-        shared.pointee.frames = frames
-        shared.pointee.step = rate / outputRate
+        let song = UnsafeMutablePointer<Song>.allocate(capacity: 1)
+        song.initialize(to: Song(samples: UnsafePointer(samples), frames: frames, step: rate / outputRate))
+        swap(to: UnsafePointer(song), samples: samples)
         fileRate = rate
+    }
+
+    /// Lets go of the song, to give its memory back.
+    func release() { swap(to: nil, samples: nil) }
+
+    private func swap(to song: UnsafePointer<Song>?, samples: UnsafeMutablePointer<Int16>?) {
+        let oldSong = shared.pointee.song, oldSamples = buffer
+        // The song must be complete in memory before the audio thread can see it.
+        OSMemoryBarrier()
+        shared.pointee.song = song
         buffer = samples
-        shared.pointee.samples = UnsafePointer(samples)
-        if let old {
-            let address = UInt(bitPattern: old)
-            DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
-                UnsafeMutablePointer<Int16>(bitPattern: address)?.deallocate()
-            }
+        guard oldSong != nil || oldSamples != nil else { return }
+        let songAddress = UInt(bitPattern: oldSong), samplesAddress = UInt(bitPattern: oldSamples)
+        DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
+            UnsafeMutablePointer<Song>(bitPattern: songAddress)?.deallocate()
+            UnsafeMutablePointer<Int16>(bitPattern: samplesAddress)?.deallocate()
         }
     }
 
     /// A hand lands on the record at this point in the song.
     func grab(at time: TimeInterval, speed: Double) {
-        shared.pointee.position = max(0, min(time * fileRate, Double(max(shared.pointee.frames - 1, 0))))
-        shared.pointee.speed = speed
+        let last = Double(max((shared.pointee.song?.pointee.frames ?? 1) - 1, 0))
+        shared.pointee.requestPosition = max(0, min(time * fileRate, last))
+        shared.pointee.requestSpeed = speed
         shared.pointee.targetSpeed = speed
         shared.pointee.follow = Self.coefficient(Self.handSeconds, rate: outputRate)
-        shared.pointee.level = 1
         shared.pointee.targetLevel = 1
+        OSMemoryBarrier()
+        shared.pointee.requests += 1
     }
 
     /// The record's speed under the hand: 1 is normal, negative is backward.
@@ -139,14 +175,23 @@ final class KnobShiftScratch {
     /// false when it wrote nothing because it is silent.
     @inline(__always)
     static func render(_ s: UnsafeMutablePointer<Shared>, left: UnsafeMutablePointer<Float>, right: UnsafeMutablePointer<Float>, frames: Int) -> Bool {
-        guard let samples = s.pointee.samples, s.pointee.frames > 3, s.pointee.level > 0.0005 || s.pointee.targetLevel > 0 else {
+        guard let song = s.pointee.song?.pointee, song.frames > 3, s.pointee.level > 0.0005 || s.pointee.targetLevel > 0 else {
             return false
         }
+        let requests = s.pointee.requests
+        if s.pointee.handled != requests {
+            s.pointee.position = s.pointee.requestPosition
+            s.pointee.speed = s.pointee.requestSpeed
+            s.pointee.level = 1
+            s.pointee.handled = requests
+        }
+        let samples = song.samples, step = song.step
         var position = s.pointee.position, speed = s.pointee.speed, level = s.pointee.level
         var outLeft = s.pointee.left, outRight = s.pointee.right
-        let target = s.pointee.targetSpeed, follow = s.pointee.follow, step = s.pointee.step
+        let target = s.pointee.targetSpeed, follow = s.pointee.follow
         let targetLevel = s.pointee.targetLevel, levelFollow = s.pointee.levelFollow
-        let last = Double(s.pointee.frames - 1)
+        let last = Double(song.frames - 1)
+        position = min(position, last)
         for frame in 0..<frames {
             speed += (target - speed) * follow
             level += (targetLevel - level) * levelFollow

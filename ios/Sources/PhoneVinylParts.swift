@@ -9,6 +9,8 @@ struct PhoneRecord: View {
     let diameter: CGFloat
     /// A hand can't move a record that is still coming out of its sleeve.
     var movable = true
+    /// Resets by itself if the system takes the touch away, which ends the drag with no word.
+    @GestureState private var touching = false
 
     var body: some View {
         ZStack {
@@ -24,6 +26,7 @@ struct PhoneRecord: View {
         .shadow(color: Glass.shadow, radius: 14, y: 6)
         .contentShape(Circle())
         .gesture(hand)
+        .onChange(of: touching) { if !touching { turntable.handUp() } }
         .accessibilityElement()
         .accessibilityLabel("Record")
         .accessibilityHint("Turn clockwise to move ahead in the song, anticlockwise to go back.")
@@ -32,6 +35,7 @@ struct PhoneRecord: View {
     private var hand: some Gesture {
         let center = CGPoint(x: diameter / 2, y: diameter / 2)
         return DragGesture(minimumDistance: 0)
+            .updating($touching) { _, touching, _ in touching = true }
             .onChanged { drag in
                 guard movable else { return }
                 if turntable.isHolding {
@@ -40,7 +44,6 @@ struct PhoneRecord: View {
                     turntable.handDown(at: drag.location, center: center)
                 }
             }
-            .onEnded { _ in turntable.handUp() }
     }
 
     private static let light: [Gradient.Stop] = [
@@ -85,6 +88,7 @@ struct PhoneTonearm: View {
     @ObservedObject var clock: KnobShiftClock
     let geometry: KnobShiftVinylGeometry
     var resting = false
+    @GestureState private var touching = false
 
     private var progress: Double {
         turntable.heldProgress ?? (clock.duration > 0 ? clock.time / clock.duration : 0)
@@ -112,6 +116,11 @@ struct PhoneTonearm: View {
                 .position(geometry.pivot)
                 .allowsHitTesting(false)
         }
+        .onChange(of: touching) {
+            guard !touching else { return }
+            Haptics.mark()
+            turntable.armDropped()
+        }
         .animation(held ? nil : Motion.gentle, value: resting)
         .animation(held || resting ? nil : .linear(duration: 0.1), value: progress)
         .accessibilityElement()
@@ -138,6 +147,7 @@ struct PhoneTonearm: View {
 
     private var pick: some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .named(PhoneVinylDeck.space))
+            .updating($touching) { _, touching, _ in touching = true }
             .onChanged { drag in
                 let at = geometry.progress(finger: drag.location)
                 if turntable.isArmHeld {
@@ -146,10 +156,6 @@ struct PhoneTonearm: View {
                     Haptics.mark()
                     turntable.armLifted(progress: progress)
                 }
-            }
-            .onEnded { _ in
-                Haptics.mark()
-                turntable.armDropped()
             }
     }
 }

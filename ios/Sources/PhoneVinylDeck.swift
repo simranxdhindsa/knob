@@ -10,8 +10,9 @@ struct PhoneVinylDeck: View {
 
     @ObservedObject var model: KnobShiftModel
     @ObservedObject var scrub: PlayerScrub
-    @StateObject private var turntable: PhoneTurntable
+    @ObservedObject private var turntable: PhoneTurntable
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @State private var stage = Stage.sleeve
 
     private enum Stage { case sleeve, out, settled }
@@ -19,7 +20,7 @@ struct PhoneVinylDeck: View {
     init(model: KnobShiftModel, scrub: PlayerScrub) {
         self.model = model
         self.scrub = scrub
-        _turntable = StateObject(wrappedValue: PhoneTurntable(model: model))
+        turntable = .shared(for: model)
     }
 
     var body: some View {
@@ -40,6 +41,8 @@ struct PhoneVinylDeck: View {
         .onAppear(perform: open)
         .onDisappear { turntable.stop() }
         .onChange(of: model.nowPlaying) { turntable.follow(model.nowPlaying) }
+        // A call or leaving the app takes the touch away too.
+        .onChange(of: scenePhase) { if scenePhase != .active { turntable.releaseNow() } }
     }
 
     /// The opening. Reduce Motion goes straight to the settled deck.

@@ -14,6 +14,8 @@ final class PhoneTurntable: ObservableObject {
     /// How quickly the song closes on where the hand has put the record. The song is held to the
     /// record's angle, not its speed, so one full turn is always exactly 1.8 seconds of song.
     private static let grip = 0.035
+    /// The motor is back up to speed well inside this; past it, the deck takes over regardless.
+    private static let longestReturn = 1.2
     /// The deck starts this far ahead, to meet the record as it fades out.
     private static let handoverLead = 0.03
 
@@ -38,25 +40,38 @@ final class PhoneTurntable: ObservableObject {
     private var holding = false
     private var wasPlaying = false
     private var returningTo: Double?
+    private var returnStarted = Date()
     private var fingerAngle = 0.0
     private var grabbedAngle = 0.0
     private var grabbedTime: TimeInterval = 0
     private var turnedSinceTick = 0.0
 
-    init(model: KnobShiftModel) {
+    /// One record for the life of the app, so turning the phone doesn't read the song again.
+    private static var shared: PhoneTurntable?
+
+    static func shared(for model: KnobShiftModel) -> PhoneTurntable {
+        if let shared { return shared }
+        let made = PhoneTurntable(model: model)
+        shared = made
+        return made
+    }
+
+    private init(model: KnobShiftModel) {
         self.model = model
         let rate = model.audioEngine.outputNode.outputFormat(forBus: 0).sampleRate
         scratch = KnobShiftScratch(outputRate: rate > 0 ? rate : 48_000)
         node = scratch.makeNode(format: AVAudioFormat(standardFormatWithSampleRate: scratch.outputRate, channels: 2)!)
-        #if DEBUG
-        Self.current = self
-        #endif
+        NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.giveBackMemory() }
+        }
     }
 
-    #if DEBUG
-    /// For the development checks, which drive the record the way a hand does.
-    static weak var current: PhoneTurntable?
-    #endif
+    /// Upright, nothing needs the song in memory if the phone is short of it.
+    private func giveBackMemory() {
+        guard !attached, !isActive else { return }
+        scratch.release()
+        loaded = nil
+    }
 
     /// The deck is on screen: wires the record into Knob's sound, after the mixer, so Knob's
     /// volume and effects apply to it like everything else.
@@ -69,8 +84,7 @@ final class PhoneTurntable: ObservableObject {
     }
 
     func stop() {
-        loading?.cancel()
-        if isActive { finish() }
+        releaseNow()
         guard attached else { return }
         model.audioEngine.detach(node)
         attached = false
@@ -83,19 +97,24 @@ final class PhoneTurntable: ObservableObject {
         if isActive { abandon() }
         loaded = track
         loading?.cancel()
+        scratch.release()
         let url = track.url
-        loading = Task { [weak self] in
-            let decoded = await Task.detached(priority: .userInitiated) { () -> Decoded? in
-                (try? KnobShiftScratch.decode(url)).map(Decoded.init)
-            }.value
-            guard let decoded else { return }
-            guard let self, !Task.isCancelled, self.loaded == track else {
-                decoded.samples.deallocate()
+        loading = Task.detached(priority: .userInitiated) { [weak self] in
+            guard let decoded = (try? KnobShiftScratch.decode(url)).map(Decoded.init) else {
+                await self?.model.log("VINYL", "\(track.title) stays off the record: it is too long or could not be read.")
                 return
             }
-            self.scratch.use(decoded.samples, frames: decoded.frames, rate: decoded.rate)
-            self.model.log("VINYL", "\(track.title) is on the record.")
+            await self?.took(decoded, for: track)
         }
+    }
+
+    private func took(_ decoded: Decoded, for track: KnobShiftModel.Track) {
+        guard loaded == track else {
+            decoded.samples.deallocate()
+            return
+        }
+        scratch.use(decoded.samples, frames: decoded.frames, rate: decoded.rate)
+        model.log("VINYL", "\(track.title) is on the record.")
     }
 
     private struct Decoded: @unchecked Sendable {
@@ -129,9 +148,9 @@ final class PhoneTurntable: ObservableObject {
         holding = true
         spin = 0
         grabbedAngle = angle
-        grabbedTime = scratch.time
+        grabbedTime = model.playbackTime
         fingerAngle = Self.bearing(point, center)
-        model.log("VINYL", "A hand stops the record at \(String(format: "%.2f", scratch.time))s.")
+        model.log("VINYL", "A hand stops the record at \(String(format: "%.2f", grabbedTime))s.")
     }
 
     func handMoved(to point: CGPoint, center: CGPoint) {
@@ -169,6 +188,7 @@ final class PhoneTurntable: ObservableObject {
     /// the lock screen and the song's state all stay as they were.
     private func holdDeck() {
         wasPlaying = model.isPlaying
+        model.releaseHold = { [weak self] in self?.releaseNow() }
         guard wasPlaying else { return }
         model.updatePlaybackTime()
         model.cancelPlan("A hand is on the record")
@@ -190,6 +210,20 @@ final class PhoneTurntable: ObservableObject {
         let target = model.isPlaying ? 1.0 : 0.0
         scratch.letGo(to: target)
         returningTo = target
+        returnStarted = Date()
+    }
+
+    /// Ends any hold at once, wherever the song has got to: for a button pressed under the hand,
+    /// a touch the system took away, or the deck leaving the screen.
+    func releaseNow() {
+        if isArmHeld, let progress = heldProgress {
+            isArmHeld = false
+            heldProgress = nil
+            model.releaseHold = nil
+            model.seek(to: progress * model.playbackDuration)
+        } else if isActive {
+            finish()
+        }
     }
 
     /// Keeps the song's clock, and so the arm and the times, with the record, and hands back to
@@ -206,19 +240,24 @@ final class PhoneTurntable: ObservableObject {
     }
 
     private func followRecord() {
+        guard scratch.isCaughtUp else { return }
         model.playbackTime = scratch.time
         if holding {
             let wanted = grabbedTime + (angle - grabbedAngle) / Self.degreesPerSecond
             let held = min(max(wanted, 0), model.playbackDuration)
             scratch.move(speed: min(max((held - scratch.time) / Self.grip, -Self.fastest), Self.fastest))
         }
-        if let target = returningTo, abs(scratch.speed - target) < 0.03 { finish() }
+        guard let target = returningTo else { return }
+        // At the very end of the song there is no groove left for the record to speed up in.
+        let atEnd = target > 0 && scratch.time >= model.playbackDuration - 0.05
+        if abs(scratch.speed - target) < 0.03 || atEnd || Date().timeIntervalSince(returnStarted) > Self.longestReturn { finish() }
     }
 
     private func finish() {
         holding = false
         returningTo = nil
         isActive = false
+        model.releaseHold = nil
         let duration = model.nowPlaying?.duration ?? 0
         let time = min(scratch.time + (model.isPlaying ? Self.handoverLead : 0), max(duration - 0.5, 0))
         model.seek(to: time)
@@ -230,6 +269,7 @@ final class PhoneTurntable: ObservableObject {
         holding = false
         returningTo = nil
         isActive = false
+        model.releaseHold = nil
         scratch.fadeOut()
     }
 
@@ -256,10 +296,12 @@ final class PhoneTurntable: ObservableObject {
         let time = progress * model.playbackDuration
         isArmHeld = false
         heldProgress = nil
+        model.releaseHold = nil
         model.log("VINYL", "The arm comes down at \(String(format: "%.2f", time))s.")
         if wasPlaying, canHold {
             try? model.startEngineIfNeeded()
             scratch.grab(at: time, speed: 0)
+            model.releaseHold = { [weak self] in self?.releaseNow() }
             isActive = true
             watch()
             comeBack()
