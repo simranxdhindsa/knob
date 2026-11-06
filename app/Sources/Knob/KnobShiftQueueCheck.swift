@@ -257,6 +257,24 @@ enum KnobShiftQueueCheck {
         empty.playNext(ids: [UUID()])
         empty.toggleMixOrder()
         expect(empty.tracks.isEmpty, "an empty queue survives every action")
+        let handMade = [song("Slow", 80), song("Fast", 170), song("Mid", 120), song("Other", 95)]
+        let taken = model(handMade, playing: 1)
+        taken.sortQueue(by: .bpm)
+        taken.sortQueue(by: .length)
+        taken.restoreOrderBeforeSort()
+        expect(names(taken.tracks) == names(handMade) && taken.nowPlaying == handMade[1] && taken.currentIndex == 1 && taken.orderBeforeSort == nil,
+               "two sorts in a row can be taken back to the hand made order, the playing song still playing")
+        let changed = model(handMade, playing: 0)
+        changed.sortQueue(by: .bpm)
+        changed.remove(ids: [handMade[2].id])
+        let added = song("New", 100)
+        changed.tracks.append(added)
+        changed.restoreOrderBeforeSort()
+        expect(names(changed.tracks) == ["Slow", "Fast", "Other", "New"], "taking a sort back leaves out removed songs and keeps added ones")
+        let dragged = model(handMade, playing: 0)
+        dragged.sortQueue(by: .bpm)
+        dragged.move(fromOffsets: IndexSet(integer: 3), toOffset: 1)
+        expect(dragged.orderBeforeSort == nil, "a drag after a sort makes that the user's order")
         expect(KnobShiftQueueSort.allCases.map(\.title) == ["BPM", "Length", "Artist", "Recently added"] && !KnobShiftQueueSort.allCases.contains { $0.title.contains("-") },
                "the menu names have no dashes")
     }

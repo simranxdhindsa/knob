@@ -77,15 +77,32 @@ extension KnobShiftModel {
     /// works on the sorted queue). Songs with nothing to sort by go last, in their order.
     func sortQueue(by sort: KnobShiftQueueSort) {
         let own = isArranged ? unshuffled : tracks
+        if orderBeforeSort == nil { orderBeforeSort = own }
+        replaceOwnOrder(with: Self.sorted(own, by: sort))
+        log("QUEUE", "Sorted by \(sort.title).")
+    }
+
+    /// Takes a sort back: the order from before it, with songs removed since left out and songs
+    /// added since after it.
+    func restoreOrderBeforeSort() {
+        guard let saved = orderBeforeSort else { return }
+        let present = Set(tracks.map(\.id)), known = Set(saved.map(\.id))
+        orderBeforeSort = nil
+        replaceOwnOrder(with: saved.filter { present.contains($0.id) } + tracks.filter { !known.contains($0.id) })
+        log("QUEUE", "Back to the order from before sorting.")
+    }
+
+    /// A new order of the user's own, so shuffle and Mix Order go off. The playing song keeps
+    /// playing and moves with it.
+    private func replaceOwnOrder(with order: [Track]) {
         let anchor = nowPlaying ?? (tracks.indices.contains(currentIndex) ? tracks[currentIndex] : nil)
         shuffleToRestore = nil
         mixOrderToRestore = false
         isShuffled = false
         isMixOrdered = false
         unshuffled = []
-        tracks = Self.sorted(own, by: sort)
+        tracks = order
         if let anchor, let index = tracks.firstIndex(of: anchor) { currentIndex = index }
-        log("QUEUE", "Sorted by \(sort.title).")
         queueReordered()
     }
 

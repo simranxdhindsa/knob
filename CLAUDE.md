@@ -226,6 +226,7 @@ If the same UI pattern is needed in 2+ places, extract it into `Components/`; ne
 | `UpdateStatusLabel` | Updater state beside the version in the header: short text ("Downloading…"), full sentence as tooltip |
 | `EngravedLabel` | Uppercase control label (in `Views/PanelView.swift`) |
 | `DeckTip`, `DeckTipBubble`, `TipHand` | The first time guide (`Components/DeckGuide.swift`): one tip at a time, in text on glass, with a hand acting out the gesture on the real part. A tip goes for good once it is done or dismissed, kept by name in `PersistKey.knobShiftTipsSeen`, so new installs and updates get the same guide. Add new gestures here rather than a tip of their own |
+| `QueueSearchField`, `QueueTrackRow`, `QueueJumpMark`, `KnobShiftQueueHeader` | The queue's search, rows and header. Rows hold no state: the list passes everything in, with one hover value for the whole list. Mix Order and sorting live in `State/KnobShiftMixOrder.swift` and `KnobShiftModel+QueueOrder.swift`; `--knobshift-queue-check` tests them. Half and double time count as close, so 75 into 148 BPM is a smooth mix, not a jump |
 | `PhoneBedsideClock`, `PhoneCharger` | iPhone only, in `ios/Sources/PhoneBedside.swift`. Bedside mode: on its side on a charger, `PhoneVinylDeck` keeps the same deck running, dims it (`Bedside` in Palette) and swaps its column for this clock; a tap brings the controls back for 6 seconds. The screen stays on only while Bedside mode shows, and `BedsideDrift` moves everything up to 4 points each minute so nothing stays on the same pixels. Apple's StandBy can't show this: it only allows widgets and Live Activities, which can't spin a record. Test on the simulator with `KNOB_PHONE_BEDSIDE=n`, which fakes the charger, and `KNOB_PHONE_BEDSIDE_TIME=21:05` |
 
 Precision controls and startup recovery: [`docs/precision-and-recovery.md`](docs/precision-and-recovery.md). Knobs and faders support Shift-drag at one-tenth speed. Startup diagnosis must read only the current launch's log bytes, never historical errors. Regression checks: `sh tests/precision-startup-build.sh`.
@@ -292,3 +293,8 @@ Brief, dated record of what was worked on per day, in the `Knob: <summary>` form
 ### 2026-11-06
 - Knob: a real record deck on the iPhone on its side and in Mac full screen, with the arm, spin to seek, real scratch sound and a song change animation
 - Knob: iPhone Bedside mode: on a charger the deck dims beside a big clock and the screen stays on
+
+### 2026-11-07
+- Knob: a first time guide with a hand that acts out each gesture on the record deck
+- Knob: the queue gains Mix Order, search, sorting, Play Next, time left and cleaner song names
+- Knob: a StandBy and Lock Screen card for iPhone, built by hand into the iPhone build with no Xcode project

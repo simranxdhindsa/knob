@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// The queue card's top row: the title, the Playlists switch, shuffle, the bin and ADD MUSIC.
+/// The queue card's top row: the title, the Playlists switch, sorting, Mix Order, shuffle, the
+/// bin and ADD MUSIC.
 struct KnobShiftQueueHeader: View {
     @ObservedObject var model: KnobShiftModel
     @Binding var showingPlaylists: Bool
@@ -23,7 +24,8 @@ struct KnobShiftQueueHeader: View {
             playlistsButton
             // Shuffle and the bin are for the queue, so they step aside for Playlists.
             if !showingPlaylists {
-                // HEADER ACTIONS: new queue buttons (Mix Order and the like) go here, before shuffle.
+                sortMenu
+                mixOrderButton
                 shuffleButton
                 if hasSongs {
                     Button { confirmingRemoveAll = true } label: {
@@ -41,19 +43,58 @@ struct KnobShiftQueueHeader: View {
     }
 
     private var shuffleButton: some View {
-        Button { model.toggleShuffle() } label: {
-            Image(systemName: "shuffle")
+        orderToggle("shuffle", on: model.isShuffled, action: model.toggleShuffle)
+            .help(model.isShuffled ? "Shuffle is on. Click to go back to your order." : "Shuffle the queue")
+            .accessibilityLabel(model.isShuffled ? "Shuffle on" : "Shuffle off")
+    }
+
+    /// Mix Order arranges what is left so neighbours mix well. It and shuffle replace each other.
+    private var mixOrderButton: some View {
+        orderToggle("waveform", on: model.isMixOrdered, action: model.toggleMixOrder)
+            .help(model.isMixOrdered ? "Mix Order is on. Click to go back to your order." : "Arrange the songs so they mix well")
+            .accessibilityLabel(model.isMixOrdered ? "Mix Order on" : "Mix Order off")
+    }
+
+    /// A button that holds the queue in another order, lit while it does.
+    private func orderToggle(_ symbol: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
                 .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(model.isShuffled ? Palette.accent : surface.tertiary)
+                .foregroundStyle(on ? Palette.accent : surface.tertiary)
                 .frame(width: 24, height: 20)
-                .background(Capsule().fill(model.isShuffled ? Palette.accent.opacity(0.14) : .clear))
-                .shadow(color: model.isShuffled ? Palette.accentGlow.opacity(0.5) : .clear, radius: 4)
+                .background(Capsule().fill(on ? Palette.accent.opacity(0.14) : .clear))
+                .shadow(color: on ? Palette.accentGlow.opacity(0.5) : .clear, radius: 4)
         }
         .buttonStyle(.plain)
         .disabled(model.tracks.count < 2)
-        .help(model.isShuffled ? "Shuffle is on. Click to go back to your order." : "Shuffle the queue")
-        .accessibilityLabel(model.isShuffled ? "Shuffle on" : "Shuffle off")
-        .padding(.trailing, 8)
+        .padding(.trailing, 4)
+    }
+
+    /// Sorting replaces the user's order, so the menu keeps the way back until they make a new one.
+    private var sortMenu: some View {
+        Menu {
+            Section("Sort by") {
+                ForEach(KnobShiftQueueSort.allCases, id: \.self) { sort in
+                    Button(sort.title) { model.sortQueue(by: sort) }
+                }
+            }
+            if model.orderBeforeSort != nil {
+                Button("Back to your order", action: model.restoreOrderBeforeSort)
+            }
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(model.orderBeforeSort != nil ? Palette.accent : surface.tertiary)
+                .frame(width: 24, height: 20)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .disabled(model.tracks.count < 2)
+        .help("Sort the queue")
+        .accessibilityLabel("Sort the queue")
+        .padding(.trailing, 4)
     }
 
     /// Switches between the queue and the Playlists view, where imported and synced songs wait

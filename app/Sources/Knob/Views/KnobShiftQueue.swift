@@ -144,6 +144,7 @@ struct KnobShiftQueue: View {
         // Rows before the playing song, in the order on screen, are the ones already played.
         let playedIDs: Set<UUID> = playingID.flatMap { id in model.tracks.firstIndex { $0.id == id } }
             .map { Set(model.tracks.prefix($0).map(\.id)) } ?? []
+        let jumps = Self.jumps(in: model.tracks, playing: playingID)
         let shownIDs = tracks.map(\.id)
         let playingShown = playingID.map(shownIDs.contains) ?? false
         return ScrollViewReader { reader in
@@ -157,7 +158,7 @@ struct KnobShiftQueue: View {
                     // A List gives native drag to reorder, in your order and in shuffle alike.
                     List(selection: $selection) {
                         ForEach(tracks) { track in
-                            queueRow(trackRow(track, playingID: playingID, played: playedIDs.contains(track.id)), id: track.id, track: track)
+                            queueRow(trackRow(track, playingID: playingID, played: playedIDs.contains(track.id), jump: jumps[track.id]), id: track.id, track: track)
                         }
                         .onMove(perform: searching ? nil : { model.move(fromOffsets: $0, toOffset: $1) })
                         ForEach(pending) { song in
@@ -171,7 +172,7 @@ struct KnobShiftQueue: View {
                     .onDeleteKey(perform: removeSelection)
                     .contextMenu(forSelectionType: UUID.self) { ids in
                         if !ids.isEmpty {
-                            // CONTEXT MENU: Play Next and other song actions go here, above Remove.
+                            Button(ids.count == 1 ? "Play Next" : "Play \(ids.count) Songs Next") { model.playNext(ids: ids) }
                             Button(ids.count == 1 ? "Remove from Queue" : "Remove \(ids.count) Songs from Queue") {
                                 selection.subtract(ids)
                                 model.remove(ids: ids)
@@ -232,6 +233,12 @@ struct KnobShiftQueue: View {
                 if inside { hovered = id } else if hovered == id { hovered = nil }
             }
             #else
+            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                if track != nil {
+                    Button { model.playNext(ids: [id]) } label: { Label("Play Next", systemImage: "text.insert") }
+                        .tint(Palette.accent)
+                }
+            }
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 Button(role: .destructive) { removeOne(id) } label: { Label("Remove", systemImage: "trash") }
             }
@@ -246,12 +253,24 @@ struct KnobShiftQueue: View {
             }
     }
 
-    private func trackRow(_ track: KnobShiftModel.Track, playingID: UUID?, played: Bool) -> some View {
+    /// How the mix into each song still to come will feel, in the real play order, which stays
+    /// the order while a search hides the songs between.
+    private static func jumps(in tracks: [KnobShiftModel.Track], playing: UUID?) -> [UUID: KnobShiftMixJump] {
+        let start = (playing.flatMap { id in tracks.firstIndex { $0.id == id } } ?? 0) + 1
+        guard start < tracks.count else { return [:] }
+        var jumps: [UUID: KnobShiftMixJump] = [:]
+        for index in start..<tracks.count {
+            jumps[tracks[index].id] = KnobShiftMixOrder.jump(from: tracks[index - 1].analysis, to: tracks[index].analysis)
+        }
+        return jumps
+    }
+
+    private func trackRow(_ track: KnobShiftModel.Track, playingID: UUID?, played: Bool, jump: KnobShiftMixJump?) -> some View {
         QueueTrackRow(
             track: track, playing: track.id == playingID, selected: selection.contains(track.id), played: played,
-            hovered: hovered == track.id, reveal: model.justPrepared.contains(track.id),
+            hovered: hovered == track.id, reveal: model.justPrepared.contains(track.id), jump: jump,
             voiceNote: voiceNote(track), offersRetry: offersVoiceRetry(track),
-            onRetry: { model.rereadVoice(track) }, onRemove: { removeOne(track.id) })
+            onRetry: { model.rereadVoice(track) }, onPlayNext: { model.playNext(ids: [track.id]) }, onRemove: { removeOne(track.id) })
     }
 
     private func pendingRow(_ song: KnobShiftModel.PendingSong) -> some View {

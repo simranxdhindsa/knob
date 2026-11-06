@@ -163,6 +163,9 @@ final class KnobShiftModel: ObservableObject {
     /// keeps the user's own order in `unshuffled`, and the two are never on together.
     @Published internal(set) var isMixOrdered = false
     var mixOrderToRestore = false
+    /// The user's own order from before the first sort, so a sort can be taken back. A drag makes
+    /// a new order of their own, and this goes.
+    @Published internal(set) var orderBeforeSort: [Track]?
     /// KnobMix Now was pressed and the mix is waiting for its phrase or break.
     @Published internal(set) var mixNowWaiting = false
     /// The user's own order while shuffle is on, so turning it off brings that order back.

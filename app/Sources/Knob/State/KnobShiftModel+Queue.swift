@@ -40,6 +40,7 @@ extension KnobShiftModel {
     /// was, so turning shuffle off still restores it.
     func move(fromOffsets source: IndexSet, toOffset destination: Int) {
         tracks.move(fromOffsets: source, toOffset: destination)
+        if !isArranged { orderBeforeSort = nil }
         log("QUEUE", "Reordered: " + tracks.map(\.name).joined(separator: ", ") + ".")
         queueReordered()
     }

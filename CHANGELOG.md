@@ -15,6 +15,12 @@ Knob 4.1 keeps the orange microphone dot away, makes low volumes easier to hear,
 - Turn your iPhone on its side and the player becomes a real record deck: spin the record to scratch through the song, lift the arm to jump anywhere, tap the cover to pause
 - On the Mac, a switch at the top of full screen brings up the same record deck
 - When the song changes on the record deck, the record slides back into its sleeve, the cover changes and the new record comes out
+- The queue can arrange itself so neighbouring songs mix well, and a small mark shows which mixes will be smooth and which are a big tempo jump
+- Search the queue by song or artist, sort it by BPM, length, artist or recently added, and go back to your own order at any time
+- Play Next puts any song straight after the one playing, from the right click menu on Mac or a swipe on iPhone
+- The queue shows how long is left and when it ends, dims songs already played, and takes you back to the playing song with one click
+- Long song names read better, with the film or album they come from moved to the line below
+- On iPhone, the playing song can show in StandBy and on the Lock Screen with its cover, a moving bar and play, previous and next buttons, and a small widget shows the last song
 - Short tips show you the way to the record deck and how to use it, one at a time, and go away for good once you have tried each thing
 - Put your iPhone on its side on a charger with Knob open and it becomes a bedside clock: the record keeps turning in a dimmed room beside a big clock, the screen stays on, and a tap brings the controls back
 - KnobShift in full screen shows the whole cover, sharp and uncut, with bigger controls

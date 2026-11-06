@@ -31,7 +31,7 @@ struct QueueSelectedTick: View {
     var body: some View {
         Image(systemName: "checkmark.circle.fill")
             .font(.system(size: 13))
-            .foregroundStyle(.white, Palette.accent)
+            .foregroundStyle(Glass.onAccent, Palette.accent)
             .accessibilityHidden(true)
     }
 }
@@ -59,6 +59,33 @@ struct QueueRemoveButton: View {
     }
 }
 
+/// How the mix into a song will feel, beside its length: faint when smooth, orange when the tempo
+/// has to stretch, bright orange for a big jump, so a long list stays quiet until something stands out.
+struct QueueJumpMark: View {
+    private static let size: CGFloat = 6
+
+    let jump: KnobShiftMixJump
+    @Environment(\.surface) private var surface
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: Self.size, height: Self.size)
+            .shadow(color: jump == .big ? Palette.accentGlow.opacity(0.7) : .clear, radius: 3)
+            .help(jump.title)
+            .accessibilityLabel(jump.title)
+    }
+
+    private var color: Color {
+        switch jump {
+        case .smooth: surface.tertiary.opacity(0.5)
+        case .stretch: Palette.accent.opacity(0.5)
+        case .big: Palette.accent
+        case .unknown: .clear
+        }
+    }
+}
+
 /// One ready song. The song name on top; the second line holds the artist, where it is from and
 /// its tempo.
 struct QueueTrackRow: View {
@@ -69,9 +96,12 @@ struct QueueTrackRow: View {
     let played: Bool
     let hovered: Bool
     let reveal: Bool
+    /// How the mix into this song will feel, for songs still to come.
+    let jump: KnobShiftMixJump?
     let voiceNote: String?
     let offersRetry: Bool
     let onRetry: () -> Void
+    let onPlayNext: () -> Void
     let onRemove: () -> Void
     @Environment(\.surface) private var surface
 
@@ -95,6 +125,7 @@ struct QueueTrackRow: View {
                     .frame(minHeight: QueueRowStyle.tap)
                     .accessibilityLabel("Read the voice of \(parts.name) again")
             }
+            if let jump, jump != .unknown { QueueJumpMark(jump: jump) }
             Text(KnobShiftNowPlaying.clock(track.duration))
                 .font(.system(size: 10, weight: .medium).monospacedDigit()).foregroundStyle(surface.tertiary)
             QueueRemoveButton(visible: hovered || selected, action: onRemove)
@@ -107,6 +138,7 @@ struct QueueTrackRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityValue(playing ? "Playing" : (played ? "Played" : ""))
+        .accessibilityAction(named: "Play next", onPlayNext)
         .accessibilityAction(named: "Remove from queue", onRemove)
     }
 
