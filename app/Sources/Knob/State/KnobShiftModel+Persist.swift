@@ -12,6 +12,7 @@ extension KnobShiftModel {
         let paths = (UserDefaults.standard.stringArray(forKey: PersistKey.knobShiftQueue.rawValue) ?? []).map(Platform.relocated)
         log("RESTORE", "Restoring \(paths.count) song(s).")
         shuffleToRestore = UserDefaults.standard.stringArray(forKey: PersistKey.knobShiftShuffledQueue.rawValue)?.map(Platform.relocated)
+        mixOrderToRestore = UserDefaults.standard.bool(forKey: PersistKey.knobShiftMixOrdered.rawValue)
         let found = await Task.detached(priority: .userInitiated) {
             paths.filter { FileManager.default.fileExists(atPath: $0) }.map { URL(fileURLWithPath: $0) }
         }.value
@@ -42,20 +43,21 @@ extension KnobShiftModel {
         restoreNowPlaying()
     }
 
-    /// Turns shuffle back on in its saved order, once the songs are back in the user's own order.
-    /// Songs the saved order does not know go last.
-    private func restoreShuffle() {
+    /// Turns shuffle (or Mix Order) back on in its saved order, once the songs are back in the
+    /// user's own order. Songs the saved order does not know go last.
+    func restoreShuffle() {
         guard let order = shuffleToRestore else { return }
         shuffleToRestore = nil
-        guard !isShuffled else { return }
+        guard !isShuffled, !isMixOrdered else { return }
         let rank = Dictionary(order.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
         unshuffled = tracks
         tracks = tracks.enumerated().sorted {
             (rank[$0.element.url.path] ?? .max, $0.offset) < (rank[$1.element.url.path] ?? .max, $1.offset)
         }.map(\.element)
-        isShuffled = true
+        isMixOrdered = mixOrderToRestore
+        isShuffled = !mixOrderToRestore
         if let playing = nowPlaying, let index = tracks.firstIndex(of: playing) { currentIndex = index }
-        log("RESTORE", "Shuffle is back on, in its saved order.")
+        log("RESTORE", (isMixOrdered ? "Mix Order" : "Shuffle") + " is back on, in its saved order.")
         refreshPlanIfNeeded()
         persistQueue()
     }
@@ -66,7 +68,7 @@ extension KnobShiftModel {
 
     /// Puts the queue back in its saved order, once the song prepared first has joined it.
     private func restoreOrder(of files: [URL]) {
-        guard !isShuffled else { return }
+        guard !isShuffled, !isMixOrdered else { return }
         let rank = Dictionary(files.enumerated().map { ($1.path, $0) }, uniquingKeysWith: { first, _ in first })
         tracks = tracks.enumerated().sorted {
             (rank[$0.element.url.path] ?? .max, $0.offset) < (rank[$1.element.url.path] ?? .max, $1.offset)
@@ -120,12 +122,13 @@ extension KnobShiftModel {
     /// Spotify songs still downloading are not saved: their list in the playlist folder brings
     /// them back.
     func persistQueueNow() {
-        let paths = (isShuffled ? unshuffled : tracks).map { $0.url.path }
+        let paths = (isArranged ? unshuffled : tracks).map { $0.url.path }
             + pending.filter { !$0.waitingForDownload && $0.joinsQueue }.map { $0.url.path }
         UserDefaults.standard.set(paths, forKey: PersistKey.knobShiftQueue.rawValue)
         // While a queue is being restored its shuffle is not back yet, so the saved one stays.
         if shuffleToRestore == nil {
-            UserDefaults.standard.set(isShuffled ? tracks.map(\.url.path) : nil, forKey: PersistKey.knobShiftShuffledQueue.rawValue)
+            UserDefaults.standard.set(isArranged ? tracks.map(\.url.path) : nil, forKey: PersistKey.knobShiftShuffledQueue.rawValue)
+            UserDefaults.standard.set(isMixOrdered ? true : nil, forKey: PersistKey.knobShiftMixOrdered.rawValue)
         }
         rememberNowPlaying()
     }

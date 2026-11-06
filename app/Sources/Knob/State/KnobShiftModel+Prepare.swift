@@ -169,7 +169,7 @@ extension KnobShiftModel {
     }
 
     /// Adds a prepared song where it was planned to go: next to a song of its playlist, or last.
-    private func place(_ track: Track, at placement: KnobShiftSyncPlan.Placement?) {
+    func place(_ track: Track, at placement: KnobShiftSyncPlan.Placement?) {
         func index(in list: [Track]) -> Int {
             switch placement {
             case .after(let id)?: return list.lastIndex { $0.spotifyId == id }.map { $0 + 1 } ?? list.count
@@ -181,7 +181,7 @@ extension KnobShiftModel {
         // The song playing keeps its place in the order: one added before it moves it along.
         if at <= currentIndex, !tracks.isEmpty, nowPlaying != nil { currentIndex += 1 }
         tracks.insert(track, at: at)
-        if isShuffled { unshuffled.insert(track, at: index(in: unshuffled)) }
+        if isShuffled || isMixOrdered { unshuffled.insert(track, at: index(in: unshuffled)) }
     }
 
     private func setProgress(_ value: Double, for id: UUID) {
