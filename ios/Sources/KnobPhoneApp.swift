@@ -73,6 +73,66 @@ final class PhoneApp: ObservableObject {
         shift.log("VINYL", "MARK end")
     }
 
+    /// KNOB_PHONE_BEDSIDE=n turns the phone on its side after n seconds, plugs it in and walks
+    /// Bedside mode, marking each moment so the screen can be photographed there.
+    /// KNOB_PHONE_BEDSIDE_TIME=21:05 shows that time on the clock.
+    private static func bedsideCheck(_ shift: KnobShiftModel, after seconds: Double) async {
+        let key = PersistKey.knobShiftBedside.rawValue
+        if let parts = ProcessInfo.processInfo.environment["KNOB_PHONE_BEDSIDE_TIME"]?.split(separator: ":").compactMap({ Int($0) }), parts.count == 2 {
+            PhoneCharger.checkTime = Calendar.current.date(bySettingHour: parts[0], minute: parts[1], second: 0, of: Date())
+        }
+        func mark(_ text: String) {
+            shift.log("VINYL", "MARK \(text), screen stays on is \(UIApplication.shared.isIdleTimerDisabled)")
+        }
+        try? await Task.sleep(for: .seconds(seconds))
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
+        try? await Task.sleep(for: .seconds(4))
+        mark("deck")
+        try? await Task.sleep(for: .seconds(2.5))
+        PhoneCharger.shared.pretend(plugged: true, percent: 82)
+        try? await Task.sleep(for: .seconds(3))
+        mark("bedside")
+        try? await Task.sleep(for: .seconds(1.5))
+        shift.next()
+        try? await Task.sleep(for: .seconds(3.5))
+        mark("bedside after change")
+        try? await Task.sleep(for: .seconds(1.5))
+        shift.pauseOrResume()
+        try? await Task.sleep(for: .seconds(1.5))
+        mark("bedside paused")
+        try? await Task.sleep(for: .seconds(1.5))
+        shift.pauseOrResume()
+        for _ in shift.tracks where (shift.nowPlaying?.name.count ?? 0) < 30 {
+            shift.next()
+            try? await Task.sleep(for: .seconds(3))
+        }
+        mark("long title")
+        try? await Task.sleep(for: .seconds(1.5))
+        mark("tapping")
+        try? await Task.sleep(for: .seconds(1))
+        PhoneCharger.shared.tapClock()
+        try? await Task.sleep(for: .seconds(1.5))
+        mark("controls up")
+        try? await Task.sleep(for: .seconds(6.5))
+        mark("clock back")
+        try? await Task.sleep(for: .seconds(1.5))
+        PhoneCharger.shared.tapClock()
+        try? await Task.sleep(for: .seconds(1.5))
+        UserDefaults.standard.set(false, forKey: key)
+        try? await Task.sleep(for: .seconds(2))
+        mark("switched off")
+        try? await Task.sleep(for: .seconds(1.5))
+        UserDefaults.standard.set(true, forKey: key)
+        try? await Task.sleep(for: .seconds(2.5))
+        mark("switched on")
+        try? await Task.sleep(for: .seconds(1.5))
+        PhoneCharger.shared.pretend(plugged: false, percent: 82)
+        try? await Task.sleep(for: .seconds(2))
+        mark("unplugged")
+        try? await Task.sleep(for: .seconds(1.5))
+        mark("end")
+    }
+
     private static func environment(_ name: String) -> Bool { ProcessInfo.processInfo.environment[name] == "1" }
 
     private static func swapCheck(_ shift: KnobShiftModel, after seconds: Double) async {
@@ -215,6 +275,9 @@ final class PhoneApp: ObservableObject {
         }
         if let seconds = environment["KNOB_PHONE_UX"].flatMap(Double.init) {
             Task { await uxCheck(model.knobShift, after: seconds) }
+        }
+        if let seconds = environment["KNOB_PHONE_BEDSIDE"].flatMap(Double.init) {
+            Task { await bedsideCheck(model.knobShift, after: seconds) }
         }
         if let seconds = environment["KNOB_PHONE_SWAP"].flatMap(Double.init) {
             Task { await swapCheck(model.knobShift, after: seconds) }
