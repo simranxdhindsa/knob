@@ -16,6 +16,8 @@ enum PersistKey: String {
     case askedKeyAccess = "knob.audio.askedKeyAccess"
     /// Paths for the local files the user has added to KnobShift's queue.
     case knobShiftQueue = "knob.shift.queue"
+    /// Full screen on the Mac shows the record deck.
+    case knobShiftVinyl = "knob.shift.vinyl"
     /// While shuffle is on, the shuffled order; `knobShiftQueue` keeps the user's own order.
     case knobShiftShuffledQueue = "knob.shift.shuffledQueue"
     /// The song last in the player and where it was, so the next launch has it ready to play.

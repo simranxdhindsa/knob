@@ -77,6 +77,21 @@ enum Screen {
 /// The players' modern finish (the iPhone player and the Mac's KnobShift window), following the
 /// theme: dark text over a blurred, lightened cover in light mode, and light text over a darkened
 /// one in dark mode.
+/// The iPhone's record deck: a real record is black whatever the theme.
+enum Vinyl {
+    static let disc = Color(hex: 0x141416)
+    static let discCore = Color(hex: 0x09090A)
+    static let rim = Color(hex: 0x2C2C31)
+    /// Light on the grooves and on chrome, at any strength.
+    static let shine = Color.white
+    static let metal = Color(hex: 0xD3D5DA)
+    static let metalShade = Color(hex: 0x7C7F87)
+    static let chromeDark = Color(hex: 0x33353A)
+    static let plate = Color(hex: 0x38393E)
+    static let plateLight = Color(hex: 0x6A6C73)
+    static let base = Color(hex: 0x2B2C31)
+}
+
 enum Glass {
     static let text = themed(dark: .white, light: Color(hex: 0x1C1C1E))
     static let secondary = themed(dark: .white.opacity(0.65), light: .black.opacity(0.6))

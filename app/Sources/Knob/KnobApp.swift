@@ -53,6 +53,14 @@ struct KnobLauncher {
             KnobShiftSpotifyCheck.run(Array(arguments[(index + 1)...]))
             return
         }
+        if let index = arguments.firstIndex(of: "--knobshift-vinyl-check"), index + 2 < arguments.count {
+            KnobShiftVinylCheck.run(first: URL(fileURLWithPath: arguments[index + 1]), second: URL(fileURLWithPath: arguments[index + 2]))
+            return
+        }
+        if let index = arguments.firstIndex(of: "--knobshift-scratch-check") {
+            KnobShiftScratchCheck.run(Array(arguments[(index + 1)...]))
+            return
+        }
         if arguments.contains("--knobshift-link-check") {
             MainActor.assumeIsolated { KnobShiftLinkCheck.run() }
             return

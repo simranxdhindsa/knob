@@ -270,6 +270,9 @@ final class KnobShiftModel: ObservableObject {
     var transitionTask: Task<Void, Never>?
     var mixPause = MixPause()
     var progressTask: Task<Void, Never>?
+    /// Set while the iPhone's record holds the song. Anything that moves the song, from any
+    /// button or the lock screen, ends the hold first, so the song never plays twice.
+    var releaseHold: (() -> Void)?
     var playbackStartedAt = Date()
     private var configurationObserver: NSObjectProtocol?
     /// The song the current plan or blend leads into, for the log when it is called off.
@@ -474,6 +477,7 @@ final class KnobShiftModel: ObservableObject {
     }
 
     func pauseOrResume() {
+        releaseHold?()
         guard nowPlaying != nil else { play(); return }
         if isPlaying, mixState == .mixing, transitionTask != nil {
             pauseMix()
@@ -509,6 +513,7 @@ final class KnobShiftModel: ObservableObject {
     }
 
     func previous() {
+        releaseHold?()
         guard !tracks.isEmpty else { return }
         if playbackTime > 3 { seek(to: 0); return }
         currentIndex = (currentIndex - 1 + tracks.count) % tracks.count
@@ -517,6 +522,7 @@ final class KnobShiftModel: ObservableObject {
     }
 
     func next() {
+        releaseHold?()
         guard !tracks.isEmpty else { return }
         currentIndex = (currentIndex + 1) % tracks.count
         log("TRANSPORT", "Next track: \(tracks[currentIndex].title).")
@@ -531,6 +537,7 @@ final class KnobShiftModel: ObservableObject {
     }
 
     func seek(to time: TimeInterval) {
+        releaseHold?()
         guard let track = nowPlaying else { return }
         let wasPlaying = isPlaying
         cancelPlan("You moved to \(Analysis.clock(time))")

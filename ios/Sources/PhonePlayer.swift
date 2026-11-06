@@ -17,12 +17,35 @@ struct PhonePlayer: View {
     @ObservedObject private var sheets = PhoneSheets.shared
     @StateObject private var scrub = PlayerScrub()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.hidesPlayButton) private var hidesPlayButton
     @State private var importing = false
 
     var body: some View {
         GeometryReader { geometry in
+            if geometry.size.width > geometry.size.height {
+                PhoneVinylDeck(model: model, scrub: scrub)
+            } else {
+                upright(geometry)
+            }
+        }
+        .background { PlayerAmbient(url: (model.mixingInto ?? model.nowPlaying)?.url).ignoresSafeArea() }
+        .sheet(item: $sheets.mac) { PhoneMacSheet(model: model, source: $0) }
+        .fileImporter(isPresented: $importing, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
+            guard case .success(let urls) = result else { return }
+            let prepared = prepareImports(urls)
+            Task { await model.addTracks(prepared) }
+        }
+        .onChange(of: canTurn, initial: true) { PhoneOrientation.allow(landscape: canTurn) }
+    }
+
+    /// The phone can turn to the record deck with a song loaded, and nothing else open.
+    private var canTurn: Bool {
+        model.nowPlaying != nil && !hidesPlayButton && !sheets.queue && !sheets.sound && sheets.mac == nil && !importing
+    }
+
+    private func upright(_ geometry: GeometryProxy) -> some View {
             let layout = PhonePlayerLayout(size: geometry.size, topInset: geometry.safeAreaInsets.top, queue: sheets.queue)
-            ZStack(alignment: .topLeading) {
+            return ZStack(alignment: .topLeading) {
                 // With no song there is no cover to melt, only a note on the plain background.
                 if model.nowPlaying == nil && !sheets.queue {
                     Image(systemName: "music.note")
@@ -44,14 +67,6 @@ struct PhonePlayer: View {
                 controls(layout)
             }
             .animation(reduceMotion ? .easeOut(duration: 0.2) : Motion.gentle, value: sheets.queue)
-        }
-        .background { PlayerAmbient(url: (model.mixingInto ?? model.nowPlaying)?.url).ignoresSafeArea() }
-        .sheet(item: $sheets.mac) { PhoneMacSheet(model: model, source: $0) }
-        .fileImporter(isPresented: $importing, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
-            guard case .success(let urls) = result else { return }
-            let prepared = prepareImports(urls)
-            Task { await model.addTracks(prepared) }
-        }
     }
 
     private func cover(_ layout: PhonePlayerLayout) -> some View {

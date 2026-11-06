@@ -5,7 +5,8 @@ import UniformTypeIdentifiers
 /// finish as the iPhone player: the cover runs to the window's edges and melts into a blurred wash
 /// of its own colours, above the song with KnobMix and more beside it on glass, the position
 /// slider and the transport around the Play dial. Up Next and the queue sit on glass beside it in
-/// a wide window; a narrow one shows them in the cover's place from the queue button.
+/// a wide window; a narrow one shows them in the cover's place from the queue button. Full screen
+/// (KnobShiftPlayerView+Poster.swift) shows the whole cover instead, with nothing laid over it.
 struct KnobShiftPlayerView: View {
     static let minimumSize = CGSize(width: 440, height: 520)
     static let initialSize = CGSize(width: 820, height: 600)
@@ -14,8 +15,10 @@ struct KnobShiftPlayerView: View {
     static let wide: CGFloat = 760
 
     @ObservedObject var model: KnobShiftModel
-    @StateObject private var scrub = PlayerScrub()
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @StateObject var scrub = PlayerScrub()
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+    /// Full screen shows the record deck instead of the cover, from the switch at its top.
+    @AppStorage(PersistKey.knobShiftVinyl.rawValue) var vinyl = false
     @State private var importing = false
     @State private var showingSpotify = false
     @State private var showingYouTube = false
@@ -25,12 +28,18 @@ struct KnobShiftPlayerView: View {
     var body: some View {
         GeometryReader { geometry in
             let wide = geometry.size.width >= Self.wide
+            let poster = KnobShiftPosterLayout.fits(geometry.size)
             HStack(spacing: 0) {
-                deck(wide: wide)
+                if poster {
+                    posterDeck(wide: wide)
+                } else {
+                    deck(wide: wide)
+                }
                 if wide {
-                    sidebar.frame(width: min(360, geometry.size.width * 0.42))
+                    sidebar(poster: poster).frame(width: KnobShiftPosterLayout.sidebar(geometry.size.width, poster: poster))
                 }
             }
+            .animation(reduceMotion ? .easeOut(duration: 0.2) : Motion.gentle, value: poster)
         }
         .frame(minWidth: Self.minimumSize.width, minHeight: Self.minimumSize.height)
         .background { PlayerAmbient(url: (model.mixingInto ?? model.nowPlaying)?.url).ignoresSafeArea() }
@@ -60,7 +69,7 @@ struct KnobShiftPlayerView: View {
                     cover(layout, hidden: queue)
                 }
                 if queue {
-                    sidebar
+                    sidebar(poster: false)
                         .frame(height: layout.coverSpace)
                         .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 18)), removal: .opacity))
                 }
@@ -120,14 +129,14 @@ struct KnobShiftPlayerView: View {
         .padding(.bottom, KnobShiftPlayerLayout.bottom)
     }
 
-    private func titleRow(wide: Bool) -> some View {
+    func titleRow(wide: Bool, scale: CGFloat = 1) -> some View {
         let track = model.nowPlaying
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(track?.name ?? "Nothing playing")
-                    .font(.system(size: 21, weight: .semibold)).foregroundStyle(Glass.text)
+                    .font(.system(size: 21 * scale, weight: .semibold)).foregroundStyle(Glass.text)
                 Text(track?.artist ?? (track != nil ? "Local music" : (model.tracks.isEmpty ? "Add songs from the dots" : "Press Play to start")))
-                    .font(.system(size: 16)).foregroundStyle(Glass.secondary)
+                    .font(.system(size: 16 * scale)).foregroundStyle(Glass.secondary)
             }
             .lineLimit(1)
             .contentTransition(.opacity)
@@ -160,13 +169,13 @@ struct KnobShiftPlayerView: View {
         .accessibilityLabel(showingQueue ? "Hide the queue" : "Show the queue")
     }
 
-    private var sidebar: some View {
+    private func sidebar(poster: Bool) -> some View {
         VStack(spacing: 14) {
             KnobShiftUpNext(model: model)
             KnobShiftQueue(model: model, onAdd: { importing = true }, onSpotify: { showingSpotify = true }, onYouTube: { showingYouTube = true })
         }
-        // Clear of the window's close, minimise and zoom buttons.
-        .padding(.top, 38)
+        // Clear of the window's close, minimise and zoom buttons, which full screen doesn't have.
+        .padding(.top, poster ? 18 : 38)
         .padding([.horizontal, .bottom], 18)
     }
 }

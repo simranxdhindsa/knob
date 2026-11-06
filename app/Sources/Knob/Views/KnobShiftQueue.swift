@@ -111,37 +111,46 @@ struct KnobShiftQueue: View {
                 empty
             } else {
                 // A List gives native drag to reorder, in your order and in shuffle alike.
-                List(selection: $selection) {
-                    ForEach(model.tracks) { track in queueRow(row(track)) }
-                        .onMove { model.move(fromOffsets: $0, toOffset: $1) }
-                    ForEach(model.queuePending) { song in queueRow(pendingRow(song)) }
-                }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .tint(Palette.accent)
-                .onDeleteKey(perform: removeSelection)
-                .contextMenu(forSelectionType: UUID.self) { ids in
-                    if !ids.isEmpty {
-                        Button(ids.count == 1 ? "Remove from Queue" : "Remove \(ids.count) Songs from Queue") {
-                            selection.subtract(ids)
-                            model.remove(ids: ids)
-                        }
+                ScrollViewReader { reader in
+                    List(selection: $selection) {
+                        ForEach(model.tracks) { track in queueRow(row(track)) }
+                            .onMove { model.move(fromOffsets: $0, toOffset: $1) }
+                        ForEach(model.queuePending) { song in queueRow(pendingRow(song)) }
                     }
-                } primaryAction: { ids in
-                    if ids.count == 1, let id = ids.first, let track = model.tracks.first(where: { $0.id == id }) { model.select(track) }
-                }
-                // Songs that left the queue (removed, or finished preparing under a new id) drop
-                // out of the selection.
-                .onChange(of: model.tracks.count + model.queuePending.count) {
-                    let present = Set(model.tracks.map(\.id)).union(model.queuePending.map(\.id))
-                    selection.formIntersection(present)
-                }
-                // Shuffle animates; mapping every song's id on each change was slow with
-                // thousands of songs.
-                .animation(Motion.gentle, value: model.isShuffled)
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .tint(Palette.accent)
+                    .hidesListHighlight(selected: selection.count)
+                    .onDeleteKey(perform: removeSelection)
+                    .contextMenu(forSelectionType: UUID.self) { ids in
+                        if !ids.isEmpty {
+                            Button(ids.count == 1 ? "Remove from Queue" : "Remove \(ids.count) Songs from Queue") {
+                                selection.subtract(ids)
+                                model.remove(ids: ids)
+                            }
+                        }
+                    } primaryAction: { ids in
+                        if ids.count == 1, let id = ids.first, let track = model.tracks.first(where: { $0.id == id }) { model.select(track) }
+                    }
+                    // Songs that left the queue (removed, or finished preparing under a new id) drop
+                    // out of the selection.
+                    .onChange(of: model.tracks.count + model.queuePending.count) {
+                        let present = Set(model.tracks.map(\.id)).union(model.queuePending.map(\.id))
+                        selection.formIntersection(present)
+                    }
+                    // Shuffle animates; mapping every song's id on each change was slow with
+                    // thousands of songs.
+                    .animation(Motion.gentle, value: model.isShuffled)
+                    // After the list has laid out: before that there is nothing to scroll to.
+                    .task {
+                        try? await Task.sleep(for: .milliseconds(80))
+                        showPlaying(reader)
+                    }
+                    .onChange(of: model.nowPlaying?.id) { showPlaying(reader) }
                 #if os(iOS)
-                .padding(.leading, -8)
+                    .padding(.leading, -8)
                 #endif
+                }
             }
             if let notice = model.notice {
                 Text(notice).font(.system(size: 10)).foregroundStyle(Palette.accent).lineLimit(2)
@@ -226,8 +235,22 @@ struct KnobShiftQueue: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(playing ? Palette.accent.opacity(0.10) : .clear))
+        .background(rowHighlight(playing: playing, selected: selection.contains(track.id)))
         .contentShape(Rectangle())
+    }
+
+    /// Brings the playing song into view when the queue opens and when the song changes, unless
+    /// rows are selected, which means someone is working in the list.
+    private func showPlaying(_ reader: ScrollViewProxy) {
+        guard selection.isEmpty, let id = model.nowPlaying?.id else { return }
+        reader.scrollTo(id, anchor: .center)
+    }
+
+    /// Selected and playing are one shape, so the two rows always line up.
+    private func rowHighlight(playing: Bool, selected: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        return shape.fill(Palette.accent.opacity(selected ? 0.22 : (playing ? 0.10 : 0)))
+            .overlay(shape.stroke(Palette.accent.opacity(selected ? 0.55 : 0), lineWidth: 1))
     }
 
     /// The quiet second try shows nothing; only a song that missed twice says so.
@@ -281,6 +304,7 @@ struct KnobShiftQueue: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
+        .background(rowHighlight(playing: false, selected: selection.contains(song.id)))
     }
 
     #if os(macOS)
