@@ -22,6 +22,11 @@ enum VinylTexture {
         cached(&lights, diameter) { Canvas { context, size in drawLight(context, size) } }
     }
 
+    /// The same drawings straight on screen, for the StandBy card, which has no memory to spare
+    /// for pictures and draws only now and then.
+    static var liveFace: some View { Canvas { context, size in drawFace(context, size) } }
+    static var liveLight: some View { Canvas { context, size in drawLight(context, size) } }
+
     private static func cached<V: View>(_ store: inout [Int: Image], _ diameter: CGFloat, @ViewBuilder _ content: () -> V) -> Image {
         // In steps, and stretched the last little way, so a slightly different size draws nothing.
         let key = max(Int((diameter / 8).rounded(.up)), 1) * 8

@@ -2,24 +2,33 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// The still record for the lock screen, StandBy and the Dynamic Island: a black disc drawn here
-/// from plain shapes, in the deck's colours, with the song's cover on its label. The
+/// The record for the lock screen, StandBy and the Dynamic Island: the deck's own vinyl, drawn by
+/// the same code as the app, with the song's cover on its label. Face and label turn together
+/// while the light stays still, as on the deck. The
 /// layout follows the Music Player Card on 21st.dev (ravikatiyar162): cover, title and artist,
 /// a progress bar with the time, and the three transport buttons, here in Knob's own finish.
 struct StandbyRecord: View {
     let cover: String?
     let diameter: CGFloat
+    var turn: Double = 0
     @Environment(\.isLuminanceReduced) private var dim
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
-            StandbyDisc(diameter: diameter)
-            label
-                .frame(width: diameter * 0.35, height: diameter * 0.35)
-                .clipShape(Circle())
-            Circle().fill(Vinyl.discCore).frame(width: diameter * 0.03, height: diameter * 0.03)
+            ZStack {
+                VinylTexture.liveFace
+                label
+                    .frame(width: diameter * VinylTexture.label, height: diameter * VinylTexture.label)
+                    .clipShape(Circle())
+                Circle().fill(Vinyl.discCore).frame(width: diameter * 0.03, height: diameter * 0.03)
+            }
+            .rotationEffect(.degrees(reduceMotion ? 0 : turn))
+            .animation(reduceMotion ? nil : Motion.standbyTurn, value: turn)
+            VinylTexture.liveLight.allowsHitTesting(false)
         }
         .frame(width: diameter, height: diameter)
+        .clipShape(Circle())
         // At night the whole record goes down, so it does not light the room.
         .opacity(dim ? 0.55 : 1)
         .saturation(dim ? 0.5 : 1)
@@ -44,24 +53,30 @@ struct StandbyRecord: View {
     }
 }
 
-/// The disc: dark vinyl, rings of grooves and the two soft bands of light a real record catches.
-private struct StandbyDisc: View {
-    private static let grooves = 12
+/// The record inside a ring that fills as the song plays. iOS moves the ring by itself, so it
+/// stays true between Knob's updates. For the Dynamic Island, where there is no room for a bar.
+struct StandbyRingedRecord: View {
+    private static let gap: CGFloat = 5
 
+    let state: KnobStandbyAttributes.ContentState
     let diameter: CGFloat
 
     var body: some View {
         ZStack {
-            Circle().fill(RadialGradient(colors: [Vinyl.discCore, Vinyl.disc, Vinyl.discCore], center: .center,
-                                         startRadius: 0, endRadius: diameter / 2))
-            ForEach(0..<Self.grooves, id: \.self) { ring in
-                Circle()
-                    .stroke(Vinyl.shine.opacity(ring % 3 == 0 ? 0.12 : 0.06), lineWidth: 0.6)
-                    .frame(width: diameter * (0.94 - CGFloat(ring) * 0.045), height: diameter * (0.94 - CGFloat(ring) * 0.045))
-            }
-            Circle().fill(AngularGradient(colors: [.clear, Vinyl.shine.opacity(0.16), .clear, .clear,
-                                                   Vinyl.shine.opacity(0.12), .clear, .clear], center: .center, angle: .degrees(20)))
-            Circle().stroke(Vinyl.rim, lineWidth: 1)
+            ring
+                .progressViewStyle(.circular)
+                .tint(Palette.accent)
+                .frame(width: diameter, height: diameter)
+            StandbyRecord(cover: state.cover, diameter: diameter - Self.gap, turn: state.turn)
+        }
+        .frame(width: diameter, height: diameter)
+    }
+
+    @ViewBuilder private var ring: some View {
+        if state.isPlaying {
+            ProgressView(timerInterval: state.range, countsDown: false) { EmptyView() } currentValueLabel: { EmptyView() }
+        } else {
+            ProgressView(value: min(state.elapsed, state.duration), total: max(state.duration, 1))
         }
     }
 }
@@ -70,6 +85,7 @@ private struct StandbyDisc: View {
 struct StandbyTitles: View {
     let state: KnobStandbyAttributes.ContentState
     var size: CGFloat = 17
+    var showsNext = false
     @Environment(\.isLuminanceReduced) private var dim
 
     var body: some View {
@@ -82,6 +98,12 @@ struct StandbyTitles: View {
                 Text(artist)
                     .font(.system(size: size * 0.82))
                     .foregroundStyle(Vinyl.shine.opacity(dim ? 0.75 : 0.6))
+                    .lineLimit(1)
+            }
+            if showsNext, let next = state.next {
+                Text("Next: \(next)")
+                    .font(.system(size: size * 0.62, weight: .medium))
+                    .foregroundStyle(Palette.accent.opacity(dim ? 0.7 : 1))
                     .lineLimit(1)
             }
         }
@@ -99,7 +121,7 @@ struct StandbyProgress: View {
     var body: some View {
         HStack(spacing: 8) {
             bar.tint(Palette.accent.opacity(dim ? 0.7 : 1))
-            time
+            StandbyTimeLeft(state: state)
                 .font(.system(size: size, weight: .medium).monospacedDigit())
                 .foregroundStyle(Vinyl.shine.opacity(dim ? 0.8 : 0.65))
                 .frame(width: size * 3.6, alignment: .trailing)
@@ -113,8 +135,13 @@ struct StandbyProgress: View {
             ProgressView(value: min(state.elapsed, state.duration), total: max(state.duration, 1))
         }
     }
+}
 
-    @ViewBuilder private var time: some View {
+/// The time left, like -2:07, which iOS counts down by itself while the song plays.
+struct StandbyTimeLeft: View {
+    let state: KnobStandbyAttributes.ContentState
+
+    var body: some View {
         if state.isPlaying {
             Text("-") + Text(timerInterval: state.range, pauseTime: nil, countsDown: true, showsHours: false)
         } else {
@@ -162,16 +189,24 @@ struct StandbyCard: View {
 
     var body: some View {
         HStack(spacing: fullscreen ? 18 : 16) {
-            StandbyRecord(cover: state.cover, diameter: fullscreen ? 132 : 104)
+            StandbyRecord(cover: state.cover, diameter: fullscreen ? 132 : 104, turn: state.turn)
             VStack(spacing: fullscreen ? 8 : 10) {
-                StandbyTitles(state: state, size: fullscreen ? 20 : 17)
+                StandbyTitles(state: state, size: fullscreen ? 20 : 17, showsNext: fullscreen)
                 StandbyProgress(state: state, size: fullscreen ? 13 : 12)
                 StandbyButtons(isPlaying: state.isPlaying, size: fullscreen ? 18 : 20)
             }
         }
         .padding(fullscreen ? 12 : 14)
         .opacity(dim ? 0.9 : 1)
+        .background { if fullscreen && !dim { wash } }
         .activityBackgroundTint(fullscreen ? Bedside.night : Vinyl.base)
+    }
+
+    /// The cover's colours, spread soft behind the card, as the player does. Gone at night.
+    @ViewBuilder private var wash: some View {
+        if let picture = StandbyRecord.picture(StandbyGroup.coverFile(state.cover)) {
+            Image(uiImage: picture).resizable().scaledToFill().blur(radius: 40).opacity(0.35).clipped()
+        }
     }
 }
 

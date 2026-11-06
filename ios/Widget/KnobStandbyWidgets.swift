@@ -23,25 +23,29 @@ struct KnobPlayingActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    StandbyRecord(cover: context.state.cover, diameter: 64)
-                }
-                DynamicIslandExpandedRegion(.trailing) {
-                    StandbyButtons(isPlaying: context.state.isPlaying, size: 14)
-                        .padding(.top, 8)
+                    StandbyRecord(cover: context.state.cover, diameter: 72, turn: context.state.turn)
+                        .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.center) {
-                    StandbyTitles(state: context.state, size: 15)
+                    StandbyTitles(state: context.state, size: 16, showsNext: true)
+                        .padding(.leading, 8)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    StandbyProgress(state: context.state, size: 11)
+                    VStack(spacing: 8) {
+                        StandbyProgress(state: context.state, size: 11)
+                        StandbyButtons(isPlaying: context.state.isPlaying, size: 17)
+                    }
+                    .padding(.horizontal, 6)
                 }
             } compactLeading: {
-                StandbyRecord(cover: context.state.cover, diameter: 22)
+                StandbyRingedRecord(state: context.state, diameter: 26)
             } compactTrailing: {
-                Image(systemName: context.state.isPlaying ? "waveform" : "pause.fill")
+                StandbyTimeLeft(state: context.state)
+                    .font(.system(size: 12, weight: .semibold).monospacedDigit())
                     .foregroundStyle(Palette.accent)
+                    .frame(width: 42)
             } minimal: {
-                StandbyRecord(cover: context.state.cover, diameter: 22)
+                StandbyRingedRecord(state: context.state, diameter: 24)
             }
             .keylineTint(Palette.accent)
         }

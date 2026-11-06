@@ -16,7 +16,8 @@ mkdir -p "$work" "$appex"
 
 # -parse-as-library for @main, -application-extension because it runs inside iOS's widget host,
 # and _NSExtensionMain as its entry point, which is what Xcode does for a widget.
-sources=("$here"/*.swift "$repo_dir/app/Sources/Knob/Theme/Palette.swift")
+shared="$repo_dir/app/Sources/Knob"
+sources=("$here"/*.swift "$shared/Theme/Palette.swift" "$shared/Theme/Motion.swift" "$shared/Components/VinylTexture.swift")
 intent_flags="$("$here/app-intents.sh" flags "$work/intents")"
 # Two steps: the compiler writes the App Intents "const values" beside the object file.
 # shellcheck disable=SC2086
