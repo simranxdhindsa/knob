@@ -279,6 +279,36 @@ enum Snapshot {
                 window.orderOut(nil)
             }
         }
+        await selectionShot(of: files, into: folder)
+    }
+
+    /// Selects rows through the real list, the way a click does, beside the playing row, and
+    /// says whether the system's highlight stayed off.
+    private static func selectionShot(of files: [URL], into folder: URL) async {
+        let shift = KnobShiftModel(restoresQueue: false)
+        shift.showPreviewForSnapshot(mixing: false)
+        let analysis = shift.tracks[0].analysis
+        shift.tracks = files.map {
+            KnobShiftModel.Track(url: $0, title: $0.deletingPathExtension().lastPathComponent, duration: 215, tailSilence: 1, analysis: analysis)
+        }
+        shift.currentIndex = 1
+        shift.nowPlaying = shift.tracks[1]
+        let (host, window) = hosted(KnobShiftPlayerView(model: shift).frame(width: 1710, height: 1074).environment(\.colorScheme, .dark), scheme: .dark)
+        window.setFrameOrigin(NSPoint(x: -8000, y: -8000))
+        window.orderFrontRegardless()
+        try? await Task.sleep(for: .seconds(3))
+        guard let table = findTable(in: host) else { print("selection: no table found"); return }
+        for rows in [IndexSet(integer: 3), IndexSet([3, 4])] {
+            table.selectRowIndexes(rows, byExtendingSelection: false)
+            try? await Task.sleep(for: .seconds(1))
+            print("selection: rows \(rows.count), highlight style \(table.selectionHighlightStyle.rawValue), selected \(table.selectedRowIndexes.count)")
+        }
+        save(host, to: folder.appendingPathComponent("knobshift-selected-real.png"))
+        window.orderOut(nil)
+    }
+
+    private static func findTable(in view: NSView) -> NSTableView? {
+        (view as? NSTableView) ?? view.subviews.lazy.compactMap(findTable).first
     }
 
     private static func render<V: View>(_ view: V, scheme: ColorScheme, to url: URL) {

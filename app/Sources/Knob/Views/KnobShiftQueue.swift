@@ -119,6 +119,7 @@ struct KnobShiftQueue: View {
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
                 .tint(Palette.accent)
+                .hidesListHighlight(selected: selection.count)
                 .onDeleteKey(perform: removeSelection)
                 .contextMenu(forSelectionType: UUID.self) { ids in
                     if !ids.isEmpty {
@@ -226,8 +227,15 @@ struct KnobShiftQueue: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(playing ? Palette.accent.opacity(0.10) : .clear))
+        .background(rowHighlight(playing: playing, selected: selection.contains(track.id)))
         .contentShape(Rectangle())
+    }
+
+    /// Selected and playing are one shape, so the two rows always line up.
+    private func rowHighlight(playing: Bool, selected: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        return shape.fill(Palette.accent.opacity(selected ? 0.22 : (playing ? 0.10 : 0)))
+            .overlay(shape.stroke(Palette.accent.opacity(selected ? 0.55 : 0), lineWidth: 1))
     }
 
     /// The quiet second try shows nothing; only a song that missed twice says so.
@@ -281,6 +289,7 @@ struct KnobShiftQueue: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
+        .background(rowHighlight(playing: false, selected: selection.contains(song.id)))
     }
 
     #if os(macOS)
