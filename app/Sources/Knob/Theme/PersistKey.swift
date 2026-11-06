@@ -24,6 +24,8 @@ enum PersistKey: String {
     case knobShiftTipsSeen = "knob.shift.tipsSeen"
     /// While shuffle is on, the shuffled order; `knobShiftQueue` keeps the user's own order.
     case knobShiftShuffledQueue = "knob.shift.shuffledQueue"
+    /// Whether the saved arranged order (`knobShiftShuffledQueue`) is Mix Order rather than shuffle.
+    case knobShiftMixOrdered = "knob.shift.mixOrdered"
     /// The song last in the player and where it was, so the next launch has it ready to play.
     case knobShiftLastSong = "knob.shift.lastSong"
     case knobShiftLastPosition = "knob.shift.lastPosition"
