@@ -1,6 +1,8 @@
 /// Every persisted setting. Views read and write these only through `@AppStorage`;
 /// the model and engine helpers use `UserDefaults` with the same keys.
 enum PersistKey: String {
+    /// Listen Together's line up for an output, in seconds: the output's name is added to this.
+    case togetherLineUp = "knob.ui.togetherLineUp"
     case selectedTab = "knob.ui.selectedTab"
     case lastPreset = "knob.ui.lastPreset"
     /// Show Knob in the Dock and the ⌘-Tab switcher (default true).

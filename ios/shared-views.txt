@@ -11,3 +11,4 @@ KnobShiftAddMusic
 KnobShiftPlaylistsView
 KnobShiftQueueRows
 KnobShiftQueueHeader
+KnobShiftTogetherView

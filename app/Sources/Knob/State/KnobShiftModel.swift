@@ -282,6 +282,13 @@ final class KnobShiftModel: ObservableObject {
     var releaseHold: (() -> Void)?
     var playbackStartedAt = Date()
     private var configurationObserver: NSObjectProtocol?
+    /// Everything KnobShift plays meets here, before any device's volume: what Listen Together
+    /// sends. The gate is open unless a session plays this device through its delay instead.
+    let deckBus = AVAudioMixerNode()
+    let deckGate = AVAudioMixerNode()
+    /// The running Listen Together session, if any.
+    var together: KnobShiftTogetherPlayer?
+    var togetherCapture: KnobShiftTogetherCapture?
     /// The song the current plan or blend leads into, for the log when it is called off.
     var plannedNext: Track?
     var isProcessing = false
@@ -293,8 +300,12 @@ final class KnobShiftModel: ObservableObject {
 
     init(restoresQueue: Bool = true) {
         let engine = audioEngine
-        deckOne = KnobShiftDeck(name: "Deck 1", engine: engine)
-        deckTwo = KnobShiftDeck(name: "Deck 2", engine: engine)
+        engine.attach(deckBus)
+        engine.attach(deckGate)
+        engine.connect(deckBus, to: deckGate, format: nil)
+        engine.connect(deckGate, to: engine.mainMixerNode, format: nil)
+        deckOne = KnobShiftDeck(name: "Deck 1", engine: engine, output: deckBus)
+        deckTwo = KnobShiftDeck(name: "Deck 2", engine: engine, output: deckBus)
         primaryDeck = deckOne
         secondaryDeck = deckTwo
         log("SESSION", "Local mixer initialized with Deck 1 and Deck 2.")
@@ -307,6 +318,7 @@ final class KnobShiftModel: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.log("DEVICE", "Output configuration changed. Engine running: \(self.audioEngine.isRunning), \(self.outputFormatDescription).")
+                KnobShiftTogetherSession.shared.outputChanged()
             }
         }
         if restoresQueue {
