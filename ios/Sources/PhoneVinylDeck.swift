@@ -8,28 +8,33 @@ struct PhoneVinylDeck: View {
     @ObservedObject var model: KnobShiftModel
     @ObservedObject var scrub: PlayerScrub
     @State private var settled = false
+    /// The song on the deck, which changes with the cover rather than ahead of it.
+    @State private var song: KnobShiftModel.Track?
 
     var body: some View {
         GeometryReader { proxy in
             HStack(spacing: 0) {
-                VinylStage(model: model, size: CGSize(width: proxy.size.width - Self.column, height: proxy.size.height)) {
+                VinylStage(model: model, size: CGSize(width: proxy.size.width - Self.column, height: proxy.size.height), onSettled: {
                     withAnimation(Motion.gentle) { settled = true }
-                }
+                }, onShowing: { song = $0 })
                 details.opacity(settled ? 1 : 0)
             }
         }
     }
 
     private var details: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let shown = song ?? model.nowPlaying
+        return VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(model.nowPlaying?.name ?? "Nothing playing")
+                Text(shown?.name ?? "Nothing playing")
                     .font(.system(size: 17, weight: .semibold)).foregroundStyle(Glass.text)
                     .lineLimit(2)
-                Text(model.nowPlaying?.artist ?? "")
+                Text(shown?.artist ?? "")
                     .font(.system(size: 13)).foregroundStyle(Glass.secondary)
                     .lineLimit(1)
             }
+            .contentTransition(.opacity)
+            .animation(Motion.vinylCover, value: shown?.id)
             PlayerTimeline(model: model, clock: model.clock, scrub: scrub, showsChip: false)
                 .frame(height: 52)
             HStack(spacing: 0) {

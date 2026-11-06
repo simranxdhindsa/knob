@@ -49,10 +49,43 @@ final class PhoneApp: ObservableObject {
     #if DEBUG
     /// KNOB_PHONE_SWAP=n turns the phone on its side after n seconds, then changes song every way
     /// there is, so the record's change can be timed: next, previous, three quick nexts, a KnobMix.
+    /// KNOB_PHONE_UX=n walks the deck the way a person would, marking each moment in the log so
+    /// the phone's screen can be photographed there: a change, a pause, a change while paused.
+    private static func uxCheck(_ shift: KnobShiftModel, after seconds: Double) async {
+        try? await Task.sleep(for: .seconds(seconds))
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
+        try? await Task.sleep(for: .seconds(4))
+        shift.log("VINYL", "MARK playing")
+        try? await Task.sleep(for: .seconds(5))
+        shift.log("VINYL", "MARK change")
+        shift.next()
+        try? await Task.sleep(for: .seconds(3.5))
+        shift.log("VINYL", "MARK after change")
+        try? await Task.sleep(for: .seconds(1.5))
+        shift.pauseOrResume()
+        try? await Task.sleep(for: .seconds(1))
+        shift.log("VINYL", "MARK paused, playing is \(shift.isPlaying)")
+        try? await Task.sleep(for: .seconds(1.5))
+        shift.next()
+        try? await Task.sleep(for: .seconds(3.5))
+        shift.log("VINYL", "MARK changed while paused, playing is \(shift.isPlaying)")
+        try? await Task.sleep(for: .seconds(1.5))
+        shift.log("VINYL", "MARK end")
+    }
+
+    private static func environment(_ name: String) -> Bool { ProcessInfo.processInfo.environment[name] == "1" }
+
     private static func swapCheck(_ shift: KnobShiftModel, after seconds: Double) async {
         try? await Task.sleep(for: .seconds(seconds))
         UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
         try? await Task.sleep(for: .seconds(4))
+        // Straight back to the same song, cutting the change short: the record must come back out.
+        shift.log("VINYL", "CASE next then straight back")
+        shift.next()
+        try? await Task.sleep(for: .milliseconds(150))
+        shift.previous()
+        try? await Task.sleep(for: .seconds(3))
+        if environment("KNOB_PHONE_SWAP_ONLY_BACK") { return }
         shift.log("VINYL", "CASE next")
         shift.next()
         try? await Task.sleep(for: .seconds(4))
@@ -179,6 +212,9 @@ final class PhoneApp: ObservableObject {
         let environment = ProcessInfo.processInfo.environment
         if let seconds = environment["KNOB_PHONE_TURN"].flatMap(Double.init) {
             Task { await vinylCheck(model.knobShift, after: seconds) }
+        }
+        if let seconds = environment["KNOB_PHONE_UX"].flatMap(Double.init) {
+            Task { await uxCheck(model.knobShift, after: seconds) }
         }
         if let seconds = environment["KNOB_PHONE_SWAP"].flatMap(Double.init) {
             Task { await swapCheck(model.knobShift, after: seconds) }

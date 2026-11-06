@@ -10,7 +10,7 @@ extension KnobShiftPlayerView {
             VStack(spacing: 0) {
                 Group {
                     if vinyl && model.nowPlaying != nil {
-                        VinylStage(model: model, size: CGSize(width: geometry.size.width - 48, height: layout.side))
+                        VinylStage(model: model, size: CGSize(width: geometry.size.width - 48, height: layout.side), onShowing: { deckSong = $0 })
                             .transition(.opacity)
                     } else {
                         posterCover(layout)
@@ -20,7 +20,7 @@ extension KnobShiftPlayerView {
                 .padding(.top, layout.top)
                 .padding(.bottom, layout.gap)
                 VStack(spacing: 0) {
-                    titleRow(wide: wide, scale: layout.scale)
+                    titleRow(wide: wide, scale: layout.scale, song: vinyl ? deckSong : nil)
                         .frame(height: KnobShiftPlayerLayout.title * layout.scale)
                     PlayerTimeline(model: model, clock: model.clock, scrub: scrub, textSize: 12 * layout.scale, showsMixAhead: true)
                         .frame(height: KnobShiftPlayerLayout.timeline * layout.scale)

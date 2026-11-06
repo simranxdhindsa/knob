@@ -24,7 +24,7 @@ enum Motion {
     static let vinylSettle = Animation.interpolatingSpring(mass: 1, stiffness: 110, damping: 19)
     /// The record changing with the song, always these lengths, however the song changed or
     /// however long its KnobMix runs: under the sleeve, the sleeve's cover changes, back out.
-    static let vinylTuckSeconds = 0.4, vinylCoverSeconds = 0.25, vinylReturnSeconds = 0.5
+    static let vinylTuckSeconds = 0.8, vinylCoverSeconds = 0.3, vinylReturnSeconds = 0.9
     static let vinylTuck = Animation.timingCurve(0.5, 0, 0.7, 1, duration: vinylTuckSeconds)
     static let vinylCover = Animation.easeInOut(duration: vinylCoverSeconds)
     static let vinylReturn = Animation.timingCurve(0.2, 0, 0.2, 1, duration: vinylReturnSeconds)

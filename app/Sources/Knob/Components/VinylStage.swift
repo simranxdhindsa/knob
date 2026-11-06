@@ -17,6 +17,8 @@ struct VinylStage: View {
     let size: CGSize
     /// Told when the deck has settled, for whatever sits around it to appear.
     var onSettled: () -> Void = {}
+    /// Told which song is on show, so the name beside the deck changes with the cover.
+    var onShowing: (KnobShiftModel.Track?) -> Void = { _ in }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var stage = Stage.sleeve
@@ -31,10 +33,12 @@ struct VinylStage: View {
     /// The song the deck should be showing: in a KnobMix, the one coming in.
     private var wanted: KnobShiftModel.Track? { model.mixingInto ?? model.nowPlaying }
 
-    init(model: KnobShiftModel, size: CGSize, onSettled: @escaping () -> Void = {}) {
+    init(model: KnobShiftModel, size: CGSize, onSettled: @escaping () -> Void = {},
+         onShowing: @escaping (KnobShiftModel.Track?) -> Void = { _ in }) {
         self.model = model
         self.size = size
         self.onSettled = onSettled
+        self.onShowing = onShowing
         turntable = .shared(for: model)
     }
 
@@ -59,6 +63,7 @@ struct VinylStage: View {
         .onDisappear { turntable.stop() }
         .task { await open() }
         .task(id: wanted?.id) { await change() }
+        .onChange(of: showing, initial: true) { onShowing(showing) }
         .onChange(of: model.nowPlaying) { turntable.follow(model.nowPlaying) }
         // A call or leaving the app takes the touch away too.
         .onChange(of: scenePhase) { if scenePhase != .active { turntable.releaseNow() } }
@@ -67,22 +72,38 @@ struct VinylStage: View {
     private var isInSleeve: Bool { stage == .sleeve || stage == .tucked }
 
     /// The record changing with the song. A newer change cancels this one and takes over from
-    /// wherever it got to, so quick taps of Next just show the last song.
+    /// wherever it got to, so quick taps of Next just show the last song. Every way out leaves
+    /// the record back on the deck: a change cut short by going straight back to the song on
+    /// show, a cancelled KnobMix or an emptied queue has nothing newer coming to finish the job.
     private func change() async {
-        guard let wanted, wanted != showing else { return }
+        leaving = nil
+        guard let wanted, wanted != showing else {
+            comeBackOut()
+            return
+        }
         // Nothing on show yet, or still opening: the new song simply goes in the sleeve.
         guard showing != nil, stage == .settled || stage == .tucked else {
             showing = wanted
             return
         }
+        // Read while the record goes away, so the new cover is ready the moment it is shown, and
+        // the drawn stand in for a song with no cover never flashes up.
+        let url = wanted.url
+        let cover = Task { await KnobShiftArtwork.load(url) }
         guard !reduceMotion else {
+            _ = await cover.value
+            leaving = showing
             withAnimation(.easeOut(duration: 0.2)) { showing = wanted }
+            try? await Task.sleep(for: .seconds(0.2))
+            leaving = nil
+            comeBackOut()
             return
         }
         let began = Date()
         do {
             withAnimation(Motion.vinylTuck) { stage = .tucked }
             try await Task.sleep(for: .seconds(Motion.vinylTuckSeconds))
+            _ = await cover.value
             leaving = showing
             withAnimation(Motion.vinylCover) { showing = wanted }
             try await Task.sleep(for: .seconds(Motion.vinylCoverSeconds))
@@ -93,6 +114,11 @@ struct VinylStage: View {
         } catch {
             // A newer song took over.
         }
+    }
+
+    private func comeBackOut() {
+        guard stage == .tucked else { return }
+        withAnimation(Motion.vinylReturn) { stage = .settled }
     }
 
     /// The opening. Reduce Motion goes straight to the settled deck.
@@ -109,7 +135,6 @@ struct VinylStage: View {
             try await Task.sleep(for: .milliseconds(760))
             withAnimation(Motion.vinylSettle) { stage = .settled }
             onSettled()
-            await change()
         } catch {
             // The deck left mid opening, and there is nothing left to open.
         }
@@ -155,7 +180,7 @@ struct VinylStage: View {
             })
             .position(sleevePosition(layout))
             .accessibilityElement()
-            .accessibilityLabel("Album cover, \(model.nowPlaying?.name ?? "no song")")
+            .accessibilityLabel("Album cover, \(showing?.name ?? "no song")")
             .accessibilityHint("Tap to play or pause, swipe for another song.")
             .accessibilityAddTraits(.isButton)
     }
