@@ -159,6 +159,10 @@ final class KnobShiftModel: ObservableObject {
     /// The queue in play order: the user's order, or the shuffled one (KnobShiftModel+Queue.swift).
     @Published internal(set) var tracks: [Track] = []
     @Published internal(set) var isShuffled = false
+    /// Mix Order is on: the songs after the playing one are arranged by tempo. Like shuffle it
+    /// keeps the user's own order in `unshuffled`, and the two are never on together.
+    @Published internal(set) var isMixOrdered = false
+    var mixOrderToRestore = false
     /// KnobMix Now was pressed and the mix is waiting for its phrase or break.
     @Published internal(set) var mixNowWaiting = false
     /// The user's own order while shuffle is on, so turning it off brings that order back.

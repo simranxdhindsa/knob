@@ -12,6 +12,9 @@ extension KnobShiftModel {
         return tracks[(min(currentIndex, tracks.count - 1) + 1) % tracks.count]
     }
 
+    /// Shuffle or Mix Order is showing, so `unshuffled` holds the user's own order.
+    var isArranged: Bool { isShuffled || isMixOrdered }
+
     func toggleShuffle() {
         shuffleToRestore = nil
         if isShuffled {
@@ -20,7 +23,8 @@ extension KnobShiftModel {
             isShuffled = false
             log("QUEUE", "Shuffle off, back to your order.")
         } else {
-            unshuffled = tracks
+            // Coming from Mix Order the user's own order is already kept; it stays the one restored.
+            if isMixOrdered { isMixOrdered = false } else { unshuffled = tracks }
             if let playing = nowPlaying, tracks.contains(playing) {
                 tracks = [playing] + tracks.filter { $0 != playing }.shuffled()
             } else {
@@ -41,7 +45,7 @@ extension KnobShiftModel {
     }
 
     /// Keeps the playing song current at its new place and plans the mix into whatever is now next.
-    private func queueReordered() {
+    func queueReordered() {
         if let playing = nowPlaying, let index = tracks.firstIndex(of: playing) {
             currentIndex = index
         }

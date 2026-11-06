@@ -10,6 +10,7 @@ import SwiftUI
 ///   --volume-check SEC  print real Mac volume changes for SEC seconds, set and restore, then quit
 ///   --knobshift-analysis-check FILE  analyse a local file without opening an audio output device
 ///   --knobshift-mix-check            KnobMix's transition rules against the real planner, no audio
+///   --knobshift-queue-check          Mix Order, Play Next and sorting on made up songs, no audio
 @main
 struct KnobLauncher {
     static func main() {
@@ -72,6 +73,10 @@ struct KnobLauncher {
         if arguments.contains("--knobshift-mix-check") {
             MainActor.assumeIsolated { KnobShiftMixTests.run() }
             exit(MainActor.assumeIsolated { KnobShiftMixTests.failures } == 0 ? 0 : 1)
+        }
+        if arguments.contains("--knobshift-queue-check") {
+            MainActor.assumeIsolated { KnobShiftQueueCheck.run() }
+            exit(MainActor.assumeIsolated { KnobShiftQueueCheck.failures } == 0 ? 0 : 1)
         }
         if let index = arguments.firstIndex(of: "--knobshift-youtube-check"), index + 1 < arguments.count {
             KnobShiftYouTubeCheck.run(Array(arguments[(index + 1)...]))
