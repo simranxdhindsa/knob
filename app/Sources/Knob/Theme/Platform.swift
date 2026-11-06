@@ -85,6 +85,16 @@ extension Image {
 }
 
 extension View {
+    /// Turns off the Mac list's own selection highlight, which is always the system's colour
+    /// whatever the tint, so rows can draw theirs. The iPhone's lists select nothing here.
+    func hidesListHighlight(selected: Int) -> some View {
+        #if os(macOS)
+        background(ListHighlightOff(selected: selected))
+        #else
+        self
+        #endif
+    }
+
     /// The Delete key on the Mac. The iPhone has none: rows there are removed with their own
     /// buttons or the long press menu.
     func onDeleteKey(perform action: @escaping () -> Void) -> some View {
@@ -104,3 +114,47 @@ extension View {
         #endif
     }
 }
+
+#if os(macOS)
+/// Reaches the table behind the SwiftUI list beside it. `selected` changes with the selection,
+/// which puts the setting back should the list ever restore its own.
+private struct ListHighlightOff: NSViewRepresentable {
+    let selected: Int
+
+    final class Coordinator {
+        weak var table: NSTableView?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> NSView { NSView() }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        let found = context.coordinator
+        DispatchQueue.main.async { [weak view] in
+            // The search only runs until the table is found, not on every update.
+            if let table = found.table, table.window != nil {
+                table.selectionHighlightStyle = .none
+                return
+            }
+            var ancestor = view?.superview
+            while let current = ancestor {
+                if let table = Self.table(in: current) {
+                    table.selectionHighlightStyle = .none
+                    found.table = table
+                    return
+                }
+                ancestor = current.superview
+            }
+        }
+    }
+
+    private static func table(in view: NSView) -> NSTableView? {
+        if let table = view as? NSTableView { return table }
+        for child in view.subviews {
+            if let table = table(in: child) { return table }
+        }
+        return nil
+    }
+}
+#endif
