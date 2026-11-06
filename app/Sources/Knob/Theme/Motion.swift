@@ -50,11 +50,8 @@ enum Motion {
     static let queueJumpArrow = Animation.easeOut(duration: 0.28)
     static let queueLand = Animation.easeOut(duration: 0.9)
 
-    /// The record in StandBy and the Dynamic Island. iOS runs no animation of its own there, so
-    /// Knob sends a small turn this often and the card glides through it.
-    static let standbyTurnSeconds = 2.0
-    static let standbyTurnDegrees = 120.0
-    static let standbyTurn = Animation.linear(duration: standbyTurnSeconds)
+    /// One turn of the record in StandBy and the Dynamic Island, the deck's own speed.
+    static let standbyTurnSeconds = 2.25
 
     /// A song's cover coming up from grey to full colour once it is ready.
     static let artworkReveal = Animation.easeOut(duration: 0.4)

@@ -27,8 +27,6 @@ final class PhoneStandby {
     private var coverName: String?
     private var coverTask: Task<Void, Never>?
     private var generation = 0
-    /// How far the record has turned, in degrees. It grows, so each step glides forwards.
-    private var turn = 0.0
 
     func start(model: KnobShiftModel) {
         guard self.model == nil else { return }
@@ -48,14 +46,9 @@ final class PhoneStandby {
         NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
             .sink { [weak self] _ in self?.update() }
             .store(in: &watching)
-        // A jump in the song (a move in the timeline, a mix) shows on the card within seconds, and
-        // the record takes its next step. Low Power Mode keeps it still, to save the battery.
-        refresh = Timer.scheduledTimer(withTimeInterval: Motion.standbyTurnSeconds, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                if self.model?.isPlaying == true, !ProcessInfo.processInfo.isLowPowerModeEnabled { self.turn += Motion.standbyTurnDegrees }
-                self.update()
-            }
+        // A jump in the song (a move in the timeline, a mix) shows on the card within seconds.
+        refresh = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.update() }
         }
     }
 
@@ -102,7 +95,7 @@ final class PhoneStandby {
         let state = KnobStandbyAttributes.ContentState(
             title: Self.short(track.name), artist: track.artist.map(Self.short), isPlaying: model.isPlaying,
             started: Date().addingTimeInterval(-elapsed), duration: track.duration, elapsed: elapsed, cover: coverName,
-            turn: turn, next: model.upNext.map { Self.short($0.name) }, mixing: model.mixState == .mixing || model.mixNowWaiting)
+            next: model.upNext.map { Self.short($0.name) }, mixing: model.mixState == .mixing || model.mixNowWaiting)
         if let sent, !Self.changed(sent, state) { return }
         // While paused the card holds still as long as it likes. It only goes out of date if the
         // song should have ended and Knob has gone, and a late update brings it back.
@@ -129,7 +122,7 @@ final class PhoneStandby {
     /// A new song, a play or pause, a jump of more than a second, or a different cover.
     private static func changed(_ old: KnobStandbyAttributes.ContentState, _ new: KnobStandbyAttributes.ContentState) -> Bool {
         if old.title != new.title || old.artist != new.artist || old.isPlaying != new.isPlaying || old.cover != new.cover { return true }
-        if old.turn != new.turn || old.next != new.next || old.mixing != new.mixing { return true }
+        if old.next != new.next || old.mixing != new.mixing { return true }
         if new.isPlaying { return abs(old.started.timeIntervalSince(new.started)) > 1 }
         return abs(old.elapsed - new.elapsed) > 0.5
     }

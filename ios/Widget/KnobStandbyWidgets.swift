@@ -3,8 +3,7 @@ import SwiftUI
 import WidgetKit
 
 /// Knob's StandBy extension: the Live Activity for the playing song and a small widget with
-/// the last song. Neither can spin the record: iOS only lets widgets and Live Activities in
-/// StandBy, and they show a still picture.
+/// the last song. iOS only lets widgets and Live Activities in StandBy.
 @main
 struct KnobStandbyBundle: WidgetBundle {
     var body: some Widget {
@@ -23,7 +22,7 @@ struct KnobPlayingActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    StandbyRecord(cover: context.state.cover, diameter: 72, turn: context.state.turn, moving: context.state.isPlaying)
+                    StandbyRecord(cover: context.state.cover, diameter: 72, spinning: context.state.isPlaying)
                         .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.center) {
