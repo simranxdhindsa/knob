@@ -35,7 +35,7 @@ struct KnobShiftQueueHeader: View {
                     .buttonStyle(.plain)
                     .help("Remove every song from the queue")
                     .accessibilityLabel("Remove all songs")
-                    .padding(.trailing, 6)
+                    .padding(.trailing, 2)
                 }
             }
             addMusic
@@ -61,14 +61,14 @@ struct KnobShiftQueueHeader: View {
             Image(systemName: symbol)
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(on ? Palette.accent : surface.tertiary)
-                .frame(width: 24, height: 20)
+                .frame(width: 22, height: 20)
                 .background(Capsule().fill(on ? Palette.accent.opacity(0.14) : .clear))
                 .shadow(color: on ? Palette.accentGlow.opacity(0.5) : .clear, radius: 4)
         }
         .buttonStyle(.plain)
         // Once on it can always be turned off, even after removing all but one song.
         .disabled(model.tracks.count < 2 && !on)
-        .padding(.trailing, 4)
+        .padding(.trailing, 2)
     }
 
     /// Sorting replaces the user's order, so the menu keeps the way back until they make a new one.
@@ -76,18 +76,19 @@ struct KnobShiftQueueHeader: View {
         Menu {
             Section("Sort by") {
                 ForEach(KnobShiftQueueSort.allCases, id: \.self) { sort in
-                    Button(sort.title) { model.sortQueue(by: sort) }
+                    Button { model.sortQueue(by: sort) } label: { Label(sort.title, systemImage: sort.symbol) }
                 }
             }
             if model.orderBeforeSort != nil {
-                Button("Back to your order", action: model.restoreOrderBeforeSort)
+                Button(action: model.restoreOrderBeforeSort) { Label("Back to your order", systemImage: "arrow.uturn.backward") }
             }
         } label: {
             Image(systemName: "arrow.up.arrow.down")
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(model.orderBeforeSort != nil ? Palette.accent : surface.tertiary)
-                .frame(width: 24, height: 20)
+                .frame(width: 22, height: 20)
         }
+        .labelStyle(.titleAndIcon)
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
@@ -95,7 +96,7 @@ struct KnobShiftQueueHeader: View {
         .disabled(model.tracks.count < 2)
         .help("Sort the queue")
         .accessibilityLabel("Sort the queue")
-        .padding(.trailing, 4)
+        .padding(.trailing, 2)
     }
 
     /// Switches between the queue and the Playlists view, where imported and synced songs wait
@@ -112,13 +113,13 @@ struct KnobShiftQueueHeader: View {
             Image(systemName: "music.note.list")
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(showingPlaylists || downloading ? Palette.accent : surface.tertiary)
-                .frame(width: 24, height: 20)
+                .frame(width: 22, height: 20)
                 .background(Capsule().fill(showingPlaylists ? Palette.accent.opacity(0.14) : .clear))
         }
         .buttonStyle(.plain)
         .help(showingPlaylists ? "Back to the queue" : "Playlists")
         .accessibilityLabel(showingPlaylists ? "Back to the queue" : "Playlists")
-        .padding(.trailing, 8)
+        .padding(.trailing, 2)
     }
 
     /// ADD MUSIC: songs on this Mac, or, where Spotify import is available, a dropdown with both
@@ -212,14 +213,25 @@ struct QueueSelectionBar: View {
 
 /// Brings the playing song back into view when it has scrolled away.
 struct QueueJumpButton: View {
+    /// How far the arrow shoots when pressed.
+    private static let shot: CGFloat = 9
+
     /// Which way the playing song is: true when it is above what is on screen.
     let above: Bool
     let action: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The arrow is on its way, the moment after a press.
+    @State private var shooting = false
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            action()
+            shoot()
+        } label: {
             HStack(spacing: 5) {
                 Image(systemName: above ? "arrow.up" : "arrow.down").font(.system(size: 9, weight: .bold))
+                    .offset(y: shooting ? (above ? -Self.shot : Self.shot) : 0)
+                    .opacity(shooting ? 0 : 1)
                 Text("PLAYING").font(.system(size: 9, weight: .bold)).tracking(0.6)
             }
             .foregroundStyle(Palette.accent)
@@ -230,8 +242,27 @@ struct QueueJumpButton: View {
             .shadow(color: Palette.accentGlow.opacity(0.35), radius: 6)
             .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(QueueJumpPress())
         .help("Scroll to the song that is playing")
         .accessibilityLabel("Show the playing song")
+    }
+
+    /// The arrow leaves the way the list is about to move, then is back in place.
+    private func shoot() {
+        guard !reduceMotion else { return }
+        withAnimation(Motion.queueJumpArrow) { shooting = true }
+        Task {
+            try? await Task.sleep(for: .seconds(Motion.queueJumpSeconds))
+            shooting = false
+        }
+    }
+}
+
+/// The jump button dipping under a press.
+private struct QueueJumpPress: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.92 : 1)
+            .animation(Motion.snappy, value: configuration.isPressed)
     }
 }

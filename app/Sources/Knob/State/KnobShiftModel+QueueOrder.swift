@@ -13,6 +13,16 @@ enum KnobShiftQueueSort: CaseIterable {
         case .recentlyAdded: "Recently added"
         }
     }
+
+    /// The menu's icon.
+    var symbol: String {
+        switch self {
+        case .bpm: "metronome"
+        case .length: "clock"
+        case .artist: "person"
+        case .recentlyAdded: "calendar.badge.plus"
+        }
+    }
 }
 
 /// Mix Order, Play Next and sorting. Like shuffle they only change the order of `tracks` and

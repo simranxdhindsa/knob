@@ -60,6 +60,8 @@ struct KnobShiftQueue: View {
     @State private var search = ""
     /// The one row the pointer is on (Mac). Rows hold no hover state of their own.
     @State private var hovered: UUID?
+    /// The row the jump button has just brought into view, while it glows.
+    @State private var landing: UUID?
     @State private var playingOnScreen = true
     @State private var viewport = QueueViewport()
     @AppStorage(PersistKey.knobShiftShowPlaylists.rawValue) private var showingPlaylists = false
@@ -172,10 +174,14 @@ struct KnobShiftQueue: View {
                     .onDeleteKey(perform: removeSelection)
                     .contextMenu(forSelectionType: UUID.self) { ids in
                         if !ids.isEmpty {
-                            Button(ids.count == 1 ? "Play Next" : "Play \(ids.count) Songs Next") { model.playNext(ids: ids) }
-                            Button(ids.count == 1 ? "Remove from Queue" : "Remove \(ids.count) Songs from Queue") {
+                            Button { model.playNext(ids: ids) } label: {
+                                Label(ids.count == 1 ? "Play Next" : "Play \(ids.count) Songs Next", systemImage: "text.insert").labelStyle(.titleAndIcon)
+                            }
+                            Button {
                                 selection.subtract(ids)
                                 model.remove(ids: ids)
+                            } label: {
+                                Label(ids.count == 1 ? "Remove from Queue" : "Remove \(ids.count) Songs from Queue", systemImage: "trash").labelStyle(.titleAndIcon)
                             }
                         }
                     } primaryAction: { ids in
@@ -203,7 +209,7 @@ struct KnobShiftQueue: View {
                 if playingShown, !playingOnScreen {
                     let above = (playingID.flatMap { id in shownIDs.firstIndex(of: id) } ?? 0)
                         < (viewport.firstVisibleIndex(in: shownIDs) ?? 0)
-                    QueueJumpButton(above: above) { showPlaying(reader, force: true) }
+                    QueueJumpButton(above: above) { jumpToPlaying(reader) }
                         .padding(.bottom, 8)
                         .transition(.opacity)
                 }
@@ -268,7 +274,7 @@ struct KnobShiftQueue: View {
     private func trackRow(_ track: KnobShiftModel.Track, playingID: UUID?, played: Bool, jump: KnobShiftMixJump?) -> some View {
         QueueTrackRow(
             track: track, playing: track.id == playingID, selected: selection.contains(track.id), played: played,
-            hovered: hovered == track.id, reveal: model.justPrepared.contains(track.id), jump: jump,
+            hovered: hovered == track.id, reveal: model.justPrepared.contains(track.id), landing: landing == track.id, jump: jump,
             voiceNote: voiceNote(track), offersRetry: offersVoiceRetry(track),
             onRetry: { model.rereadVoice(track) }, onPlayNext: { model.playNext(ids: [track.id]) }, onRemove: { removeOne(track.id) })
     }
@@ -291,6 +297,19 @@ struct KnobShiftQueue: View {
     private func showPlaying(_ reader: ScrollViewProxy, force: Bool = false) {
         guard force || selection.isEmpty, let id = model.nowPlaying?.id else { return }
         reader.scrollTo(id, anchor: .center)
+    }
+
+    /// The jump button: the list glides to the playing song, and the row glows as it arrives. One
+    /// value on the list drives the glow, so no row holds any animation of its own.
+    private func jumpToPlaying(_ reader: ScrollViewProxy) {
+        guard let id = model.nowPlaying?.id else { return }
+        withAnimation(Motion.respecting(Motion.queueJump, reduce: reduceMotion)) { reader.scrollTo(id, anchor: .center) }
+        Task {
+            try? await Task.sleep(for: .seconds(reduceMotion ? 0 : Motion.queueJumpSeconds * 0.6))
+            withAnimation(Motion.snappy) { landing = id }
+            try? await Task.sleep(for: .seconds(Motion.queueJumpSeconds))
+            withAnimation(Motion.queueLand) { landing = nil }
+        }
     }
 
     /// After a search is cleared: back to what was selected, else the song that was at the top.

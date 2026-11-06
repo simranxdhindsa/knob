@@ -43,6 +43,13 @@ enum Motion {
     static let tipMoveSeconds = 2.4
     static let tipTurn = Animation.easeInOut(duration: 0.9).delay(0.5)
 
+    /// The queue going to the playing song: the list glides there, the button's arrow shoots the
+    /// way the list is about to move, and the row glows as it arrives.
+    static let queueJumpSeconds = 0.6
+    static let queueJump = Animation.timingCurve(0.2, 0, 0.2, 1, duration: queueJumpSeconds)
+    static let queueJumpArrow = Animation.easeOut(duration: 0.28)
+    static let queueLand = Animation.easeOut(duration: 0.9)
+
     /// A song's cover coming up from grey to full colour once it is ready.
     static let artworkReveal = Animation.easeOut(duration: 0.4)
 

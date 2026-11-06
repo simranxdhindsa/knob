@@ -13,10 +13,12 @@ enum QueueRowStyle {
     /// Selected is a neutral lift with an outline and a tick on the cover; playing is the orange
     /// text, a faint orange wash and a bar on the left. A row can be both.
     @ViewBuilder
-    static func background(playing: Bool, selected: Bool, surface: Surface) -> some View {
+    static func background(playing: Bool, selected: Bool, landing: Bool = false, surface: Surface) -> some View {
         let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
         shape.fill(selected ? surface.text.opacity(0.14) : (playing ? Palette.accent.opacity(0.10) : .clear))
             .overlay(shape.stroke(selected ? surface.text.opacity(0.45) : .clear, lineWidth: 1))
+            .overlay(shape.stroke(Palette.accent.opacity(landing ? 0.9 : 0), lineWidth: 1.5)
+                .shadow(color: Palette.accentGlow.opacity(landing ? 0.8 : 0), radius: 7))
             .overlay(alignment: .leading) {
                 if playing {
                     Capsule().fill(Palette.accent).frame(width: 3).padding(.vertical, 8).padding(.leading, 2)
@@ -96,6 +98,8 @@ struct QueueTrackRow: View {
     let played: Bool
     let hovered: Bool
     let reveal: Bool
+    /// The list has just come to this row.
+    var landing = false
     /// How the mix into this song will feel, for songs still to come.
     let jump: KnobShiftMixJump?
     let voiceNote: String?
@@ -133,7 +137,7 @@ struct QueueTrackRow: View {
         .opacity(played && !playing ? 0.5 : 1)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(QueueRowStyle.background(playing: playing, selected: selected, surface: surface))
+        .background(QueueRowStyle.background(playing: playing, selected: selected, landing: landing, surface: surface))
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(selected ? .isSelected : [])
