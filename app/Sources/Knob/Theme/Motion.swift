@@ -19,6 +19,10 @@ enum Motion {
     /// The slow drift of a generated cover's shapes while its song plays.
     static let artworkDrift = Animation.easeInOut(duration: 9).repeatForever(autoreverses: true)
 
+    /// The iPhone's record sliding out of its sleeve, then settling half under it.
+    static let vinylOut = Animation.interpolatingSpring(mass: 1, stiffness: 80, damping: 16)
+    static let vinylSettle = Animation.interpolatingSpring(mass: 1, stiffness: 110, damping: 19)
+
     /// A song's cover coming up from grey to full colour once it is ready.
     static let artworkReveal = Animation.easeOut(duration: 0.4)
 

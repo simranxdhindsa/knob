@@ -53,6 +53,22 @@ final class KnobShiftScratch {
     var time: TimeInterval { shared.pointee.position / fileRate }
     var speed: Double { shared.pointee.speed }
 
+    /// The player node for this record: it sits silent until a hand lands.
+    func makeNode(format: AVAudioFormat) -> AVAudioSourceNode {
+        let shared = shared
+        return AVAudioSourceNode(format: format) { isSilent, _, frames, list in
+            let buffers = UnsafeMutableAudioBufferListPointer(list)
+            guard buffers.count >= 2, let left = buffers[0].mData?.assumingMemoryBound(to: Float.self),
+                  let right = buffers[1].mData?.assumingMemoryBound(to: Float.self),
+                  Self.render(shared, left: left, right: right, frames: Int(frames)) else {
+                for buffer in buffers { if let data = buffer.mData { memset(data, 0, Int(buffer.mDataByteSize)) } }
+                isSilent.pointee = true
+                return noErr
+            }
+            return noErr
+        }
+    }
+
     /// Reads the whole song into memory as 16 bit stereo, about 42 MB for four minutes. Slow, so
     /// it runs off the main thread, and the old song is only let go once nothing can be reading it.
     static func decode(_ url: URL) throws -> (UnsafeMutablePointer<Int16>, Int, Double) {
@@ -101,6 +117,7 @@ final class KnobShiftScratch {
         shared.pointee.speed = speed
         shared.pointee.targetSpeed = speed
         shared.pointee.follow = Self.coefficient(Self.handSeconds, rate: outputRate)
+        shared.pointee.level = 1
         shared.pointee.targetLevel = 1
     }
 

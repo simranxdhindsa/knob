@@ -6,6 +6,7 @@ import SwiftUI
 /// through Knob's sound.
 @main
 struct KnobPhoneApp: App {
+    @UIApplicationDelegateAdaptor(PhoneAppDelegate.self) private var delegate
     @StateObject private var app = PhoneApp()
 
     var body: some Scene {
@@ -46,6 +47,57 @@ final class PhoneApp: ObservableObject {
     }
 
     #if DEBUG
+    /// KNOB_PHONE_TURN=n turns the phone on its side after n seconds, then drives the record deck
+    /// the way hands do: the song's position is logged through the turn, then a hand turns the
+    /// record one full turn forward and half a turn back, and the arm is moved to 70 percent.
+    private static func vinylCheck(_ shift: KnobShiftModel, after seconds: Double) async {
+        try? await Task.sleep(for: .seconds(seconds))
+        shift.updatePlaybackTime()
+        let before = shift.playbackTime
+        for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
+        }
+        shift.log("VINYL", "Turning on its side at \(String(format: "%.2f", before))s.")
+        try? await Task.sleep(for: .seconds(4))
+        shift.updatePlaybackTime()
+        shift.log("VINYL", "Four seconds later the song is at \(String(format: "%.2f", shift.playbackTime))s, and playing is \(shift.isPlaying).")
+        guard let deck = PhoneTurntable.current else {
+            shift.log("VINYL", "No record deck on screen.")
+            return
+        }
+        deck.handDown(at: CGPoint(x: 100, y: 0), center: .zero)
+        try? await Task.sleep(for: .milliseconds(400))
+        for (degrees, count) in [(12.0, 30), (-12.0, 15)] {
+            for _ in 0..<count {
+                deck.turn(by: degrees)
+                try? await Task.sleep(for: .milliseconds(30))
+            }
+        }
+        try? await Task.sleep(for: .milliseconds(300))
+        shift.log("VINYL", "Under the hand, playing is \(shift.isPlaying).")
+        deck.handUp()
+        try? await Task.sleep(for: .seconds(3))
+        shift.updatePlaybackTime()
+        shift.log("VINYL", "After the hand: song at \(String(format: "%.2f", shift.playbackTime))s, playing is \(shift.isPlaying).")
+        deck.armLifted(progress: 0.3)
+        deck.armMoved(progress: 0.7)
+        try? await Task.sleep(for: .seconds(1))
+        deck.armDropped()
+        try? await Task.sleep(for: .seconds(3))
+        shift.updatePlaybackTime()
+        shift.log("VINYL", "After the arm: song at \(String(format: "%.2f", shift.playbackTime))s of \(String(format: "%.2f", shift.playbackDuration))s, playing is \(shift.isPlaying).")
+        // Round and round: the record's sound is wired in and out each time.
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        shift.updatePlaybackTime()
+        let started = shift.playbackTime
+        for turn in 0..<8 {
+            scene?.requestGeometryUpdate(.iOS(interfaceOrientations: turn % 2 == 0 ? .portrait : .landscapeLeft))
+            try? await Task.sleep(for: .seconds(1.2))
+        }
+        shift.updatePlaybackTime()
+        shift.log("VINYL", "Eight turns in 9.6 seconds moved the song \(String(format: "%.2f", shift.playbackTime - started))s, playing is \(shift.isPlaying).")
+    }
+
     /// Development checks in the simulator, set with SIMCTL_CHILD_ before `simctl launch`:
     /// KNOB_PHONE_SILENT=1 measures Knob's sound but plays nothing, KNOB_PHONE_ADD=1 queues every
     /// song in KnobShift/Imported, KNOB_PHONE_PLAY=1 turns Knob on and plays, and
@@ -56,6 +108,9 @@ final class PhoneApp: ObservableObject {
     /// both after n seconds. KNOB_PHONE_HOLD and KNOB_PHONE_SHUFFLE are explained where they run.
     private static func runChecks(_ model: KnobModel) async {
         let environment = ProcessInfo.processInfo.environment
+        if let seconds = environment["KNOB_PHONE_TURN"].flatMap(Double.init) {
+            Task { await vinylCheck(model.knobShift, after: seconds) }
+        }
         PhoneEffectUnit.silent = environment["KNOB_PHONE_SILENT"] == "1"
         // KNOB_PHONE_ADD=2 carries on while the songs prepare, so the queue can be seen doing it.
         if let add = environment["KNOB_PHONE_ADD"], add == "1" || add == "2" {

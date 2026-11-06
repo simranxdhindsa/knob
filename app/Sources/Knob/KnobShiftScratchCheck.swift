@@ -119,6 +119,20 @@ enum KnobShiftScratchCheck {
         let spent = Date().timeIntervalSince(began)
         expect(spent < 3, String(format: "a minute of sound takes %.2f s to make, even in this debug build", spent))
 
+        let deck = KnobShiftVinylGeometry(center: CGPoint(x: 300, y: 200), diameter: 340)
+        var roundTrip = 0.0, rightHalf = true
+        for step in 0...100 {
+            let progress = Double(step) / 100
+            roundTrip = max(roundTrip, abs(deck.progress(angle: deck.angle(progress: progress)) - progress))
+            rightHalf = rightHalf && deck.stylus(progress: progress).x > deck.center.x
+        }
+        expect(roundTrip < 0.0001, String(format: "the arm's angle and the song agree (off by %.6f)", roundTrip))
+        expect(rightHalf, "the stylus stays on the half the sleeve leaves showing")
+        let radius = { (p: Double) in hypot(deck.stylus(progress: p).x - 300, deck.stylus(progress: p).y - 200) / 340 }
+        expect(abs(radius(0) - 0.47) < 0.001 && abs(radius(1) - 0.22) < 0.001, "the stylus runs from the outer groove to the inner one")
+        expect(deck.angle(progress: 1) > deck.angle(progress: 0) && deck.restAngle < deck.angle(progress: 0), "the arm swings inward as the song plays, and rests clear of the record")
+        expect(abs(deck.progress(finger: deck.stylus(progress: 0.4)) - 0.4) < 0.0001, "a finger on the stylus picks the same point in the song")
+
         if arguments.count >= 2 { record(URL(fileURLWithPath: arguments[0]), to: URL(fileURLWithPath: arguments[1])) }
         print(failed == 0 ? "Scratch check passed" : "Scratch check FAILED: \(failed)")
         exit(failed == 0 ? 0 : 1)
