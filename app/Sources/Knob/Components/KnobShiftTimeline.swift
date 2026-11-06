@@ -25,7 +25,7 @@ struct KnobShiftTimeline: View {
             HStack {
                 Text(playing ? KnobShiftNowPlaying.clock(position) : "0:00")
                 Spacer()
-                Text(playing ? KnobShiftNowPlaying.clock(max(0, clock.duration - position)) + " left" : "0:00")
+                Text(playing ? "-" + KnobShiftNowPlaying.clock(max(0, clock.duration - position)) : "0:00")
             }
             .font(.system(size: mini ? 9 : 10, weight: .semibold).monospacedDigit())
             .foregroundStyle(surface.tertiary)

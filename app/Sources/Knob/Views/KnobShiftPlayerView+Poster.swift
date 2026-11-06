@@ -10,7 +10,7 @@ extension KnobShiftPlayerView {
             VStack(spacing: 0) {
                 Group {
                     if vinyl && model.nowPlaying != nil {
-                        VinylStage(model: model, size: CGSize(width: geometry.size.width - 48, height: layout.side))
+                        VinylStage(model: model, size: CGSize(width: geometry.size.width - 48, height: layout.side), onShowing: { deckSong = $0 })
                             .transition(.opacity)
                     } else {
                         posterCover(layout)
@@ -20,7 +20,7 @@ extension KnobShiftPlayerView {
                 .padding(.top, layout.top)
                 .padding(.bottom, layout.gap)
                 VStack(spacing: 0) {
-                    titleRow(wide: wide, scale: layout.scale)
+                    titleRow(wide: wide, scale: layout.scale, song: vinyl ? deckSong : nil)
                         .frame(height: KnobShiftPlayerLayout.title * layout.scale)
                     PlayerTimeline(model: model, clock: model.clock, scrub: scrub, textSize: 12 * layout.scale, showsMixAhead: true)
                         .frame(height: KnobShiftPlayerLayout.timeline * layout.scale)
@@ -37,7 +37,8 @@ extension KnobShiftPlayerView {
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
             .overlay(alignment: .topTrailing) {
-                VinylSwitch(isOn: $vinyl)
+                VinylToggle(isOn: $vinyl, label: "Record deck")
+                    .help(vinyl ? "Back to the cover" : "Play it on a record")
                     .padding(.top, 14)
                     .padding(.trailing, 18)
             }
@@ -61,23 +62,6 @@ extension KnobShiftPlayerView {
                 .animation(reduceMotion ? .easeOut(duration: 0.2) : Motion.gentle, value: model.isPlaying)
                 .allowsHitTesting(false)
         }
-    }
-}
-
-/// The switch between the cover and the record deck, with a real little record that turns while
-/// the deck is on. Only full screen has one.
-private struct VinylSwitch: View {
-    @Binding var isOn: Bool
-
-    var body: some View {
-        HStack(spacing: 9) {
-            VinylIcon(size: 30, spinning: isOn)
-            PowerSwitch(isOn: $isOn, label: "Record deck")
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .playerGlass()
-        .help(isOn ? "Back to the cover" : "Play it on a record")
     }
 }
 

@@ -8,29 +8,35 @@ struct PhoneVinylDeck: View {
     @ObservedObject var model: KnobShiftModel
     @ObservedObject var scrub: PlayerScrub
     @State private var settled = false
+    /// The song on the deck, which changes with the cover rather than ahead of it.
+    @State private var song: KnobShiftModel.Track?
 
     var body: some View {
         GeometryReader { proxy in
             HStack(spacing: 0) {
-                VinylStage(model: model, size: CGSize(width: proxy.size.width - Self.column, height: proxy.size.height)) {
+                VinylStage(model: model, size: CGSize(width: proxy.size.width - Self.column, height: proxy.size.height), onSettled: {
                     withAnimation(Motion.gentle) { settled = true }
-                }
+                }, onShowing: { song = $0 })
                 details.opacity(settled ? 1 : 0)
             }
         }
     }
 
     private var details: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let shown = song ?? model.nowPlaying
+        return VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(model.nowPlaying?.name ?? "Nothing playing")
+                Text(shown?.name ?? "Nothing playing")
                     .font(.system(size: 17, weight: .semibold)).foregroundStyle(Glass.text)
                     .lineLimit(2)
-                Text(model.nowPlaying?.artist ?? "")
+                Text(shown?.artist ?? "")
                     .font(.system(size: 13)).foregroundStyle(Glass.secondary)
                     .lineLimit(1)
             }
-            VinylTimes(clock: model.clock, playing: model.nowPlaying != nil)
+            .contentTransition(.opacity)
+            .animation(Motion.vinylCover, value: shown?.id)
+            PlayerTimeline(model: model, clock: model.clock, scrub: scrub, showsChip: false)
+                .frame(height: 52)
             HStack(spacing: 0) {
                 step("backward.fill", label: "Previous", action: model.previous)
                 PlayDial(model: model, clock: model.clock, scrub: scrub, size: 74)
@@ -59,21 +65,5 @@ struct PhoneVinylDeck: View {
         }
         .buttonStyle(PlayerPress())
         .accessibilityLabel(label)
-    }
-}
-
-/// The song's times, alone in watching the clock so its ticks redraw nothing else.
-private struct VinylTimes: View {
-    @ObservedObject var clock: KnobShiftClock
-    let playing: Bool
-
-    var body: some View {
-        HStack {
-            Text(playing ? KnobShiftNowPlaying.clock(clock.time) : "0:00")
-            Spacer()
-            Text(playing ? KnobShiftNowPlaying.clock(max(0, clock.duration - clock.time)) + " left" : "0:00")
-        }
-        .font(.system(size: 12, weight: .medium).monospacedDigit())
-        .foregroundStyle(Glass.secondary)
     }
 }

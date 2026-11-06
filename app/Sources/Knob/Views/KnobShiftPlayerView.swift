@@ -19,6 +19,8 @@ struct KnobShiftPlayerView: View {
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     /// Full screen shows the record deck instead of the cover, from the switch at its top.
     @AppStorage(PersistKey.knobShiftVinyl.rawValue) var vinyl = false
+    /// The song on the deck, so the name changes with the cover rather than ahead of it.
+    @State var deckSong: KnobShiftModel.Track?
     @State private var importing = false
     @State private var showingSpotify = false
     @State private var showingYouTube = false
@@ -129,8 +131,8 @@ struct KnobShiftPlayerView: View {
         .padding(.bottom, KnobShiftPlayerLayout.bottom)
     }
 
-    func titleRow(wide: Bool, scale: CGFloat = 1) -> some View {
-        let track = model.nowPlaying
+    func titleRow(wide: Bool, scale: CGFloat = 1, song: KnobShiftModel.Track? = nil) -> some View {
+        let track = song ?? model.nowPlaying
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(track?.name ?? "Nothing playing")

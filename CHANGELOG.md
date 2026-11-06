@@ -14,9 +14,10 @@ Knob 4.1 keeps the orange microphone dot away, makes low volumes easier to hear,
 - Songs Knob could not find now show YouTube matches to pick from, or you can paste a link, and Retry tries them all at once
 - Turn your iPhone on its side and the player becomes a real record deck: spin the record to scratch through the song, lift the arm to jump anywhere, tap the cover to pause
 - On the Mac, a switch at the top of full screen brings up the same record deck
+- When the song changes on the record deck, the record slides back into its sleeve, the cover changes and the new record comes out
 - KnobShift in full screen shows the whole cover, sharp and uncut, with bigger controls and a countdown to the next KnobMix
 - The queue opens at the song that's playing and follows it
-- Selected songs in the queue are orange, and time left reads 2:48 left
+- Selected songs in the queue are orange
 - Spotify covers are about three times sharper at full screen, on your Mac and iPhone, even for songs you already have
 - All Songs in Playlists shows every playlist's songs in one list, and one tap shuffles them all and starts playing
 - Low volumes in Knob are louder, so small steps are easier to hear, and 100% stays exactly as loud as before

@@ -11,6 +11,8 @@ struct PlayerTimeline: View {
     var textSize: CGFloat = 12
     /// Full screen has the room to show how long until the next mix all the way there.
     var showsMixAhead = false
+    /// The chip sits between the times, which a narrow column has no room for.
+    var showsChip = true
 
     /// How many seconds ahead a planned mix is announced.
     private static let warning = 5
@@ -25,11 +27,11 @@ struct PlayerTimeline: View {
                 HStack {
                     Text(playing ? KnobShiftNowPlaying.clock(time) : "0:00")
                     Spacer()
-                    Text(playing ? KnobShiftNowPlaying.clock(max(0, clock.duration - time)) + " left" : "0:00")
+                    Text(playing ? "-" + KnobShiftNowPlaying.clock(max(0, clock.duration - time)) : "0:00")
                 }
                 .font(.system(size: textSize, weight: .medium).monospacedDigit())
                 .foregroundStyle(Glass.secondary)
-                chip
+                if showsChip { chip }
             }
         }
     }

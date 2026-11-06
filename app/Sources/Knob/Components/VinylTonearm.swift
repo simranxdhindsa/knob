@@ -25,7 +25,7 @@ struct VinylTonearm: View {
                 .position(geometry.pivot)
             Canvas { context, size in VinylArmDrawing.draw(context, size: size, reach: reach) }
                 .frame(width: VinylArmDrawing.width(reach), height: VinylArmDrawing.height(reach))
-                .contentShape(VinylArmDrawing.Line(reach: reach).stroke(style: StrokeStyle(lineWidth: 40, lineCap: .round)))
+                .contentShape(VinylArmDrawing.Line(reach: reach).stroke(style: StrokeStyle(lineWidth: 44, lineCap: .round)))
                 .shadow(color: Glass.shadow, radius: held ? 12 : 5, x: 2, y: held ? 12 : 5)
                 .rotationEffect(.degrees(angle), anchor: VinylArmDrawing.anchor(reach))
                 .position(x: geometry.pivot.x + VinylArmDrawing.width(reach) / 2 - VinylArmDrawing.pivot(reach).x,
