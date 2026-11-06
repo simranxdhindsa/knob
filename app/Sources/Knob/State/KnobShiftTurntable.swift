@@ -7,12 +7,13 @@ import SwiftUI
 /// over from exactly that point, so the song carries on from wherever the hand left it.
 @MainActor
 final class KnobShiftTurntable: ObservableObject {
-    /// 33 and a third turns a minute: one full turn is 1.8 seconds of song.
-    static let degreesPerSecond = 200.0
+    /// A little under a real 33 and a third, which looked hurried on screen: one full turn is
+    /// 2.25 seconds of song.
+    nonisolated static let degreesPerSecond = 160.0
     /// The fastest a hand can throw the record, as a multiple of normal speed.
     private static let fastest = 8.0
     /// How quickly the song closes on where the hand has put the record. The song is held to the
-    /// record's angle, not its speed, so one full turn is always exactly 1.8 seconds of song.
+    /// record's angle, not its speed, so one full turn is always exactly 2.25 seconds of song.
     private static let grip = 0.035
     /// The motor is back up to speed well inside this; past it, the deck takes over regardless.
     private static let longestReturn = 1.2

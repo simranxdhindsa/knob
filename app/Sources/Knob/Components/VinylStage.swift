@@ -266,7 +266,7 @@ struct VinylIcon: View {
 
     var body: some View {
         TimelineView(.animation(paused: !spinning)) { context in
-            let turn = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.8) / 1.8 * 360
+            let turn = (context.date.timeIntervalSinceReferenceDate * KnobShiftTurntable.degreesPerSecond).truncatingRemainder(dividingBy: 360)
             ZStack {
                 VinylTexture.face(size).frame(width: size, height: size)
                 Circle().fill(Palette.accent).frame(width: size * 0.36, height: size * 0.36)
