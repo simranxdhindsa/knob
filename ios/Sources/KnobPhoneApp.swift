@@ -33,6 +33,8 @@ final class PhoneApp: ObservableObject {
             Self.playInBackground()
             // The lock screen, Control Center and headphone buttons.
             KnobShiftNowPlayingCenter.shared.start(model: model.knobShift)
+            // The Live Activity for the Lock Screen and StandBy (when this build carries it).
+            PhoneStandby.shared.start(model: model.knobShift)
             do {
                 model.knobShift.insertOutputEffect(try await PhoneEffectUnit.make(for: engine))
             } catch {
