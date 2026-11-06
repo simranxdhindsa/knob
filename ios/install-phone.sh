@@ -41,11 +41,14 @@ trap 'rm -f "$list"' EXIT
 step() { printf '[%3ds] %s\n' "$SECONDS" "$1"; }
 asking() { [ -t 0 ]; }
 
-# Everything the phone build reads. File sizes and times, since the sound model is too big to read
-# through on every run; a file touched but unchanged only costs one extra build.
+# Everything the phone build reads, signing profiles included, since a new one can add the StandBy
+# card with no code changed. File sizes and times, as the sound model is too big to read through
+# on every run; a file touched but unchanged only costs one extra build.
 code_print() {
-  (cd "$repo_dir" && find app/Sources/Knob app/Resources/KnobShift ios dsp engine presets -type f ! -name .DS_Store \
-    -exec stat -f '%N %z %m' {} + | sort | shasum | cut -d' ' -f1)
+  (cd "$repo_dir" && {
+    find app/Sources/Knob app/Resources/KnobShift ios dsp engine presets -type f ! -name .DS_Store -exec stat -f '%N %z %m' {} +
+    find "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" -type f -exec stat -f '%N %z %m' {} + 2>/dev/null || true
+  } | sort | shasum | cut -d' ' -f1)
 }
 
 # One entry per real iPhone: reachable (yes or no), id, name, model. Simulators are left out.
