@@ -9,6 +9,14 @@ enum Snapshot {
         let app = NSApplication.shared
         app.setActivationPolicy(.prohibited)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        if let songs = ProcessInfo.processInfo.environment["KNOB_SNAPSHOT_SONGS"] {
+            Task { @MainActor in
+                await realPlayerShots(of: URL(fileURLWithPath: songs), into: folder)
+                exit(0)
+            }
+            app.run()
+            return
+        }
 
         let model = KnobModel(engine: DemoEngine(), volume: DemoVolume())
         model.start()
@@ -43,8 +51,10 @@ enum Snapshot {
             for mixing in [false, true] {
                 let shift = KnobShiftModel(restoresQueue: false)
                 shift.showPreviewForSnapshot(mixing: mixing)
-                for (name, size) in [("compact", CGSize(width: 460, height: 720)), ("wide", CGSize(width: 900, height: 620))] {
-                    for (schemeName, scheme) in [("dark", ColorScheme.dark), ("light", ColorScheme.light)] {
+                for (name, size) in playerSizes {
+                    // Full screen is only ever dark: the player's window always is.
+                    for (schemeName, scheme) in [("dark", ColorScheme.dark), ("light", ColorScheme.light)]
+                    where !name.hasPrefix("fullscreen") || scheme == .dark {
                         render(KnobShiftPlayerView(model: shift)
                             .frame(width: size.width, height: size.height)
                             .environment(\.colorScheme, scheme), scheme: scheme,
@@ -231,16 +241,66 @@ enum Snapshot {
         return model
     }
 
+    /// The player's two windows, then full screen as it really is on a 13 inch and a 14 inch
+    /// MacBook, both under the notch, and on a 27 inch monitor.
+    private static let playerSizes: [(String, CGSize)] = [
+        ("compact", CGSize(width: 460, height: 720)), ("wide", CGSize(width: 900, height: 620)),
+        ("fullscreen-13in", CGSize(width: 1470, height: 919)), ("fullscreen-14in", CGSize(width: 1710, height: 1074)),
+        ("fullscreen-27in", CGSize(width: 2560, height: 1440)),
+    ]
+
+    /// KNOB_SNAPSHOT_SONGS names a folder of songs: instead of the usual set, the player alone is
+    /// drawn with their real covers, in a long queue with the middle one playing. Covers load in
+    /// the background, so this waits for them in a window shown well off every screen.
+    private static func realPlayerShots(of songs: URL, into folder: URL) async {
+        let files = ((try? FileManager.default.contentsOfDirectory(at: songs, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension == "m4a" }.sorted { $0.path < $1.path }
+        guard files.count >= 2 else { print("No songs in \(songs.path)"); return }
+        for mixing in [false, true] {
+            let shift = KnobShiftModel(restoresQueue: false)
+            shift.showPreviewForSnapshot(mixing: mixing)
+            let analysis = shift.tracks[0].analysis
+            shift.tracks = files.map {
+                KnobShiftModel.Track(url: $0, title: $0.deletingPathExtension().lastPathComponent, duration: 215, tailSilence: 1, analysis: analysis)
+            }
+            let playing = files.count / 2
+            let next = shift.tracks[(playing + 1) % files.count]
+            shift.currentIndex = playing
+            shift.nowPlaying = shift.tracks[playing]
+            shift.nextMix = KnobShiftModel.NextMix(next: next, startsAt: 114.4, endsAt: 124.1, at: Date().addingTimeInterval(mixing ? 0 : 50), blends: true)
+            shift.mixingInto = mixing ? next : nil
+            for (name, size) in playerSizes {
+                let (host, window) = hosted(KnobShiftPlayerView(model: shift).frame(width: size.width, height: size.height)
+                    .environment(\.colorScheme, .dark), scheme: .dark)
+                window.setFrameOrigin(NSPoint(x: -8000, y: -8000))
+                window.orderFrontRegardless()
+                try? await Task.sleep(for: .seconds(4))
+                save(host, to: folder.appendingPathComponent("knobshift-\(name)-real\(mixing ? "-mixing" : "").png"))
+                window.orderOut(nil)
+            }
+        }
+    }
+
     private static func render<V: View>(_ view: V, scheme: ColorScheme, to url: URL) {
+        let (host, _) = hosted(view, scheme: scheme)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+        save(host, to: url)
+    }
+
+    private static func hosted<V: View>(_ view: V, scheme: ColorScheme) -> (NSHostingView<V>, NSWindow) {
         let host = NSHostingView(rootView: view)
         host.frame.size = host.fittingSize
         let window = NSWindow(contentRect: host.frame, styleMask: .borderless, backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
         window.isOpaque = false
         window.backgroundColor = .clear
         window.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
         window.contentView = host
         host.layoutSubtreeIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+        return (host, window)
+    }
+
+    private static func save(_ host: NSView, to url: URL) {
         guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return }
         host.cacheDisplay(in: host.bounds, to: bitmap)
         try? bitmap.representation(using: .png, properties: [:])?.write(to: url)
