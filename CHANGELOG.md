@@ -12,6 +12,9 @@ Knob 4.1 keeps the orange microphone dot away, makes low volumes easier to hear,
 - A new Playlists view from the queue: open any playlist, pick songs or add them all, and imported songs wait there until you add them
 - Knob no longer uses your Mac's audio input to carry sound, so the orange microphone dot stays off while Knob is on. Turning Knob on asks you to install a small update to its audio device, once
 - Songs Knob could not find now show YouTube matches to pick from, or you can paste a link, and Retry tries them all at once
+- KnobShift in full screen shows the whole cover, sharp and uncut, with bigger controls and a countdown to the next KnobMix
+- The queue opens at the song that's playing and follows it
+- Selected songs in the queue are orange, and time left reads 2:48 left
 - Spotify covers are about three times sharper at full screen, on your Mac and iPhone, even for songs you already have
 - All Songs in Playlists shows every playlist's songs in one list, and one tap shuffles them all and starts playing
 - Low volumes in Knob are louder, so small steps are easier to hear, and 100% stays exactly as loud as before
