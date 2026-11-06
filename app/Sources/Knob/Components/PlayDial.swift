@@ -47,6 +47,8 @@ struct PlayerTransport: View {
     @ObservedObject var model: KnobShiftModel
     @ObservedObject var scrub: PlayerScrub
     let dialSize: CGFloat
+    /// Full screen's controls grow with the screen.
+    var scale: CGFloat = 1
     @State private var backTaps = 0
     @State private var nextTaps = 0
 
@@ -54,7 +56,7 @@ struct PlayerTransport: View {
         HStack {
             step("backward.fill", label: "Previous", taps: $backTaps, action: model.previous)
             Spacer()
-            PlayDial(model: model, clock: model.clock, scrub: scrub, size: dialSize)
+            PlayDial(model: model, clock: model.clock, scrub: scrub, size: dialSize, markScale: scale)
             Spacer()
             step("forward.fill", label: "Next", taps: $nextTaps, action: model.next)
         }
@@ -68,10 +70,10 @@ struct PlayerTransport: View {
             action()
         } label: {
             Image(systemName: symbol)
-                .font(.system(size: 30))
+                .font(.system(size: 30 * scale))
                 .symbolEffect(.bounce, value: taps.wrappedValue)
                 .foregroundStyle(Glass.text)
-                .frame(width: 68, height: 68)
+                .frame(width: 68 * scale, height: 68 * scale)
                 .contentShape(Circle())
         }
         .buttonStyle(PlayerPress())
@@ -90,6 +92,7 @@ struct PlayDial: View {
     @ObservedObject var clock: KnobShiftClock
     @ObservedObject var scrub: PlayerScrub
     let size: CGFloat
+    var markScale: CGFloat = 1
     /// True while the iPhone opening's knob is flying in to become this disc.
     @Environment(\.hidesPlayButton) private var hidesPlayButton
     @State private var rotary: RotaryDrag?
@@ -132,7 +135,7 @@ struct PlayDial: View {
                     .fill(Glass.tertiary)
                     .overlay(Capsule().fill(Palette.accent).opacity(glow))
                     .shadow(color: Palette.accentGlow.opacity(glow * 0.7), radius: 3)
-                    .frame(width: Self.markWidth, height: size * Self.markLength)
+                    .frame(width: Self.markWidth * markScale, height: size * Self.markLength)
                     .offset(y: -size * Self.markReach)
                     .rotationEffect(.degrees(-Self.sweep / 2 + Self.sweep * Double(mark) / Double(Self.marks - 1)))
             }
