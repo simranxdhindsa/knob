@@ -152,25 +152,26 @@ struct StandbyButtons: View {
     }
 }
 
-/// The Lock Screen card, which StandBy shows full screen. In StandBy there is room, so
-/// everything grows and nothing is drawn behind it.
+/// The Lock Screen card, which StandBy shows full screen. iOS enlarges the card there by itself,
+/// about 1.85 times on a Pro Max, and cuts off anything over about 160 points tall, so StandBy's
+/// sizes are for that same small space, with the record as big as it fits and black behind it.
 struct StandbyCard: View {
     let state: KnobStandbyAttributes.ContentState
     var fullscreen = false
     @Environment(\.isLuminanceReduced) private var dim
 
     var body: some View {
-        let scale: CGFloat = fullscreen ? 1.7 : 1
-        HStack(spacing: 16 * scale) {
-            StandbyRecord(cover: state.cover, diameter: 104 * scale)
-            VStack(spacing: 10 * scale) {
-                StandbyTitles(state: state, size: 17 * scale)
-                StandbyProgress(state: state, size: 12 * scale)
-                StandbyButtons(isPlaying: state.isPlaying, size: 20 * scale)
+        HStack(spacing: fullscreen ? 18 : 16) {
+            StandbyRecord(cover: state.cover, diameter: fullscreen ? 132 : 104)
+            VStack(spacing: fullscreen ? 8 : 10) {
+                StandbyTitles(state: state, size: fullscreen ? 20 : 17)
+                StandbyProgress(state: state, size: fullscreen ? 13 : 12)
+                StandbyButtons(isPlaying: state.isPlaying, size: fullscreen ? 18 : 20)
             }
         }
-        .padding(fullscreen ? 20 : 14)
+        .padding(fullscreen ? 12 : 14)
         .opacity(dim ? 0.9 : 1)
+        .activityBackgroundTint(fullscreen ? Bedside.night : Vinyl.base)
     }
 }
 

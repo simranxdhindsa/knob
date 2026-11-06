@@ -19,7 +19,6 @@ struct KnobPlayingActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: KnobStandbyAttributes.self) { context in
             StandbyCardHost(state: context.state)
-                .activityBackgroundTint(Vinyl.base)
                 .activitySystemActionForegroundColor(Vinyl.shine)
         } dynamicIsland: { context in
             DynamicIsland {
