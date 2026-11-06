@@ -29,6 +29,16 @@ enum Motion {
     static let vinylCover = Animation.easeInOut(duration: vinylCoverSeconds)
     static let vinylReturn = Animation.timingCurve(0.2, 0, 0.2, 1, duration: vinylReturnSeconds)
 
+    /// The iPhone's Bedside mode: the room going dim, the clock and the controls trading places
+    /// with one gone before the other comes, and each part of the clock rising into place a
+    /// moment after the one above it.
+    static let bedside = Animation.easeInOut(duration: 0.9)
+    static let bedsideOutSeconds = 0.22
+    static let bedsideOut = Animation.easeOut(duration: bedsideOutSeconds)
+    static let bedsideIn = Animation.easeOut(duration: 0.35).delay(bedsideOutSeconds)
+    static let bedsideRise = Animation.timingCurve(0.2, 0, 0.2, 1, duration: 0.7)
+    static let bedsideStagger = 0.09
+
     /// A song's cover coming up from grey to full colour once it is ready.
     static let artworkReveal = Animation.easeOut(duration: 0.4)
 

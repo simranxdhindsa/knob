@@ -92,6 +92,14 @@ enum Vinyl {
     static let base = Color(hex: 0x2B2C31)
 }
 
+/// The iPhone's Bedside mode, laid over the deck so the screen doesn't light up the room.
+enum Bedside {
+    static let night = Color.black
+    static let asleep = 0.62
+    /// Lighter while the controls are up, to see them by.
+    static let awake = 0.3
+}
+
 enum Glass {
     static let text = themed(dark: .white, light: Color(hex: 0x1C1C1E))
     static let secondary = themed(dark: .white.opacity(0.65), light: .black.opacity(0.6))

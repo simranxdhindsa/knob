@@ -18,6 +18,8 @@ enum PersistKey: String {
     case knobShiftQueue = "knob.shift.queue"
     /// Full screen on the Mac shows the record deck.
     case knobShiftVinyl = "knob.shift.vinyl"
+    /// The iPhone on its side on a charger shows the clock beside the record.
+    case knobShiftBedside = "knob.shift.bedside"
     /// While shuffle is on, the shuffled order; `knobShiftQueue` keeps the user's own order.
     case knobShiftShuffledQueue = "knob.shift.shuffledQueue"
     /// The song last in the player and where it was, so the next launch has it ready to play.
