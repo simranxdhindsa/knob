@@ -1,12 +1,12 @@
 import AVFoundation
 import SwiftUI
 
-/// The working parts of the iPhone's record deck. A hand on the record takes the song away from
+/// The working parts of the record deck (VinylStage), on the iPhone and the Mac. A hand on the record takes the song away from
 /// the player's deck and plays it from KnobShiftScratch, which follows the hand at any speed in
 /// either direction. Letting go, the motor brings the record back up to speed and the deck takes
 /// over from exactly that point, so the song carries on from wherever the hand left it.
 @MainActor
-final class PhoneTurntable: ObservableObject {
+final class KnobShiftTurntable: ObservableObject {
     /// 33 and a third turns a minute: one full turn is 1.8 seconds of song.
     static let degreesPerSecond = 200.0
     /// The fastest a hand can throw the record, as a multiple of normal speed.
@@ -25,6 +25,8 @@ final class PhoneTurntable: ObservableObject {
     @Published private(set) var isArmHeld = false
     @Published private(set) var heldProgress: Double?
     var isHolding: Bool { holding }
+    /// The playing song is in memory, so a hand can take it.
+    var isReady: Bool { canHold }
 
     private let scratch: KnobShiftScratch
     private let node: AVAudioSourceNode
@@ -47,11 +49,11 @@ final class PhoneTurntable: ObservableObject {
     private var turnedSinceTick = 0.0
 
     /// One record for the life of the app, so turning the phone doesn't read the song again.
-    private static var shared: PhoneTurntable?
+    private static var shared: KnobShiftTurntable?
 
-    static func shared(for model: KnobShiftModel) -> PhoneTurntable {
+    static func shared(for model: KnobShiftModel) -> KnobShiftTurntable {
         if let shared { return shared }
-        let made = PhoneTurntable(model: model)
+        let made = KnobShiftTurntable(model: model)
         shared = made
         return made
     }
@@ -61,12 +63,14 @@ final class PhoneTurntable: ObservableObject {
         let rate = model.audioEngine.outputNode.outputFormat(forBus: 0).sampleRate
         scratch = KnobShiftScratch(outputRate: rate > 0 ? rate : 48_000)
         node = scratch.makeNode(format: AVAudioFormat(standardFormatWithSampleRate: scratch.outputRate, channels: 2)!)
+        #if os(iOS)
         NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.giveBackMemory() }
         }
+        #endif
     }
 
-    /// Upright, nothing needs the song in memory if the phone is short of it.
+    /// With the deck away, nothing needs the song in memory if the phone is short of it.
     private func giveBackMemory() {
         guard !attached, !isActive else { return }
         scratch.release()

@@ -61,7 +61,7 @@ final class PhoneApp: ObservableObject {
         try? await Task.sleep(for: .seconds(4))
         shift.updatePlaybackTime()
         shift.log("VINYL", "Four seconds later the song is at \(String(format: "%.2f", shift.playbackTime))s, and playing is \(shift.isPlaying).")
-        let deck = PhoneTurntable.shared(for: shift)
+        let deck = KnobShiftTurntable.shared(for: shift)
         deck.handDown(at: CGPoint(x: 100, y: 0), center: .zero)
         try? await Task.sleep(for: .milliseconds(400))
         for (degrees, count) in [(12.0, 30), (-12.0, 15)] {

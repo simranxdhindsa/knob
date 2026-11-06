@@ -280,6 +280,36 @@ enum Snapshot {
             }
         }
         await selectionShot(of: files, into: folder)
+        await vinylShots(of: files, into: folder)
+    }
+
+    /// The record deck, settled, on an iPhone on its side and on the Mac in full screen.
+    private static func vinylShots(of files: [URL], into folder: URL) async {
+        let shift = KnobShiftModel(restoresQueue: false)
+        shift.showPreviewForSnapshot(mixing: false)
+        let analysis = shift.tracks[0].analysis
+        shift.tracks = files.map {
+            KnobShiftModel.Track(url: $0, title: $0.deletingPathExtension().lastPathComponent, duration: 215, tailSilence: 1, analysis: analysis)
+        }
+        shift.currentIndex = 1
+        shift.nowPlaying = shift.tracks[1]
+        shift.nextMix = nil
+        let key = PersistKey.knobShiftVinyl.rawValue
+        UserDefaults.standard.set(true, forKey: key)
+        defer { UserDefaults.standard.removeObject(forKey: key) }
+        let (phone, phoneWindow) = hosted(VinylStage(model: shift, size: CGSize(width: 590, height: 369)).environment(\.surface, .glass)
+            .background(Vinyl.base).frame(width: 590, height: 369).environment(\.colorScheme, .dark), scheme: .dark)
+        phoneWindow.setFrameOrigin(NSPoint(x: -8000, y: -8000))
+        phoneWindow.orderFrontRegardless()
+        try? await Task.sleep(for: .seconds(5))
+        save(phone, to: folder.appendingPathComponent("vinyl-phone.png"))
+        phoneWindow.orderOut(nil)
+        let (mac, macWindow) = hosted(KnobShiftPlayerView(model: shift).frame(width: 1710, height: 1074).environment(\.colorScheme, .dark), scheme: .dark)
+        macWindow.setFrameOrigin(NSPoint(x: -8000, y: -8000))
+        macWindow.orderFrontRegardless()
+        try? await Task.sleep(for: .seconds(5))
+        save(mac, to: folder.appendingPathComponent("vinyl-mac.png"))
+        macWindow.orderOut(nil)
     }
 
     /// Selects rows through the real list, the way a click does, beside the playing row, and

@@ -79,12 +79,16 @@ enum Screen {
 /// one in dark mode.
 /// The iPhone's record deck: a real record is black whatever the theme.
 enum Vinyl {
-    static let disc = Color(hex: 0x101012)
-    static let rim = Color(hex: 0x232327)
-    static let groove = Color.white.opacity(0.055)
-    static let sheen = Color.white.opacity(0.17)
+    static let disc = Color(hex: 0x141416)
+    static let discCore = Color(hex: 0x09090A)
+    static let rim = Color(hex: 0x2C2C31)
+    /// Light on the grooves and on chrome, at any strength.
+    static let shine = Color.white
     static let metal = Color(hex: 0xD3D5DA)
-    static let metalShade = Color(hex: 0x74777F)
+    static let metalShade = Color(hex: 0x7C7F87)
+    static let chromeDark = Color(hex: 0x33353A)
+    static let plate = Color(hex: 0x38393E)
+    static let plateLight = Color(hex: 0x6A6C73)
     static let base = Color(hex: 0x2B2C31)
 }
 
