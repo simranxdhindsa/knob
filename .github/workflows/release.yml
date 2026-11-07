@@ -11,6 +11,11 @@ on:
       - ".claude/**"
       - "LICENSE"
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the release (only from main). Off builds everything and publishes nothing."
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -33,4 +38,6 @@ jobs:
           KNOB_SIGNING_P12_BASE64: ${{ secrets.KNOB_SIGNING_P12_BASE64 }}
           KNOB_SIGNING_P12_PASSWORD: ${{ secrets.KNOB_SIGNING_P12_PASSWORD }}
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
-        run: bash scripts/release/release.sh --publish
+        # Publishes only from main. A manual run with publish off, or from any other branch, is a
+        # trial: it builds and signs everything, to time or check it, and publishes nothing.
+        run: bash scripts/release/release.sh ${{ (github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.publish)) && '--publish' || '' }}

@@ -8,6 +8,7 @@
 #   KNOB_SIGN_KEYCHAIN=path             keychain holding that certificate
 #   KNOB_ENGINE_DIR=path                CMake build folder with knob-engine and driver/ (default build/)
 #   KNOB_FEED_URL, KNOB_BUNDLE_ID       only for testing updates against a local feed
+#   KNOB_COMPILE_ONLY=1                 compile and stop, so the release can build the engine meanwhile
 set -euo pipefail
 app_dir=$(cd -- "$(dirname -- "$0")" && pwd)
 repo_dir=$(cd -- "$app_dir/.." && pwd)
@@ -26,10 +27,33 @@ bundle="$repo_dir/build/Knob.app"
 rm -rf "$bundle"
 mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources/presets" "$bundle/Contents/Frameworks"
 if [ "${KNOB_UNIVERSAL:-0}" = 1 ]; then
-    # One build folder per chip: SwiftPM trips over two --arch builds sharing one.
+    # One build folder per chip: SwiftPM trips over two --arch builds sharing one. The two chips
+    # build at the same time, which takes about two minutes off a release; each writes its own
+    # log, shown if it fails. Sparkle is fetched first, one at a time, so they never both fetch it.
     for arch in arm64 x86_64; do
-        swift build -c "$config" --package-path "$app_dir" --arch "$arch" --scratch-path "$app_dir/.build/$arch"
+        swift package resolve --package-path "$app_dir" --scratch-path "$app_dir/.build/$arch" >/dev/null
     done
+    pids=()
+    for arch in arm64 x86_64; do
+        swift build -c "$config" --package-path "$app_dir" --arch "$arch" --scratch-path "$app_dir/.build/$arch" \
+            > "$app_dir/.build/$arch.log" 2>&1 &
+        pids+=($!)
+    done
+    failed=
+    for index in 0 1; do
+        arch=$([ "$index" = 0 ] && echo arm64 || echo x86_64)
+        if wait "${pids[$index]}"; then
+            tail -n 1 "$app_dir/.build/$arch.log"
+        else
+            cat "$app_dir/.build/$arch.log"
+            failed=$arch
+        fi
+    done
+    if [ -n "$failed" ]; then
+        echo "The $failed build failed." >&2
+        exit 1
+    fi
+    [ "${KNOB_COMPILE_ONLY:-0}" = 1 ] && exit 0
     bin_dir=$(swift build -c "$config" --package-path "$app_dir" --arch arm64 --scratch-path "$app_dir/.build/arm64" --show-bin-path)
     intel_dir=$(swift build -c "$config" --package-path "$app_dir" --arch x86_64 --scratch-path "$app_dir/.build/x86_64" --show-bin-path)
     lipo -create "$bin_dir/Knob" "$intel_dir/Knob" -output "$bundle/Contents/MacOS/Knob"
