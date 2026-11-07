@@ -39,7 +39,7 @@ final class KnobShiftDeck {
     /// Where in its file this deck's current segment started.
     var startOffset: TimeInterval = 0
 
-    init(name: String, engine: AVAudioEngine) {
+    init(name: String, engine: AVAudioEngine, output: AVAudioNode) {
         self.name = name
         let band = filter.bands[0]
         band.filterType = .highPass
@@ -96,7 +96,7 @@ final class KnobShiftDeck {
         engine.connect(filter, to: lofi, format: nil)
         engine.connect(lofi, to: echo, format: nil)
         engine.connect(echo, to: room, format: nil)
-        engine.connect(room, to: engine.mainMixerNode, format: nil)
+        engine.connect(room, to: output, format: nil)
         applyVoicePress()
     }
 

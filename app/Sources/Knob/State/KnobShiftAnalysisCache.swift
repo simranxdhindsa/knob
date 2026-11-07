@@ -51,6 +51,23 @@ enum KnobShiftAnalysisCache {
         try? data.write(to: file, options: .atomic)
     }
 
+    /// This song's saved result as it can travel to another device.
+    static func exported(for url: URL) -> Data? {
+        load(for: url).flatMap { try? encoder.encode($0) }
+    }
+
+    /// A result from another device, filed under the copy of the song that landed here, so it
+    /// isn't analysed again. Ignored if it's from a different version of the analysis.
+    static func adopt(_ data: Data, for url: URL) {
+        guard let entry = try? decoder.decode(Entry.self, from: data), entry.version == version,
+              let stamp = stamp(url), let file = entryURL(for: url) else { return }
+        let mine = Entry(version: version, path: stamp.path, size: stamp.size, modified: stamp.modified, duration: entry.duration,
+                         tailSilence: entry.tailSilence, analysis: entry.analysis, steps: entry.steps)
+        guard let encoded = try? encoder.encode(mine) else { return }
+        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? encoded.write(to: file, options: .atomic)
+    }
+
     private static func stamp(_ url: URL) -> (path: String, size: Int64, modified: Date)? {
         let path = Platform.portable(url.standardizedFileURL.path)
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.standardizedFileURL.path),

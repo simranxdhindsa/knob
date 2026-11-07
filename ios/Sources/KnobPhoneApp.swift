@@ -42,6 +42,7 @@ final class PhoneApp: ObservableObject {
             }
             model.start()
             model.restorePower()
+            KnobShiftPlayOnSession.shared.start(model: model.knobShift)
             #if DEBUG
             await Self.runChecks(model)
             #endif

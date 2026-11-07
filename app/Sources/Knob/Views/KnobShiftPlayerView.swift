@@ -22,6 +22,8 @@ struct KnobShiftPlayerView: View {
     @AppStorage(PersistKey.knobShiftTipsSeen.rawValue) var tipsSeen = ""
     /// The song on the deck, so the name changes with the cover rather than ahead of it.
     @State var deckSong: KnobShiftModel.Track?
+    @ObservedObject private var together = KnobShiftTogetherSession.shared
+    @ObservedObject private var playOn = KnobShiftPlayOnSession.shared
     @State private var importing = false
     @State private var showingSpotify = false
     @State private var showingYouTube = false
@@ -49,6 +51,9 @@ struct KnobShiftPlayerView: View {
         .background { PlayerAmbient(url: (model.mixingInto ?? model.nowPlaying)?.url).ignoresSafeArea() }
         .environment(\.surface, .glass)
         .sheet(isPresented: $showingSpotify) { KnobShiftSpotifySheet(model: model).focusEffectDisabled() }
+        .sheet(isPresented: $playOn.showing) { KnobShiftPlayOnView(model: model).focusEffectDisabled() }
+        .modifier(PlayOnAllowPrompt())
+        .sheet(isPresented: $together.showing) { KnobShiftTogetherView(model: model).focusEffectDisabled() }
         .sheet(isPresented: $showingYouTube) { KnobShiftYouTubeSheet(model: model).focusEffectDisabled() }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result else { return }
