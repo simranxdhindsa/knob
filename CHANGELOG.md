@@ -9,6 +9,11 @@ Knob 4.1 keeps the orange microphone dot away, makes low volumes easier to hear,
 
 ### New features
 
+- Listen Together plays the same music on your Mac and iPhones at the same moment, on the same network. Pick a device from the dots menu and it is asked to join. Tap Join and its own player shows the song, the cover and the queue, and every button controls the music for everyone
+- Listen Together shares your effects and equalizer, so every device sounds the same, and a line up setting helps Bluetooth speakers that play a little late
+- Play On moves the music to another Mac or iPhone and carries on from the same moment. Songs the other device doesn't have are copied over and kept in a playlist with the same name, and it asks once before a new device can play on yours
+- AirPlay and Bluetooth speakers are in the same list as your other devices, from the speaker button
+- In StandBy and the Dynamic Island the record really turns while music plays and holds still when you pause, and the StandBy card has its own KnobMix button
 - A new Playlists view from the queue: open any playlist, pick songs or add them all, and imported songs wait there until you add them
 - Knob no longer uses your Mac's audio input to carry sound, so the orange microphone dot stays off while Knob is on. Turning Knob on asks you to install a small update to its audio device, once
 - Songs Knob could not find now show YouTube matches to pick from, or you can paste a link, and Retry tries them all at once
@@ -43,6 +48,8 @@ Knob 4.1 keeps the orange microphone dot away, makes low volumes easier to hear,
 - New headphones and speakers show in Knob as soon as you connect them, with no need to restart it
 - Clean vocal handovers in a mix now work on every song, not only some of them
 - FLAC songs you add yourself now show their names and covers
+- Moving music back with Play On keeps the whole queue, and Play On stops waiting for a device that has gone away
+- The StandBy record keeps up when the song changes, and the Dynamic Island shows the cover
 
 ## 4.0
 
