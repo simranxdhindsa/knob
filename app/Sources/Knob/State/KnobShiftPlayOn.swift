@@ -159,6 +159,9 @@ enum KnobShiftPlayOn {
 
         init(device: String) { self.device = device }
 
+        /// Ends with these exact words.
+        mutating func fail(_ message: String) { stage = .failed(message) }
+
         private var isOver: Bool {
             if case .failed = stage { return true }
             return stage == .lost
@@ -231,6 +234,14 @@ enum KnobShiftPlayOn {
             part = folder.appendingPathComponent(".\(UUID().uuidString).part")
             guard FileManager.default.createFile(atPath: part.path, contents: nil) else { throw Failure.noSpace }
             handle = try FileHandle(forWritingTo: part)
+        }
+
+        /// Copies a crash left behind. They're hidden, so nothing else would ever clear them.
+        static func clearLeftovers(in folder: URL) {
+            let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+            for name in names where name.hasPrefix(".") && name.hasSuffix(".part") {
+                try? FileManager.default.removeItem(at: folder.appendingPathComponent(name))
+            }
         }
 
         /// The name, or "name 2" and so on: a song already there is never overwritten.

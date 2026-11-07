@@ -8,8 +8,14 @@ struct KnobShiftTogetherView: View {
     @Environment(\.dismiss) private var dismiss
     /// Where a drag on the seek bar has reached, 0...1, until the finger lifts.
     @State private var scrub: Double?
+    /// Shown inside Play On's list, with no title or frame of its own.
+    var embedded = false
 
     var body: some View {
+        if embedded { ScrollView { running } } else { window }
+    }
+
+    private var window: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("Listen Together").font(.system(size: 20, weight: .bold)).foregroundStyle(Glass.text)
@@ -76,23 +82,18 @@ struct KnobShiftTogetherView: View {
             if let preset = session.presetName {
                 Text("Preset: \(preset)").font(.system(size: 12)).foregroundStyle(Glass.secondary).lineLimit(1)
             }
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("Line up").font(.system(size: 13, weight: .semibold)).foregroundStyle(Glass.text)
-                    Spacer()
-                    Text("\(Int(session.lineUp * 1000)) ms").font(.system(size: 12).monospacedDigit()).foregroundStyle(Glass.secondary)
-                }
-                Slider(value: $session.lineUp, in: 0...0.4).tint(Palette.accent).accessibilityLabel("Line up")
-                Text("If this device sounds late, as Bluetooth does, slide right until they match.")
-                    .font(.system(size: 12)).foregroundStyle(Glass.tertiary).fixedSize(horizontal: false, vertical: true)
-            }
-            Text(session.soundIsOff ? "Effects are shared. Turn Knob on here to hear them." : "Effects are shared. A change on any device reaches everyone.")
-                .font(.system(size: 12)).foregroundStyle(Glass.tertiary).fixedSize(horizontal: false, vertical: true)
+            if isSharedSound { lineUp }
+            if isSharedSound { Text(session.soundIsOff ? "Effects are shared. Turn Knob on here to hear them." : "Effects are shared. A change on any device reaches everyone.")
+                .font(.system(size: 12)).foregroundStyle(Glass.tertiary).fixedSize(horizontal: false, vertical: true) }
             if session.role == .hosting {
                 Text(session.people.isEmpty ? "Waiting for others to join." : "LISTENING").font(.system(size: 11, weight: .bold)).foregroundStyle(Glass.tertiary)
                 ForEach(session.people, id: \.self) { name in row(name, action: "Remove") { session.remove(name) } }
             }
-            wide(session.role == .hosting ? "End for Everyone" : "Leave", icon: "xmark.circle") { session.leave() }
+            if session.isRemote {
+                wide("Bring Back Here", icon: "arrow.uturn.backward") { KnobShiftPlayOnSession.shared.bringBack() }
+            } else if isSharedSound {
+                wide(session.role == .hosting ? "End for Everyone" : "Leave", icon: "xmark.circle") { session.leave() }
+            }
             if !session.queue.isEmpty {
                 Text("QUEUE").font(.system(size: 11, weight: .bold)).foregroundStyle(Glass.tertiary)
                 LazyVStack(spacing: 4) {
@@ -144,8 +145,31 @@ struct KnobShiftTogetherView: View {
         .accessibilityLabel(playing ? "\(song.title), playing" : "Play \(song.title)")
     }
 
+    /// Line up only matters when two devices play at once.
+    private var isSharedSound: Bool {
+        switch session.role {
+        case .hosting, .listening: return true
+        default: return false
+        }
+    }
+
+    private var lineUp: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Line up").font(.system(size: 13, weight: .semibold)).foregroundStyle(Glass.text)
+                Spacer()
+                Text("\(Int(session.lineUp * 1000)) ms").font(.system(size: 12).monospacedDigit()).foregroundStyle(Glass.secondary)
+            }
+            Slider(value: $session.lineUp, in: 0...0.4).tint(Palette.accent).accessibilityLabel("Line up")
+            Text("If this device sounds late, as Bluetooth does, slide right until they match.")
+                .font(.system(size: 12)).foregroundStyle(Glass.tertiary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     private var heading: String {
         if case .listening(let name) = session.role { return "Listening to \(name)" }
+        if case .remote(let name) = session.role { return "Playing on \(name)" }
+        if case .playing(let name) = session.role { return "Moved here from \(name)" }
         let count = session.people.count
         return count == 0 ? "Sharing from this \(Platform.deviceName)" : "\(count) listening"
     }

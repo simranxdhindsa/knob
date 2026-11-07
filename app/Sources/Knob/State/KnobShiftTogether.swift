@@ -28,6 +28,9 @@ enum KnobShiftTogether {
 
     enum Kind: UInt8 {
         case hello = 1, sound = 2, anchor = 3, state = 4, command = 5, cover = 6, effects = 7, queue = 8
+        // Play On, on its own connection.
+        case playHello = 20, playAllow = 21, handover = 22, need = 23, fileStart = 24, fileChunk = 25, fileEnd = 26
+        case ready = 27, go = 28, refused = 29, takeBack = 30
     }
 
     /// What a listener may send: small, and never sound.

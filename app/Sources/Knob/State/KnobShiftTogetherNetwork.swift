@@ -322,7 +322,7 @@ final class KnobShiftTogetherGuest: @unchecked Sendable {
         case .queue:
             guard let songs = try? JSONDecoder().decode([KnobShiftTogether.Song].self, from: message.body) else { return }
             onQueue?(Array(songs.prefix(KnobShiftTogether.longestQueue)))
-        case .command: break
+        default: break
         }
     }
 

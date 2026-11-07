@@ -134,8 +134,12 @@ enum KnobShiftPlayOnTests {
             var stopped = try start("stopped.m4a")
             try stopped.add(Data(repeating: 1, count: 2))
             stopped.cancel()
+            try? Data([1]).write(to: folder.appendingPathComponent(".crashed.part"))
+            try? Data([1]).write(to: folder.appendingPathComponent("keep.m4a"))
+            On.Incoming.clearLeftovers(in: folder)
+            expect(FileManager.default.fileExists(atPath: folder.appendingPathComponent("keep.m4a").path), "real songs are left alone")
             let left = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
-            expect(!left.contains { $0.contains(".part") }, "a cancelled copy leaves nothing behind")
+            expect(!left.contains { $0.contains(".part") }, "a cancelled copy or a crash leaves nothing behind")
         } catch { expect(false, "stopping worked: \(error)") }
     }
 

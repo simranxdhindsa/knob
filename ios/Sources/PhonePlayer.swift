@@ -22,6 +22,7 @@ struct PhonePlayer: View {
     /// The player has been up for a moment, so the tip doesn't land on top of its opening.
     @State private var turnTipReady = false
     @ObservedObject private var together = KnobShiftTogetherSession.shared
+    @ObservedObject private var playOn = KnobShiftPlayOnSession.shared
     @State private var importing = false
 
     var body: some View {
@@ -33,6 +34,8 @@ struct PhonePlayer: View {
             }
         }
         .background { PlayerAmbient(url: (model.mixingInto ?? model.nowPlaying)?.url).ignoresSafeArea() }
+        .sheet(isPresented: $playOn.showing) { KnobShiftPlayOnView(model: model).focusEffectDisabled() }
+        .modifier(PlayOnAllowPrompt())
         .sheet(isPresented: $together.showing) { KnobShiftTogetherView(model: model).focusEffectDisabled() }
         .sheet(item: $sheets.mac) { PhoneMacSheet(model: model, source: $0) }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
@@ -164,7 +167,7 @@ struct PhonePlayer: View {
             HStack {
                 PhoneSoundButton(knob: knob) { sheets.sound = true }
                 Spacer()
-                PhoneOutputButton()
+                PhoneOutputButton { KnobShiftPlayOnSession.shared.show(model) }
                 Spacer()
                 PhoneDeckButton(systemImage: "list.bullet", label: sheets.queue ? "Hide the queue" : "Show the queue", lit: sheets.queue) {
                     sheets.queue.toggle()

@@ -8,7 +8,9 @@ import SwiftUI
 final class KnobShiftTogetherSession: ObservableObject {
     static let shared = KnobShiftTogetherSession()
 
-    enum Role: Equatable { case off, hosting, listening(String) }
+    /// Play On adds two with no shared sound: `playing` is the device the music moved to, sending
+    /// its state out, and `remote` is the one it came from, controlling it.
+    enum Role: Equatable { case off, hosting, listening(String), playing(String), remote(String) }
     struct Nearby: Identifiable, Equatable {
         let name: String
         let endpoint: NWEndpoint
@@ -43,6 +45,8 @@ final class KnobShiftTogetherSession: ObservableObject {
     private var lostAt: Date?
     private var ticker: Task<Void, Never>?
     private var watching: Set<AnyCancellable> = []
+    /// Play On's connection, in place of a Listen Together host or guest.
+    private var outbound: (@Sendable (KnobShiftTogether.Message) -> Void)?
 
     private var deviceName: String {
         #if os(macOS)
@@ -117,6 +121,12 @@ final class KnobShiftTogetherSession: ObservableObject {
         status = nil
         loadLineUp()
         model.together?.setLineUp(lineUp)
+        watchModel(model)
+        watchSound()
+        model.log("TOGETHER", "Hosting as \(deviceName).")
+    }
+
+    private func watchModel(_ model: KnobShiftModel) {
         model.$nowPlaying.sink { [weak self] _ in Task { @MainActor [weak self] in self?.sendCover(); self?.sendState() } }.store(in: &watching)
         model.$isPlaying.sink { [weak self] _ in Task { @MainActor [weak self] in self?.sendState() } }.store(in: &watching)
         model.$isShuffled.sink { [weak self] _ in Task { @MainActor [weak self] in self?.sendState() } }.store(in: &watching)
@@ -128,8 +138,6 @@ final class KnobShiftTogetherSession: ObservableObject {
                 try? await Task.sleep(for: .seconds(1))
             }
         }
-        watchSound()
-        model.log("TOGETHER", "Hosting as \(deviceName).")
     }
 
     private func currentState(ended: Bool? = nil) -> KnobShiftTogether.State? {
@@ -142,17 +150,21 @@ final class KnobShiftTogetherSession: ObservableObject {
     }
 
     private func sendState() {
-        guard let host, let state = currentState(), let message = KnobShiftTogether.json(.state, state) else { return }
+        guard let state = currentState(), let message = KnobShiftTogether.json(.state, state) else { return }
         self.state = state
-        host.send(message)
+        broadcast(message)
+    }
+
+    private func broadcast(_ message: KnobShiftTogether.Message) {
+        if let host { host.send(message) } else { outbound?(message) }
     }
 
     private func sendQueue() {
-        guard let model, let host else { return }
+        guard let model else { return }
         queue = model.tracks.prefix(KnobShiftTogether.longestQueue).map {
             KnobShiftTogether.Song(id: $0.id.uuidString, title: $0.name, artist: $0.artist)
         }
-        if let message = KnobShiftTogether.json(.queue, queue) { host.send(message) }
+        if let message = KnobShiftTogether.json(.queue, queue) { broadcast(message) }
     }
 
     private func sendCover() {
@@ -160,7 +172,7 @@ final class KnobShiftTogetherSession: ObservableObject {
         Task { [weak self] in
             guard let image = await KnobShiftArtwork.load(url), let data = Self.jpeg(image), data.count < KnobShiftTogether.longestMessage - 8 else { return }
             self?.cover = image
-            self?.host?.send(KnobShiftTogether.Message(kind: .cover, body: data))
+            self?.broadcast(KnobShiftTogether.Message(kind: .cover, body: data))
         }
     }
 
@@ -174,7 +186,7 @@ final class KnobShiftTogetherSession: ObservableObject {
     }
 
     /// Runs a listener's button press, or this device's while listening, on the host.
-    private func run(_ command: KnobShiftTogether.Command) {
+    func run(_ command: KnobShiftTogether.Command) {
         guard let model else { return }
         switch command.action {
         case .playPause: model.pauseOrResume()
@@ -268,12 +280,18 @@ final class KnobShiftTogetherSession: ObservableObject {
 
     func send(_ action: KnobShiftTogether.Action, time: Double? = nil, song: String? = nil) {
         let command = KnobShiftTogether.Command(action: action, time: time, song: song)
-        if role == .hosting { run(command) } else { guest?.send(command) }
+        switch role {
+        case .hosting, .playing: run(command)
+        case .remote: if let message = KnobShiftTogether.json(.command, command) { outbound?(message) }
+        default: guest?.send(command)
+        }
     }
 
     func leave() { stop(saying: nil) }
 
     // MARK: Knob's own sound
+
+    var currentSound: KnobShiftTogether.Effects? { currentEffects }
 
     private var currentEffects: KnobShiftTogether.Effects? {
         sound.map { KnobShiftTogether.Effects(effects: $0.effects, eq: $0.eq, preset: $0.currentPreset?.name) }
@@ -282,7 +300,7 @@ final class KnobShiftTogetherSession: ObservableObject {
     /// Any change on this device, by knob, fader or preset, goes to everyone.
     private func watchSound() {
         guard let sound else { return }
-        if role == .hosting { soundChanged() }
+        if role == .hosting || isPlayingHere { soundChanged() }
         sound.$effects.combineLatest(sound.$eq, sound.$currentPreset).dropFirst().debounce(for: .milliseconds(80), scheduler: RunLoop.main)
             .sink { [weak self] _, _, _ in Task { @MainActor [weak self] in self?.soundChanged() } }
             .store(in: &watching)
@@ -292,20 +310,21 @@ final class KnobShiftTogetherSession: ObservableObject {
         guard let current = currentEffects, sharedEffects.map({ !$0.isClose(to: current) }) ?? true else { return }
         sharedEffects = current
         presetName = current.preset
-        if role == .hosting {
-            if let message = KnobShiftTogether.json(.effects, current) { host?.send(message) }
-        } else {
-            guest?.send(current)
+        guard let message = KnobShiftTogether.json(.effects, current) else { return }
+        switch role {
+        case .hosting, .playing: broadcast(message)
+        case .remote: outbound?(message)
+        default: guest?.send(current)
         }
     }
 
     /// Another device changed the sound. The host passes it on to everyone else.
-    private func received(_ effects: KnobShiftTogether.Effects) {
+    func received(_ effects: KnobShiftTogether.Effects) {
         guard role != .off else { return }
         sharedEffects = effects
         presetName = effects.preset
         apply(effects)
-        if role == .hosting, let message = KnobShiftTogether.json(.effects, effects) { host?.send(message) }
+        if role == .hosting || isPlayingHere, let message = KnobShiftTogether.json(.effects, effects) { broadcast(message) }
     }
 
     private func apply(_ settings: KnobShiftTogether.Effects) {
@@ -319,6 +338,57 @@ final class KnobShiftTogetherSession: ObservableObject {
 
     /// Effects only reach the speakers on a Mac while Knob is on.
     var soundIsOff: Bool { role != .off && sound?.powerOn == false }
+
+    // MARK: Play On
+
+    private var isPlayingHere: Bool {
+        if case .playing = role { return true }
+        return false
+    }
+
+    var isListening: Bool {
+        if case .listening = role { return true }
+        return false
+    }
+
+    var isRemote: Bool {
+        if case .remote = role { return true }
+        return false
+    }
+
+    /// The music moved here from `name`: tells it what's playing and takes its button presses.
+    func beginPlaying(from name: String, model: KnobShiftModel, send: @escaping @Sendable (KnobShiftTogether.Message) -> Void) {
+        stop(saying: nil)
+        self.model = model
+        outbound = send
+        role = .playing(name)
+        watchModel(model)
+        watchSound()
+    }
+
+    /// The music moved to `name`: this device is now its remote, with the same controls.
+    func beginRemote(of name: String, model: KnobShiftModel, send: @escaping @Sendable (KnobShiftTogether.Message) -> Void) {
+        stop(saying: nil)
+        self.model = model
+        outbound = send
+        role = .remote(name)
+        watchSound()
+    }
+
+    /// What the device the music moved to says is happening.
+    func remoteUpdate(_ message: KnobShiftTogether.Message) {
+        switch message.kind {
+        case .state: state = try? JSONDecoder().decode(KnobShiftTogether.State.self, from: message.body)
+        case .queue: queue = (try? JSONDecoder().decode([KnobShiftTogether.Song].self, from: message.body)) ?? queue
+        case .cover: cover = PlatformImage(data: message.body)
+        default: break
+        }
+    }
+
+    func endPlayOn(saying message: String?) {
+        guard isRemote || isPlayingHere else { return }
+        stop(saying: message)
+    }
 
     // MARK: Changes
 
@@ -339,6 +409,7 @@ final class KnobShiftTogetherSession: ObservableObject {
         host = nil
         guest = nil
         player = nil
+        outbound = nil
         joined = nil
         lostAt = nil
         role = .off
