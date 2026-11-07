@@ -301,6 +301,52 @@ final class PhoneApp: ObservableObject {
     /// (a number of seconds instead waits that long first). KNOB_PHONE_QUEUE=1 opens the queue (or
     /// after that many seconds), KNOB_PHONE_MIX=n asks for a KnobMix and KNOB_PHONE_PAUSE=n pauses,
     /// both after n seconds. KNOB_PHONE_HOLD and KNOB_PHONE_SHUFFLE are explained where they run.
+    /// KNOB_PHONE_TOGETHER drives Play On and Listen Together with no finger: `playon` and
+    /// `together` open their screens, `move` sends the music to KNOB_PLAYON_TARGET, `allow`
+    /// answers Allow, `host` starts Listen Together, `join` joins the first session nearby.
+    private static func togetherCheck(_ model: KnobShiftModel, action: String) async {
+        let playOn = KnobShiftPlayOnSession.shared, together = KnobShiftTogetherSession.shared
+        let target = ProcessInfo.processInfo.environment["KNOB_PLAYON_TARGET"] ?? ""
+        try? await Task.sleep(for: .seconds(4))
+        switch action {
+        case "playon":
+            playOn.show(model)
+        case "together":
+            together.show(model)
+        case "host":
+            for _ in 0..<600 where !model.isPlaying { try? await Task.sleep(for: .milliseconds(100)) }
+            together.show(model)
+            together.startHosting(model)
+        case "join":
+            together.show(model)
+            together.startLooking()
+            for _ in 0..<80 where together.nearby.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
+            if let first = together.nearby.first { together.join(first, model: model) }
+        case "move":
+            for _ in 0..<600 where !model.isPlaying { try? await Task.sleep(for: .milliseconds(100)) }
+            try? await Task.sleep(for: .seconds(3))
+            playOn.show(model)
+            playOn.startLooking()
+            for _ in 0..<80 where !playOn.devices.contains(where: { $0.name.contains(target) }) { try? await Task.sleep(for: .milliseconds(250)) }
+            if let device = playOn.devices.first(where: { $0.name.contains(target) }) {
+                model.log("CHECK", "Moving to \(device.name).")
+                playOn.move(to: device)
+            } else {
+                model.log("CHECK", "Could not find \(target).")
+            }
+        case "allow":
+            for _ in 0..<900 {
+                if playOn.asking != nil {
+                    try? await Task.sleep(for: .seconds(3))
+                    model.log("CHECK", "Answering Allow.")
+                    playOn.answerAsking(allow: true)
+                }
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+        default: break
+        }
+    }
+
     private static func runChecks(_ model: KnobModel) async {
         let environment = ProcessInfo.processInfo.environment
         if let seconds = environment["KNOB_PHONE_TURN"].flatMap(Double.init) {
@@ -314,6 +360,9 @@ final class PhoneApp: ObservableObject {
         }
         if let seconds = environment["KNOB_PHONE_BEDSIDE"].flatMap(Double.init) {
             Task { await bedsideCheck(model.knobShift, after: seconds) }
+        }
+        if let action = environment["KNOB_PHONE_TOGETHER"] {
+            Task { await togetherCheck(model.knobShift, action: action) }
         }
         if let seconds = environment["KNOB_PHONE_SWAP"].flatMap(Double.init) {
             Task { await swapCheck(model.knobShift, after: seconds) }

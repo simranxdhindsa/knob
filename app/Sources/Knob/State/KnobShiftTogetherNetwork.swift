@@ -218,6 +218,7 @@ final class KnobShiftTogetherGuest: @unchecked Sendable {
     private var pinger: NWConnection?
     private var timer: DispatchSourceTimer?
     private var finished = false
+    private var isConnected = false
     var onState: (@Sendable (KnobShiftTogether.State) -> Void)?
     var onCover: (@Sendable (Data) -> Void)?
     var onEffects: (@Sendable (KnobShiftTogether.Effects) -> Void)?
@@ -238,11 +239,16 @@ final class KnobShiftTogetherGuest: @unchecked Sendable {
     func start() {
         connection.stateUpdateHandler = { [weak self] state in
             switch state {
-            case .failed, .cancelled: self?.finish(.lost)
+            case .failed, .cancelled, .waiting: self?.finish(.lost)
+            case .ready: self?.isConnected = true
             default: break
             }
         }
         connection.start(queue: queue)
+        // A device that has gone never fails a connection: it just stays "preparing".
+        queue.asyncAfter(deadline: .now() + KnobShiftTogether.connectSeconds) { [weak self] in
+            if self?.isConnected == false { self?.finish(.lost) }
+        }
         if let hello = KnobShiftTogether.json(.hello, KnobShiftTogether.Hello(version: KnobShiftTogether.version, name: name)) {
             send(hello)
         }

@@ -16,6 +16,18 @@ enum KnobShiftTogetherCheck {
             Task { @MainActor in await pair(URL(fileURLWithPath: arguments[1]), URL(fileURLWithPath: arguments[2])) }
             app.run()
         }
+        if arguments.first == "host", arguments.count >= 4 {
+            let app = NSApplication.shared
+            app.setActivationPolicy(.prohibited)
+            Task { @MainActor in await hostFor(Double(arguments[3]) ?? 20, URL(fileURLWithPath: arguments[1]), URL(fileURLWithPath: arguments[2])) }
+            app.run()
+        }
+        if arguments.first == "watch", arguments.count >= 2 {
+            let app = NSApplication.shared
+            app.setActivationPolicy(.prohibited)
+            Task { @MainActor in await watch(Double(arguments[1]) ?? 30) }
+            app.run()
+        }
         if arguments.first == "guest" {
             let app = NSApplication.shared
             app.setActivationPolicy(.prohibited)
@@ -57,6 +69,54 @@ enum KnobShiftTogetherCheck {
         print("People at the end: \(session.people)")
         session.leave()
         try? await Task.sleep(for: .seconds(1))
+        exit(0)
+    }
+
+    /// A host that runs for a while, then ends for everyone the way the button does.
+    private static func hostFor(_ seconds: Double, _ first: URL, _ second: URL) async {
+        let model = KnobShiftModel(restoresQueue: false)
+        await model.addTracks([first, second])
+        guard let track = model.tracks.first else { print("FAIL could not add the songs"); exit(1) }
+        model.playForCheck(volume: 0, bySelecting: track)
+        let session = KnobShiftTogetherSession.shared
+        session.startHosting(model)
+        print("Hosting: \(session.role == .hosting)")
+        try? await Task.sleep(for: .seconds(seconds))
+        print("Ending for everyone")
+        session.leave()
+        try? await Task.sleep(for: .seconds(1))
+        exit(0)
+    }
+
+    /// A listener that reports what it sees, and changes output halfway to see it pick up again.
+    private static func watch(_ seconds: Double) async {
+        let model = KnobShiftModel(restoresQueue: false)
+        model.playForCheck(volume: 0)
+        let session = KnobShiftTogetherSession.shared
+        session.startLooking()
+        for _ in 0..<160 where session.nearby.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
+        guard let found = session.nearby.first else { print("FAIL nobody found"); exit(1) }
+        session.join(found, model: model)
+        print("Joined \(found.name)")
+        var last = ""
+        let start = Date()
+        var changed = false
+        while Date().timeIntervalSince(start) < seconds {
+            if !changed, ProcessInfo.processInfo.environment["KNOB_WATCH_OUTPUT"] != nil, Date().timeIntervalSince(start) > 10 {
+                changed = true
+                print("Output changes now")
+                model.audioEngine.stop()
+                session.outputChanged()
+            }
+            let ring = session.debugRing
+            let line = "role \(session.role), status \(session.status ?? "none"), underruns \(ring?.underruns ?? -1), jumps \(ring?.jumps ?? -1)"
+            if line != last { print("\(Int(Date().timeIntervalSince(start)))s \(line)"); last = line }
+            if session.role == .off { break }
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        if let ring = session.debugRing {
+            print(String(format: "Final error %.3f ms, speed %.0f ppm, underruns %d, jumps %d", ring.error * 1000, ring.correction * 1e6, ring.underruns, ring.jumps))
+        }
         exit(0)
     }
 

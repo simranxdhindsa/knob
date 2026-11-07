@@ -23,6 +23,9 @@ enum KnobShiftTogether {
     /// sounded crushed, while playing straight from the decks keeps those peaks.
     static let headroom: Float = 0.5
 
+    /// How long a device gets to answer before it counts as gone.
+    static let connectSeconds = 6.0
+
     /// Anything longer is refused and ends the connection: a whole cover is the longest message.
     static let longestMessage = 512 * 1024
 

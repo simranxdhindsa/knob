@@ -8,6 +8,7 @@ final class KnobShiftPlayOnLink: @unchecked Sendable {
     private let queue = DispatchQueue(label: "knob.playon.link", qos: .userInitiated)
     private var reader = KnobShiftTogether.Reader()
     private var closed = false
+    private var isConnected = false
     var onMessage: (@Sendable (KnobShiftTogether.Message) -> Void)?
     var onClose: (@Sendable () -> Void)?
 
@@ -24,11 +25,16 @@ final class KnobShiftPlayOnLink: @unchecked Sendable {
     func start() {
         connection.stateUpdateHandler = { [weak self] state in
             switch state {
-            case .failed, .cancelled: self?.finish()
+            case .failed, .cancelled, .waiting: self?.finish()
+            case .ready: self?.isConnected = true
             default: break
             }
         }
         connection.start(queue: queue)
+        // A device that has gone never fails a connection: it just stays "preparing".
+        queue.asyncAfter(deadline: .now() + KnobShiftTogether.connectSeconds) { [weak self] in
+            if self?.isConnected == false { self?.finish() }
+        }
         receive()
     }
 
