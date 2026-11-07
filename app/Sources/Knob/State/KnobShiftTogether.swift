@@ -68,9 +68,15 @@ enum KnobShiftTogether {
         var id: String
         var title: String
         var artist: String?
+        /// Seconds. Older copies of Knob leave it out.
+        var duration: Double?
     }
 
     /// More than this and the rest of the host's queue isn't shown on the others.
+    /// The Bonjour record's keys for the devices a session asks to join, and which time it asked.
+    static let invitedKey = "invited"
+    static let roundKey = "round"
+
     static let longestQueue = 1_000
 
     /// A fixed list: anything else from a listener is ignored.

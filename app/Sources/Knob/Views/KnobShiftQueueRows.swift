@@ -226,3 +226,43 @@ struct PreparingRing: View {
         .accessibilityLabel(active ? "Preparing, \(Int(progress * 100)) percent" : "Waiting to prepare")
     }
 }
+
+/// A song in the queue of the device playing the music, shown while listening to it or
+/// controlling it from here. It looks like the queue's own rows; the cover is this device's copy
+/// of the song when it has one.
+struct QueueRemoteRow: View {
+    let song: KnobShiftTogether.Song
+    let url: URL?
+    let playing: Bool
+    /// Before the playing song.
+    let played: Bool
+    @Environment(\.surface) private var surface
+
+    var body: some View {
+        let parts = SongTitle.parts(name: song.title, artist: song.artist)
+        let detail = [parts.artist, parts.source].compactMap { $0 }.joined(separator: "  ·  ")
+        HStack(spacing: 10) {
+            AlbumArtwork(url: url, size: 34, lit: playing)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(parts.name).font(.system(size: 12, weight: playing ? .bold : .medium))
+                    .foregroundStyle(playing ? Palette.accent : surface.text).lineLimit(1)
+                if !detail.isEmpty {
+                    Text(detail).font(.system(size: 10)).foregroundStyle(surface.tertiary).lineLimit(1)
+                }
+            }
+            Spacer(minLength: 4)
+            if let duration = song.duration, duration > 0 {
+                Text(KnobShiftNowPlaying.clock(duration))
+                    .font(.system(size: 10, weight: .medium).monospacedDigit()).foregroundStyle(surface.tertiary)
+            }
+        }
+        .opacity(played && !playing ? 0.5 : 1)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .frame(minHeight: QueueRowStyle.tap)
+        .background(QueueRowStyle.background(playing: playing, selected: false, surface: surface))
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(playing ? "Playing" : (played ? "Played" : ""))
+    }
+}

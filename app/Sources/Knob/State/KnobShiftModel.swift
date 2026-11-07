@@ -291,6 +291,8 @@ final class KnobShiftModel: ObservableObject {
     var togetherCapture: KnobShiftTogetherCapture?
     /// The song the current plan or blend leads into, for the log when it is called off.
     var plannedNext: Track?
+    /// Another device's music shown in the player while listening to it (KnobShiftModel+Mirror.swift).
+    var mirror: KnobShiftMirror?
     var isProcessing = false
 
     private var outputFormatDescription: String {
@@ -415,7 +417,7 @@ final class KnobShiftModel: ObservableObject {
 
     /// When a newly ready song becomes the next one while music plays, plan the mix into it.
     func refreshPlanIfNeeded() {
-        guard isPlaying, mixState != .mixing, nowPlaying != nil, tracks.count > 1,
+        guard !isMirroring, isPlaying, mixState != .mixing, nowPlaying != nil, tracks.count > 1,
               abs(primaryDeck.rate - 1) < 0.001 else { return }
         let expected = tracks[(currentIndex + 1) % tracks.count]
         guard plannedNext != expected else { return }
@@ -424,7 +426,7 @@ final class KnobShiftModel: ObservableObject {
     }
 
     func play() {
-        guard !tracks.isEmpty else { return }
+        guard !isMirroring, !tracks.isEmpty else { return }
         stop()
         currentIndex = min(currentIndex, tracks.count - 1)
         log("PLAY", "Starting \(tracks[currentIndex].title).")
@@ -482,7 +484,7 @@ final class KnobShiftModel: ObservableObject {
     }
 
     func remove(_ track: Track) {
-        guard let index = tracks.firstIndex(of: track) else { return }
+        guard !isMirroring, let index = tracks.firstIndex(of: track) else { return }
         if nowPlaying == track { stop() }
         tracks.remove(at: index)
         unshuffled.removeAll { $0 == track }
@@ -496,6 +498,7 @@ final class KnobShiftModel: ObservableObject {
     }
 
     func pauseOrResume() {
+        if sendToMirror(.playPause) { return }
         releaseHold?()
         guard nowPlaying != nil else { play(); return }
         if isPlaying, mixState == .mixing, transitionTask != nil {
@@ -532,6 +535,7 @@ final class KnobShiftModel: ObservableObject {
     }
 
     func previous() {
+        if sendToMirror(.previous) { return }
         releaseHold?()
         guard !tracks.isEmpty else { return }
         if playbackTime > 3 { seek(to: 0); return }
@@ -541,6 +545,7 @@ final class KnobShiftModel: ObservableObject {
     }
 
     func next() {
+        if sendToMirror(.next) { return }
         releaseHold?()
         guard !tracks.isEmpty else { return }
         currentIndex = (currentIndex + 1) % tracks.count
@@ -549,6 +554,7 @@ final class KnobShiftModel: ObservableObject {
     }
 
     func select(_ track: Track) {
+        if sendToMirror(.pick, track: track) { return }
         guard let index = tracks.firstIndex(of: track) else { return }
         currentIndex = index
         log("TRANSPORT", "Selected \(track.title).")
@@ -556,6 +562,7 @@ final class KnobShiftModel: ObservableObject {
     }
 
     func seek(to time: TimeInterval) {
+        if sendToMirror(.seek, time: time) { return }
         releaseHold?()
         guard let track = nowPlaying else { return }
         let wasPlaying = isPlaying

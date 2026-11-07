@@ -16,6 +16,7 @@ extension KnobShiftModel {
     /// Mixes into the next song at the next good moment rather than at once: the next four bar
     /// phrase or break in the music that leaves two bars for the new beats to come in first.
     func mixNow() {
+        if sendToMirror(.mixNow) { return }
         guard let current = nowPlaying, isPlaying, tracks.count > 1, mixState != .mixing, !mixNowWaiting else { return }
         guard abs(primaryDeck.rate - 1) < 0.001 else {
             log("KNOBMIX NOW", "The planned mix is already easing in, so it carries on as planned.")
@@ -40,6 +41,7 @@ extension KnobShiftModel {
     }
 
     func scheduleNext(handoffAt: TimeInterval? = nil) {
+        guard !isMirroring else { return }
         guard let current = nowPlaying, tracks.count > 1 else {
             mixState = .ready
             transitionDescription = "Playing normally."

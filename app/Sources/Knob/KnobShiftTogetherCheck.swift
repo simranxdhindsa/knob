@@ -79,7 +79,16 @@ enum KnobShiftTogetherCheck {
         guard let track = model.tracks.first else { print("FAIL could not add the songs"); exit(1) }
         model.playForCheck(volume: 0, bySelecting: track)
         let session = KnobShiftTogetherSession.shared
-        session.startHosting(model)
+        // KNOB_TOGETHER_ASK names a device to ask to join, the way the player's menu does.
+        if let name = ProcessInfo.processInfo.environment["KNOB_TOGETHER_ASK"] {
+            KnobShiftPlayOnSession.shared.startLooking()
+            for _ in 0..<80 where !session.devices.contains(where: { $0.contains(name) }) { try? await Task.sleep(for: .milliseconds(250)) }
+            guard let device = session.devices.first(where: { $0.contains(name) }) else { print("FAIL could not find \(name)"); exit(1) }
+            session.listen(with: device, model: model)
+            print("Asked \(device)")
+        } else {
+            session.startHosting(model)
+        }
         print("Hosting: \(session.role == .hosting)")
         try? await Task.sleep(for: .seconds(seconds))
         print("Ending for everyone")

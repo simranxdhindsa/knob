@@ -6,6 +6,7 @@ struct KnobShiftTogetherView: View {
     @ObservedObject var model: KnobShiftModel
     @ObservedObject private var session = KnobShiftTogetherSession.shared
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.surface) private var surface
     /// Where a drag on the seek bar has reached, 0...1, until the finger lifts.
     @State private var scrub: Double?
     /// Shown inside Play On's list, with no title or frame of its own.
@@ -94,12 +95,7 @@ struct KnobShiftTogetherView: View {
             } else if isSharedSound {
                 wide(session.role == .hosting ? "End for Everyone" : "Leave", icon: "xmark.circle") { session.leave() }
             }
-            if !session.queue.isEmpty {
-                Text("QUEUE").font(.system(size: 11, weight: .bold)).foregroundStyle(Glass.secondary)
-                LazyVStack(spacing: 4) {
-                    ForEach(session.queue) { song in queueRow(song) }
-                }
-            }
+            if !session.queue.isEmpty { queue }
         }
     }
 
@@ -126,23 +122,28 @@ struct KnobShiftTogetherView: View {
         }
     }
 
-    private func queueRow(_ song: KnobShiftTogether.Song) -> some View {
-        let playing = song.id == session.state?.song
-        return Button { session.send(.pick, song: song.id) } label: {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(song.title).font(.system(size: 14, weight: playing ? .semibold : .regular))
-                    .foregroundStyle(playing ? Palette.accent : Glass.text).lineLimit(1)
-                if let artist = song.artist {
-                    Text(artist).font(.system(size: 12)).foregroundStyle(Glass.secondary).lineLimit(1)
+    private var queue: some View {
+        let playingIndex = session.queue.firstIndex { $0.id == session.state?.song }
+        let local = Dictionary(model.tracks.map { ($0.id.uuidString, $0.url) }, uniquingKeysWith: { first, _ in first })
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("QUEUE").font(.system(size: 11, weight: .bold)).foregroundStyle(surface.secondary)
+                Spacer()
+                Text(session.queue.count == 1 ? "1 song" : "\(session.queue.count) songs")
+                    .font(.system(size: 11, weight: .medium).monospacedDigit()).foregroundStyle(surface.tertiary)
+            }
+            LazyVStack(spacing: 2) {
+                ForEach(Array(session.queue.enumerated()), id: \.element.id) { index, song in
+                    let playing = index == playingIndex
+                    Button { session.send(.pick, song: song.id) } label: {
+                        QueueRemoteRow(song: song, url: local[song.id], playing: playing,
+                                       played: playingIndex.map { index < $0 } ?? false)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(playing ? "\(song.title), playing" : "Play \(song.title)")
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .padding(.horizontal, 12)
-            .background(Glass.fill, in: RoundedRectangle(cornerRadius: 10))
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(playing ? "\(song.title), playing" : "Play \(song.title)")
     }
 
     private static let longestLineUp = 0.4
@@ -220,5 +221,21 @@ struct KnobShiftTogetherView: View {
         }
         .padding(.horizontal, 12)
         .background(Glass.fill, in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+/// Asks here whether to join a Listen Together session another device has just started.
+struct TogetherInvitePrompt: ViewModifier {
+    @ObservedObject private var together = KnobShiftTogetherSession.shared
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog("\(together.invite?.name ?? "A device nearby") started Listen Together",
+                                   isPresented: Binding(get: { together.invite != nil }, set: { if !$0, together.invite != nil { together.answerInvite(join: false) } }),
+                                   titleVisibility: .visible) {
+            Button("Join") { together.answerInvite(join: true) }
+            Button("Not Now", role: .cancel) { together.answerInvite(join: false) }
+        } message: {
+            Text("Join to hear the same music here at the same moment.")
+        }
     }
 }

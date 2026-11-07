@@ -21,7 +21,6 @@ struct PhonePlayer: View {
     @AppStorage(PersistKey.knobShiftTipsSeen.rawValue) private var tipsSeen = ""
     /// The player has been up for a moment, so the tip doesn't land on top of its opening.
     @State private var turnTipReady = false
-    @ObservedObject private var together = KnobShiftTogetherSession.shared
     @ObservedObject private var playOn = KnobShiftPlayOnSession.shared
     @State private var importing = false
 
@@ -36,7 +35,9 @@ struct PhonePlayer: View {
         .background { PlayerAmbient(url: (model.mixingInto ?? model.nowPlaying)?.url).ignoresSafeArea() }
         .sheet(isPresented: $playOn.showing) { KnobShiftPlayOnView(model: model).focusEffectDisabled() }
         .modifier(PlayOnAllowPrompt())
-        .sheet(isPresented: $together.showing) { KnobShiftTogetherView(model: model).focusEffectDisabled() }
+        .modifier(TogetherInvitePrompt())
+        // Hidden while the queue is open, where the song's title moves up to the bar's place.
+        .overlay(alignment: .top) { if !sheets.queue { TogetherBar(model: model).padding(.top, 4).padding(.horizontal, 16) } }
         .sheet(item: $sheets.mac) { PhoneMacSheet(model: model, source: $0) }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result else { return }

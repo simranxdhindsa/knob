@@ -120,7 +120,15 @@ final class KnobShiftPlayOnSession: ObservableObject {
         self.browser = browser
     }
 
+    /// Keeps the list of nearby devices up the whole time Knob is open, for Listen Together.
+    func keepLooking() {
+        alwaysLooking = true
+        startLooking()
+    }
+    private var alwaysLooking = false
+
     func stopLooking() {
+        guard !alwaysLooking else { return }
         browser?.cancel()
         browser = nil
     }

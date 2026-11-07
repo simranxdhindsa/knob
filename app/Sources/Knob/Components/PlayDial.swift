@@ -20,6 +20,15 @@ extension View {
             background(.ultraThinMaterial, in: Circle())
         }
     }
+
+    /// The same glass as a pill, for a bar of text and buttons.
+    @ViewBuilder func playerGlassCapsule() -> some View {
+        if #available(iOS 26, macOS 26, *) {
+            glassEffect(.regular, in: .capsule)
+        } else {
+            background(.ultraThinMaterial, in: Capsule())
+        }
+    }
 }
 
 /// Glass buttons side by side share one pass of Liquid Glass.

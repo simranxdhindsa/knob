@@ -16,6 +16,7 @@ extension KnobShiftModel {
     var isArranged: Bool { isShuffled || isMixOrdered }
 
     func toggleShuffle() {
+        if sendToMirror(.shuffle) { return }
         shuffleToRestore = nil
         if isShuffled {
             tracks = unshuffled
@@ -39,6 +40,8 @@ extension KnobShiftModel {
     /// Moves songs in the order that is showing. In shuffle the user's own order is left as it
     /// was, so turning shuffle off still restores it.
     func move(fromOffsets source: IndexSet, toOffset destination: Int) {
+        // The order belongs to the device playing while listening to it.
+        guard !isMirroring else { return }
         tracks.move(fromOffsets: source, toOffset: destination)
         if !isArranged { orderBeforeSort = nil }
         log("QUEUE", "Reordered: " + tracks.map(\.name).joined(separator: ", ") + ".")
@@ -58,7 +61,7 @@ extension KnobShiftModel {
     /// One change and one save, however many songs. The files stay on the Mac; a Spotify song
     /// still waiting to download is not downloaded again later.
     func remove(ids: Set<UUID>, remembers: Bool = true) {
-        guard !ids.isEmpty else { return }
+        guard !isMirroring, !ids.isEmpty else { return }
         if let playing = nowPlaying, ids.contains(playing.id) { stop() }
         let leaving = tracks.filter { ids.contains($0.id) }.count
         #if os(iOS)
@@ -99,6 +102,8 @@ extension KnobShiftModel {
 
     /// Empties the queue.
     func removeAll() {
+        // The order belongs to the device playing while listening to it.
+        guard !isMirroring else { return }
         remove(ids: Set(tracks.map(\.id)).union(queuePending.map(\.id)), remembers: false)
     }
 }

@@ -32,6 +32,8 @@ extension KnobShiftModel {
     /// Arranges the songs after the playing one so neighbours mix well (KnobShiftMixOrder).
     /// The user's own order is kept, one more tap brings it back, and it replaces shuffle.
     func toggleMixOrder() {
+        // The order belongs to the device playing while listening to it.
+        guard !isMirroring else { return }
         shuffleToRestore = nil
         mixOrderToRestore = false
         if isMixOrdered {
@@ -70,6 +72,8 @@ extension KnobShiftModel {
     /// queue now. The playing song itself stays put. With nothing playing they go to the top,
     /// where Play starts. In shuffle or Mix Order only the showing order changes, as with a drag.
     func playNext(ids: Set<UUID>) {
+        // The order belongs to the device playing while listening to it.
+        guard !isMirroring else { return }
         let moving = tracks.filter { ids.contains($0.id) && $0 != nowPlaying }
         guard !moving.isEmpty else { return }
         let playing = nowPlaying.flatMap { tracks.contains($0) ? $0 : nil }
@@ -87,6 +91,8 @@ extension KnobShiftModel {
     /// order becomes the user's own, so shuffle and Mix Order go off (and a plain drag after it
     /// works on the sorted queue). Songs with nothing to sort by go last, in their order.
     func sortQueue(by sort: KnobShiftQueueSort) {
+        // The order belongs to the device playing while listening to it.
+        guard !isMirroring else { return }
         let own = isArranged ? unshuffled : tracks
         if orderBeforeSort == nil { orderBeforeSort = own }
         replaceOwnOrder(with: Self.sorted(own, by: sort))

@@ -9,6 +9,12 @@ enum KnobShiftArtwork {
 
     static func cached(_ url: URL) -> PlatformImage? { cache[url] }
 
+    /// A cover sent by the device playing, while listening to it (KnobShiftModel+Mirror.swift).
+    static func remember(_ image: PlatformImage, for url: URL) {
+        cache[url] = image
+        missing.remove(url)
+    }
+
     // MARK: Sharp covers
 
     /// Spotify song files carry a 640 pixel cover, which looks soft at full screen. Spotify has
@@ -66,6 +72,14 @@ enum KnobShiftArtwork {
     static func load(_ url: URL) async -> PlatformImage? {
         if let image = cache[url] { return image }
         if missing.contains(url) { return nil }
+        // Another device's song: its cover comes over the network, often just after the song.
+        if KnobShiftMirror.isMirrored(url) {
+            for _ in 0..<30 {
+                try? await Task.sleep(for: .milliseconds(100))
+                if let image = cache[url] { return image }
+            }
+            return nil
+        }
         let data = await Task.detached(priority: .utility) { () -> Data? in
             if KnobShiftFlacTags.isFlac(url) { return KnobShiftFlacTags.read(url)?.cover }
             let asset = AVURLAsset(url: url)

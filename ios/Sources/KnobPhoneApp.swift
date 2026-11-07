@@ -43,6 +43,8 @@ final class PhoneApp: ObservableObject {
             model.start()
             model.restorePower()
             KnobShiftPlayOnSession.shared.start(model: model.knobShift)
+            // A session started on another device asks here whether to join.
+            KnobShiftTogetherSession.shared.watchForInvites(model: model.knobShift)
             #if DEBUG
             await Self.runChecks(model)
             #endif
@@ -303,7 +305,8 @@ final class PhoneApp: ObservableObject {
     /// both after n seconds. KNOB_PHONE_HOLD and KNOB_PHONE_SHUFFLE are explained where they run.
     /// KNOB_PHONE_TOGETHER drives Play On and Listen Together with no finger: `playon` and
     /// `together` open their screens, `move` sends the music to KNOB_PLAYON_TARGET, `allow`
-    /// answers Allow, `host` starts Listen Together, `join` joins the first session nearby.
+    /// answers Allow, `host` starts Listen Together, `join` joins the first session nearby, `ask` asks
+    /// KNOB_PLAYON_TARGET to listen together and `accept` answers Join when asked.
     private static func togetherCheck(_ model: KnobShiftModel, action: String) async {
         let playOn = KnobShiftPlayOnSession.shared, together = KnobShiftTogetherSession.shared
         let target = ProcessInfo.processInfo.environment["KNOB_PLAYON_TARGET"] ?? ""
@@ -322,6 +325,20 @@ final class PhoneApp: ObservableObject {
             together.startLooking()
             for _ in 0..<80 where together.nearby.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
             if let first = together.nearby.first { together.join(first, model: model) }
+        case "ask":
+            for _ in 0..<600 where !model.isPlaying { try? await Task.sleep(for: .milliseconds(100)) }
+            for _ in 0..<80 where !together.devices.contains(where: { $0.contains(target) }) { try? await Task.sleep(for: .milliseconds(250)) }
+            if let name = together.devices.first(where: { $0.contains(target) }) {
+                model.log("CHECK", "Asking \(name) to listen together.")
+                together.listen(with: name, model: model)
+            } else {
+                model.log("CHECK", "Could not find \(target). Play On sees \(playOn.devices.map(\.name)), Listen Together sees \(together.nearby.map(\.name)).")
+            }
+        case "accept":
+            for _ in 0..<1200 where together.invite == nil { try? await Task.sleep(for: .milliseconds(250)) }
+            try? await Task.sleep(for: .seconds(6))
+            model.log("CHECK", "Answering Join.")
+            together.answerInvite(join: true)
         case "move":
             for _ in 0..<600 where !model.isPlaying { try? await Task.sleep(for: .milliseconds(100)) }
             try? await Task.sleep(for: .seconds(3))

@@ -60,9 +60,7 @@ struct PlayerMoreMenu: View {
                 Button { KnobShiftPlayOnSession.shared.show(model) } label: {
                     Label("Play On", systemImage: "hifispeaker")
                 }
-                Button { KnobShiftTogetherSession.shared.show(model) } label: {
-                    Label("Listen Together", systemImage: "hifispeaker.2")
-                }
+                TogetherMenuItems(model: model)
             }
             Section("Add music") {
                 Button(action: onSpotify) { Label("From Spotify", systemImage: "link") }

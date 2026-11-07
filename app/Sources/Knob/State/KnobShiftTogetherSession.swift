@@ -14,6 +14,9 @@ final class KnobShiftTogetherSession: ObservableObject {
     struct Nearby: Identifiable, Equatable {
         let name: String
         let endpoint: NWEndpoint
+        /// Devices this session has asked to join, and which time it asked.
+        var invited: Set<String> = []
+        var round: String?
         var id: String { name }
     }
 
@@ -25,11 +28,13 @@ final class KnobShiftTogetherSession: ObservableObject {
     @Published private(set) var nearby: [Nearby] = []
     @Published private(set) var people: [String] = []
     @Published private(set) var status: String?
-    @Published private(set) var state: KnobShiftTogether.State?
-    @Published private(set) var cover: PlatformImage?
-    @Published private(set) var queue: [KnobShiftTogether.Song] = []
+    @Published private(set) var state: KnobShiftTogether.State? { didSet { updatePlayer() } }
+    @Published private(set) var cover: PlatformImage? { didSet { updatePlayer() } }
+    @Published private(set) var queue: [KnobShiftTogether.Song] = [] { didSet { updatePlayer() } }
     @Published private(set) var presetName: String?
     @Published var lineUp = 0.0 { didSet { lineUpChanged() } }
+    /// A session another device just started, asking here whether to join it.
+    @Published private(set) var invite: Nearby?
 
     /// Knob's own sound on this device, which every device in a session shares.
     weak var sound: KnobModel?
@@ -47,6 +52,14 @@ final class KnobShiftTogetherSession: ObservableObject {
     private var watching: Set<AnyCancellable> = []
     /// Play On's connection, in place of a Listen Together host or guest.
     private var outbound: (@Sendable (KnobShiftTogether.Message) -> Void)?
+    /// Looks for sessions the whole time Knob is open, not only while the screen shows.
+    private var watchingForInvites = false
+    /// Sessions already asked about or joined, so each asks once. A session that goes away and
+    /// starts again asks again.
+    private var answeredInvites: Set<String> = []
+    /// Who this device, sharing, has asked to join, and how many times it has asked.
+    @Published private(set) var invited: Set<String> = []
+    private var inviteRound = 0
 
     private var deviceName: String {
         #if os(macOS)
@@ -72,21 +85,100 @@ final class KnobShiftTogetherSession: ObservableObject {
         guard browser == nil else { return }
         let parameters = NWParameters.tcp
         parameters.includePeerToPeer = false
-        let browser = NWBrowser(for: .bonjour(type: KnobShiftTogether.service, domain: nil), using: parameters)
+        let browser = NWBrowser(for: .bonjourWithTXTRecord(type: KnobShiftTogether.service, domain: nil), using: parameters)
         browser.browseResultsChangedHandler = { [weak self] results, _ in
             let found = results.compactMap { result -> Nearby? in
                 guard case .service(let name, _, _, _) = result.endpoint else { return nil }
-                return Nearby(name: name, endpoint: result.endpoint)
+                var nearby = Nearby(name: name, endpoint: result.endpoint)
+                if case .bonjour(let record) = result.metadata {
+                    nearby.invited = Set((record[KnobShiftTogether.invitedKey] ?? "").split(separator: "\n").map(String.init))
+                    nearby.round = record[KnobShiftTogether.roundKey]
+                }
+                return nearby
             }
-            Task { @MainActor [weak self] in self?.nearby = found.sorted { $0.name < $1.name } }
+            Task { @MainActor [weak self] in
+                self?.nearby = found.sorted { $0.name < $1.name }
+                self?.updateInvite()
+            }
         }
         browser.start(queue: .main)
         self.browser = browser
     }
 
+    /// Sessions this device can join: not its own.
+    var joinable: [Nearby] { nearby.filter { $0.name != deviceName } }
+
     func stopLooking() {
+        guard !watchingForInvites else { return }
         browser?.cancel()
         browser = nil
+    }
+
+    // MARK: Asking to join
+
+    /// Called once at launch: when another device starts Listen Together, this one asks whether
+    /// to join, so nobody has to open the screen and look for it.
+    func watchForInvites(model: KnobShiftModel) {
+        self.model = model
+        watchingForInvites = true
+        startLooking()
+        KnobShiftPlayOnSession.shared.keepLooking()
+    }
+
+    /// Every other Knob open nearby, sharing or not, for choosing who to listen with.
+    var devices: [String] {
+        let open = KnobShiftPlayOnSession.shared.devices.map(\.name)
+        return Array(Set(open + joinable.map(\.name))).sorted()
+    }
+
+    func isSharing(_ name: String) -> Bool { joinable.contains { $0.name == name } }
+
+    /// Listen together with `name`: joins it when it is already sharing, otherwise starts sharing
+    /// here and asks it to join.
+    func listen(with name: String, model: KnobShiftModel) {
+        if role == .off, let session = joinable.first(where: { $0.name == name }) {
+            join(session, model: model)
+            return
+        }
+        if role == .off { startHosting(model) }
+        guard role == .hosting, let host else { return }
+        invited.insert(name)
+        inviteRound += 1
+        host.invite(invited.sorted(), round: inviteRound)
+        model.log("TOGETHER", "Asked \(name) to join.")
+    }
+
+    func answerInvite(join: Bool) {
+        guard let invite else { return }
+        self.invite = nil
+        answeredInvites.insert(inviteKey(invite))
+        model?.log("TOGETHER", join ? "Joining \(invite.name), as asked." : "Not joining \(invite.name) now.")
+        guard join, let model else { return }
+        self.join(invite, model: model)
+    }
+
+    func clearStatus() { status = nil }
+
+    private static let roundMark: Character = "\u{1}"
+
+    /// A session asks once, and again each time it names this device in a new round of asking.
+    private func inviteKey(_ session: Nearby) -> String {
+        guard session.invited.contains(deviceName), let round = session.round else { return session.name }
+        return "\(session.name)\(Self.roundMark)\(round)"
+    }
+
+    private func updateInvite() {
+        let names = Set(nearby.map(\.name))
+        answeredInvites = answeredInvites.filter { names.contains(String($0.split(separator: Self.roundMark).first ?? "")) }
+        if let invite, !names.contains(invite.name) || role != .off { self.invite = nil }
+        // The screen already lists what is nearby, so it doesn't ask on top of it.
+        guard watchingForInvites, invite == nil, role == .off, !showing,
+              let found = joinable.first(where: { !answeredInvites.contains(inviteKey($0)) }) else { return }
+        invite = found
+        model?.log("TOGETHER", "\(found.name) is sharing, so this device asks whether to join.")
+        #if os(macOS)
+        if let model { KnobShiftWindow.show(model: model) }
+        #endif
     }
 
     // MARK: Hosting
@@ -118,6 +210,7 @@ final class KnobShiftTogetherSession: ObservableObject {
         }
         self.host = host
         role = .hosting
+        invite = nil
         status = nil
         loadLineUp()
         model.together?.setLineUp(lineUp)
@@ -162,7 +255,7 @@ final class KnobShiftTogetherSession: ObservableObject {
     private func sendQueue() {
         guard let model else { return }
         queue = model.tracks.prefix(KnobShiftTogether.longestQueue).map {
-            KnobShiftTogether.Song(id: $0.id.uuidString, title: $0.name, artist: $0.artist)
+            KnobShiftTogether.Song(id: $0.id.uuidString, title: $0.name, artist: $0.artist, duration: $0.duration)
         }
         if let message = KnobShiftTogether.json(.queue, queue) { broadcast(message) }
     }
@@ -218,6 +311,9 @@ final class KnobShiftTogetherSession: ObservableObject {
             return
         }
         if model.isPlaying { model.pauseOrResume() }
+        answeredInvites.insert(session.name)
+        answeredInvites.insert(inviteKey(session))
+        invite = nil
         joined = session
         lostAt = nil
         role = .listening(session.name)
@@ -226,10 +322,14 @@ final class KnobShiftTogetherSession: ObservableObject {
         ownEffects = currentEffects
         watchSound()
         connect(session)
-        // Playing a song here means leaving: two sounds at once is never what anyone wants.
-        model.$isPlaying.dropFirst().sink { [weak self] playing in
-            if playing { Task { @MainActor [weak self] in self?.leave() } }
-        }.store(in: &watching)
+        // The player here shows the music being shared, and its buttons control it.
+        model.startMirror { [weak self] action, time, song in self?.send(action, time: time, song: song) }
+    }
+
+    /// While listening, the player follows what the other device plays.
+    private func updatePlayer() {
+        guard case .listening = role else { return }
+        model?.mirrorUpdate(state: state, queue: queue, cover: cover)
     }
 
     private func connect(_ session: Nearby) {
@@ -403,6 +503,7 @@ final class KnobShiftTogetherSession: ObservableObject {
         }
         guest?.stop()
         player?.detach()
+        model?.endMirror()
         if let ownEffects { apply(ownEffects) }
         ownEffects = nil
         sharedEffects = nil
@@ -414,6 +515,7 @@ final class KnobShiftTogetherSession: ObservableObject {
         lostAt = nil
         role = .off
         people = []
+        invited = []
         state = nil
         cover = nil
         queue = []

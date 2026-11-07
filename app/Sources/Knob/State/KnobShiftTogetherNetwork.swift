@@ -45,7 +45,7 @@ final class KnobShiftTogetherHost: @unchecked Sendable {
         let parameters = NWParameters(tls: nil, tcp: tcp)
         parameters.includePeerToPeer = false
         let listener = try NWListener(using: parameters)
-        listener.service = NWListener.Service(name: name, type: KnobShiftTogether.service)
+        listener.service = Self.service(name: name, invited: [], round: 0)
         listener.newConnectionHandler = { [weak self] connection in
             guard KnobShiftLink.isLocal(connection.endpoint) else { connection.cancel(); return }
             self?.welcome(connection)
@@ -55,6 +55,22 @@ final class KnobShiftTogetherHost: @unchecked Sendable {
         }
         listener.start(queue: queue)
         self.listener = listener
+    }
+
+    /// Asks the devices named to join: their Knob sees the names in this session's Bonjour
+    /// record. Each new round asks again, even a device that said Not Now before.
+    func invite(_ names: [String], round: Int) {
+        let service = Self.service(name: name, invited: names, round: round)
+        queue.async { [weak self] in self?.listener?.service = service }
+    }
+
+    private static func service(name: String, invited: [String], round: Int) -> NWListener.Service {
+        var record = NWTXTRecord()
+        if !invited.isEmpty {
+            record[KnobShiftTogether.invitedKey] = invited.joined(separator: "\n")
+            record[KnobShiftTogether.roundKey] = String(round)
+        }
+        return NWListener.Service(name: name, type: KnobShiftTogether.service, txtRecord: record)
     }
 
     func stop(state: KnobShiftTogether.Message?) {

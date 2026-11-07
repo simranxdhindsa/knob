@@ -288,7 +288,7 @@ final class KnobShiftTurntable: ObservableObject {
 
     /// Lifted off the record, the song stops, as it does on a real one.
     func armLifted(progress: Double) {
-        guard model.nowPlaying != nil, model.mixState != .mixing, !model.isMixPaused, !isActive else { return }
+        guard !model.isMirroring, model.nowPlaying != nil, model.mixState != .mixing, !model.isMixPaused, !isActive else { return }
         holdDeck()
         isArmHeld = true
         heldProgress = progress
