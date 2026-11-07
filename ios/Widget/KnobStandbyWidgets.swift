@@ -22,7 +22,7 @@ struct KnobPlayingActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    StandbyRecord(cover: context.state.cover, diameter: 72, spinning: context.state.isPlaying)
+                    StandbyRecord(cover: context.state.cover, diameter: 72, turn: context.state.turn, moving: context.state.isPlaying)
                         .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.center) {

@@ -20,7 +20,8 @@ struct KnobStandbyAttributes: ActivityAttributes {
         /// The cover file in the shared folder, or nothing if there is none yet.
         var cover: String?
 
-        /// The song after this one.
+        /// How far the record has turned, in degrees, and the song after this one.
+        var turn: Double = 0
         var next: String?
         /// A KnobMix is running, or waiting for its beat.
         var mixing = false

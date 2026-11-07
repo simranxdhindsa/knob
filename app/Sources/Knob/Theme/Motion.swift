@@ -50,8 +50,12 @@ enum Motion {
     static let queueJumpArrow = Animation.easeOut(duration: 0.28)
     static let queueLand = Animation.easeOut(duration: 0.9)
 
-    /// One turn of the record in StandBy and the Dynamic Island, the deck's own speed.
-    static let standbyTurnSeconds = 2.25
+    /// The record in StandBy and the Dynamic Island turning as the song changes, at the deck's own
+    /// speed of 160 degrees a second. iOS runs nothing by itself on a Live Activity and stops an
+    /// animation after about 2 seconds, so this is one glide, not a spin.
+    static let standbyTurnSeconds = 2.0
+    static let standbyTurnDegrees = 320.0
+    static let standbyTurn = Animation.linear(duration: standbyTurnSeconds)
 
     /// A song's cover coming up from grey to full colour once it is ready.
     static let artworkReveal = Animation.easeOut(duration: 0.4)

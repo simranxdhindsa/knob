@@ -4,24 +4,25 @@ import WidgetKit
 
 /// The record for the lock screen, StandBy and the Dynamic Island: the deck's own vinyl, drawn by
 /// the same code as the app, with the song's cover on its label. Face and label spin together
-/// while the light stays still, as on the deck, turned by iOS itself with the effect clock widgets
-/// use for their hands, so the app sends nothing and it stays steady. Only a playing record spins. The
+/// while the light stays still, as on the deck. iOS runs nothing by itself on a Live Activity and
+/// stops taking updates sent every few seconds, so the record cannot spin there: it holds still
+/// and glides round once as the song changes, while the bar and the ring move on their own. The
 /// layout follows the Music Player Card on 21st.dev (ravikatiyar162): cover, title and artist,
 /// a progress bar with the time, and the three transport buttons, here in Knob's own finish.
 struct StandbyRecord: View {
     let cover: String?
     let diameter: CGFloat
-    var spinning = false
+    var turn: Double = 0
+    /// Only a playing record turns: paused, it holds still even if the card catches up late.
+    var moving = false
     @Environment(\.isLuminanceReduced) private var dim
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
-            if spinning && !reduceMotion {
-                turning._clockHandRotationEffect(.custom(Motion.standbyTurnSeconds), in: .current, anchor: .center)
-            } else {
-                turning
-            }
+            turning
+                .rotationEffect(.degrees(reduceMotion ? 0 : turn))
+                .animation(reduceMotion || !moving ? nil : Motion.standbyTurn, value: turn)
             VinylTexture.liveLight.allowsHitTesting(false)
         }
         .frame(width: diameter, height: diameter)
@@ -44,7 +45,9 @@ struct StandbyRecord: View {
 
     @ViewBuilder private var label: some View {
         if let picture = Self.picture(StandbyGroup.coverFile(cover)) {
-            Image(uiImage: picture).resizable().scaledToFill()
+            // No bigger than the label: in the small Dynamic Island a full size picture came out grey.
+            Image(uiImage: picture.preparingThumbnail(of: Self.pixels(diameter * VinylTexture.label)) ?? picture)
+                .resizable().scaledToFill()
         } else {
             ZStack {
                 Palette.accent
@@ -54,6 +57,8 @@ struct StandbyRecord: View {
             }
         }
     }
+
+    private static func pixels(_ side: CGFloat) -> CGSize { CGSize(width: ceil(side * 3), height: ceil(side * 3)) }
 
     static func picture(_ file: URL?) -> UIImage? {
         file.flatMap { try? Data(contentsOf: $0) }.flatMap { UIImage(data: $0) }
@@ -74,7 +79,7 @@ struct StandbyRingedRecord: View {
                 .progressViewStyle(.circular)
                 .tint(Palette.accent)
                 .frame(width: diameter, height: diameter)
-            StandbyRecord(cover: state.cover, diameter: diameter - Self.gap, spinning: state.isPlaying)
+            StandbyRecord(cover: state.cover, diameter: diameter - Self.gap, turn: state.turn, moving: state.isPlaying)
         }
         .frame(width: diameter, height: diameter)
     }
@@ -204,7 +209,7 @@ struct StandbyCard: View {
 
     var body: some View {
         HStack(spacing: fullscreen ? 18 : 16) {
-            StandbyRecord(cover: state.cover, diameter: fullscreen ? 132 : 104, spinning: state.isPlaying)
+            StandbyRecord(cover: state.cover, diameter: fullscreen ? 132 : 104, turn: state.turn, moving: state.isPlaying)
             VStack(spacing: fullscreen ? 8 : 10) {
                 StandbyTitles(state: state, size: fullscreen ? 20 : 17, showsNext: fullscreen)
                 StandbyProgress(state: state, size: fullscreen ? 13 : 12)

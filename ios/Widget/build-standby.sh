@@ -19,17 +19,10 @@ mkdir -p "$work" "$appex"
 shared="$repo_dir/app/Sources/Knob"
 sources=("$here"/*.swift "$shared/Theme/Palette.swift" "$shared/Theme/Motion.swift" "$shared/Components/VinylTexture.swift")
 intent_flags="$("$here/app-intents.sh" flags "$work/intents")"
-# A copy of WidgetKit's interface with the clock hand effect added, for this build only: the SDK
-# itself is left alone, and the record spins in StandBy with no updates from the app.
-widgetkit="$work/override/WidgetKit.swiftmodule"
-mkdir -p "$widgetkit"
-for interface in "$sysroot/System/Library/Frameworks/WidgetKit.framework/Modules/WidgetKit.swiftmodule/"*.swiftinterface; do
-  cat "$interface" "$here/WidgetKit-clock-hand.txt" > "$widgetkit/$(basename "$interface")"
-done
 # Two steps: the compiler writes the App Intents "const values" beside the object file.
 # shellcheck disable=SC2086
 xcrun --sdk "$sdk" swiftc -c -wmo -target "$target" -sdk "$sysroot" -swift-version 5 -Onone -g \
-  -parse-as-library -application-extension -module-name KnobStandby -I "$work/override" $intent_flags \
+  -parse-as-library -application-extension -module-name KnobStandby $intent_flags \
   "${sources[@]}" -o "$work/KnobStandby.o"
 xcrun --sdk "$sdk" swiftc -target "$target" -sdk "$sysroot" "$work/KnobStandby.o" \
   -framework WidgetKit -framework SwiftUI -framework AppIntents -framework ActivityKit \
