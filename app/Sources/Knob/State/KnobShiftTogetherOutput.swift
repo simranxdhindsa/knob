@@ -18,6 +18,36 @@ enum KnobShiftTogetherOutput {
         #endif
     }
 
+    /// Where the sound goes, for the log: the device, its rate and how it connects. On the iPhone
+    /// it also says when a microphone is open, which turns Bluetooth headphones to call quality.
+    static var report: String {
+        #if os(macOS)
+        let device = defaultDevice
+        var rate = 0.0
+        var size = UInt32(MemoryLayout<Double>.size)
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyNominalSampleRate, mScope: kAudioObjectPropertyScopeGlobal, mElement: 0)
+        AudioObjectGetPropertyData(device, &address, 0, nil, &size, &rate)
+        var kind: UInt32 = 0
+        _ = read(device, kAudioDevicePropertyTransportType, kAudioObjectPropertyScopeGlobal, &kind)
+        let transport = switch kind {
+        case kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE: "Bluetooth"
+        case kAudioDeviceTransportTypeBuiltIn: "built in"
+        case kAudioDeviceTransportTypeVirtual: "virtual"
+        case kAudioDeviceTransportTypeUSB: "USB"
+        case kAudioDeviceTransportTypeHDMI, kAudioDeviceTransportTypeDisplayPort: "display"
+        case kAudioDeviceTransportTypeAirPlay: "AirPlay"
+        default: "other"
+        }
+        return "\(name), \(Int(rate)) Hz, \(transport), \(Int((delay * 1000).rounded())) ms to the air"
+        #else
+        let session = AVAudioSession.sharedInstance()
+        let outputs = session.currentRoute.outputs.map { "\($0.portName) (\($0.portType.rawValue))" }.joined(separator: ", ")
+        let inputs = session.currentRoute.inputs.map { "\($0.portName) (\($0.portType.rawValue))" }.joined(separator: ", ")
+        return "\(outputs.isEmpty ? "no output" : outputs), \(Int(session.sampleRate)) Hz, \(session.category.rawValue), \(session.mode.rawValue), "
+            + "microphone \(inputs.isEmpty ? "closed" : "open: \(inputs)"), \(Int((delay * 1000).rounded())) ms to the air"
+        #endif
+    }
+
     /// AirPlay holds sound back for about two seconds, far more than a session can make up for.
     static var isAirPlay: Bool {
         #if os(macOS)

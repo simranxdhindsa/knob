@@ -147,6 +147,10 @@ final class KnobShiftTogetherCapture: @unchecked Sendable {
     private var lastSampleTime: AVAudioFramePosition?
     private var expectedHost: Int64?
     private var scratch = [Int16](repeating: 0, count: 65_536)
+    /// The loudest sample since the last report (1 is full scale), and how many were cut off.
+    private let statsLock = NSLock()
+    private var peak: Float = 0
+    private var clipped = 0
     private weak var node: AVAudioNode?
     private let scale: Double
 
@@ -169,15 +173,31 @@ final class KnobShiftTogetherCapture: @unchecked Sendable {
             lastSampleTime = time.sampleTime + AVAudioFramePosition(frames)
             expectedHost = host + Int64(Double(frames) / rate * 1e9)
             let left = data[0], right = data[buffer.format.channelCount > 1 ? 1 : 0]
+            var loudest: Float = 0, cut = 0
             for frame in 0..<frames {
+                let both = max(abs(left[frame]), abs(right[frame]))
+                loudest = max(loudest, both)
+                if both * KnobShiftTogether.headroom > 1 { cut += 1 }
                 scratch[frame * 2] = Int16(max(-1, min(1, left[frame] * KnobShiftTogether.headroom)) * 32_767)
                 scratch[frame * 2 + 1] = Int16(max(-1, min(1, right[frame] * KnobShiftTogether.headroom)) * 32_767)
+            }
+            statsLock.withLock {
+                peak = max(peak, loudest)
+                clipped += cut
             }
             scratch.withUnsafeBufferPointer { all in
                 onBlock(Block(firstFrame: nextFrame, samples: UnsafeBufferPointer(rebasing: all[0..<(frames * 2)]),
                               hostNanoseconds: host, rate: rate, afterBreak: afterBreak))
             }
             nextFrame += Int64(frames)
+        }
+    }
+
+    /// What the mix did since the last call, for the log.
+    func takeStats() -> (peak: Float, clipped: Int) {
+        statsLock.withLock {
+            defer { peak = 0; clipped = 0 }
+            return (peak, clipped)
         }
     }
 

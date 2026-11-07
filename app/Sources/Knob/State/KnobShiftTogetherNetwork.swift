@@ -231,6 +231,11 @@ final class KnobShiftTogetherGuest: @unchecked Sendable {
     private let name: String
     private var reader = KnobShiftTogether.Reader()
     private var clock = KnobShiftTogetherClock()
+    /// For the log: blocks and loudest sample since the last report, and the clock's best trip.
+    private let statsLock = NSLock()
+    private var blocks = 0
+    private var peak: Int16 = 0
+    private var trip: Int64?
     private var pinger: NWConnection?
     private var timer: DispatchSourceTimer?
     private var finished = false
@@ -329,6 +334,11 @@ final class KnobShiftTogetherGuest: @unchecked Sendable {
             let samples = message.body.dropFirst(8).withUnsafeBytes { Array($0.bindMemory(to: UInt8.self)) }
             let values = samples.withUnsafeBytes { raw in (0..<(raw.count / 2)).map { Int16(littleEndian: raw.loadUnaligned(fromByteOffset: $0 * 2, as: Int16.self)) } }
             values.withUnsafeBufferPointer { player.ring.write(firstFrame: first, samples: $0) }
+            let loudest = values.reduce(Int16(0)) { max($0, $1 == .min ? .max : abs($1)) }
+            statsLock.withLock {
+                blocks += 1
+                peak = max(peak, loudest)
+            }
         case .anchor:
             guard let anchor = KnobShiftTogether.readAnchor(message.body) else { return }
             player.tick()
@@ -348,6 +358,14 @@ final class KnobShiftTogetherGuest: @unchecked Sendable {
         }
     }
 
+    /// What arrived since the last call, for the log. `peak` is 1 at full scale.
+    func takeStats() -> (blocks: Int, peak: Float, trip: Int64?) {
+        statsLock.withLock {
+            defer { blocks = 0; peak = 0 }
+            return (blocks, Float(peak) / (32_767 * KnobShiftTogether.headroom), trip)
+        }
+    }
+
     private func followClock(_ port: UInt16) {
         guard case .hostPort(let host, _)? = connection.currentPath?.remoteEndpoint, let port = NWEndpoint.Port(rawValue: port) else { return }
         let pinger = NWConnection(host: host, port: port, using: .udp)
@@ -363,6 +381,8 @@ final class KnobShiftTogetherGuest: @unchecked Sendable {
                     }
                     self.clock.add(sent: sent, hostAnswered: answered, received: received)
                     if let offset = self.clock.offset { self.player.setClockOffset(offset) }
+                    let best = self.clock.bestTrip
+                    self.statsLock.withLock { self.trip = best }
                 }
                 if error == nil, !self.finished { listen() }
             }

@@ -52,6 +52,8 @@ final class KnobShiftTogetherSession: ObservableObject {
     private var watching: Set<AnyCancellable> = []
     /// Play On's connection, in place of a Listen Together host or guest.
     private var outbound: (@Sendable (KnobShiftTogether.Message) -> Void)?
+    private let report = KnobShiftTogetherReport()
+    private var reporter: Task<Void, Never>?
     /// Looks for sessions the whole time Knob is open, not only while the screen shows.
     private var watchingForInvites = false
     /// Sessions already asked about or joined, so each asks once. A session that goes away and
@@ -212,6 +214,7 @@ final class KnobShiftTogetherSession: ObservableObject {
         role = .hosting
         invite = nil
         status = nil
+        startReporting()
         loadLineUp()
         model.together?.setLineUp(lineUp)
         watchModel(model)
@@ -324,6 +327,7 @@ final class KnobShiftTogetherSession: ObservableObject {
         connect(session)
         // The player here shows the music being shared, and its buttons control it.
         model.startMirror { [weak self] action, time, song in self?.send(action, time: time, song: song) }
+        startReporting()
     }
 
     /// While listening, the player follows what the other device plays.
@@ -409,6 +413,7 @@ final class KnobShiftTogetherSession: ObservableObject {
     private func soundChanged() {
         guard let current = currentEffects, sharedEffects.map({ !$0.isClose(to: current) }) ?? true else { return }
         sharedEffects = current
+        model?.log("TOGETHER", "Sharing this device's sound, \(KnobShiftTogetherReport.describe(current)).")
         presetName = current.preset
         guard let message = KnobShiftTogether.json(.effects, current) else { return }
         switch role {
@@ -423,6 +428,7 @@ final class KnobShiftTogetherSession: ObservableObject {
         guard role != .off else { return }
         sharedEffects = effects
         presetName = effects.preset
+        model?.log("TOGETHER", "Using the shared sound, \(KnobShiftTogetherReport.describe(effects)).")
         apply(effects)
         if role == .hosting || isPlayingHere, let message = KnobShiftTogether.json(.effects, effects) { broadcast(message) }
     }
@@ -504,7 +510,12 @@ final class KnobShiftTogetherSession: ObservableObject {
         guest?.stop()
         player?.detach()
         model?.endMirror()
-        if let ownEffects { apply(ownEffects) }
+        reporter?.cancel()
+        reporter = nil
+        if let ownEffects {
+            model?.log("TOGETHER", "Back to this device's own sound, \(KnobShiftTogetherReport.describe(ownEffects)).")
+            apply(ownEffects)
+        }
         ownEffects = nil
         sharedEffects = nil
         host = nil
@@ -521,6 +532,24 @@ final class KnobShiftTogetherSession: ObservableObject {
         queue = []
         presetName = nil
         status = message
+    }
+
+    /// A sound check in the log every few seconds while the session runs (KnobShiftTogetherReport).
+    private func startReporting() {
+        reporter?.cancel()
+        report.reset()
+        model?.log("TOGETHER", "Sound goes to \(KnobShiftTogetherOutput.report).")
+        reporter = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(KnobShiftTogetherReport.seconds))
+                guard let self, !Task.isCancelled else { return }
+                let hosting = self.role == .hosting
+                self.model?.log("TOGETHER", self.report.line(
+                    capture: hosting ? self.model?.togetherCapture : nil, guest: self.guest,
+                    player: hosting ? self.model?.together : self.player,
+                    listening: hosting ? self.people.count : nil, lineUp: self.lineUp, soundOn: self.sound?.powerOn))
+            }
+        }
     }
 
     private func loadLineUp() { lineUp = UserDefaults.standard.double(forKey: lineUpKey) }
