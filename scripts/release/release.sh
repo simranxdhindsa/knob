@@ -72,16 +72,32 @@ else
     echo "Note: no release certificate, so this trial build is signed ad-hoc."
 fi
 
-log "Sound engine and driver (Apple silicon + Intel)"
+# The engine and driver build while the app compiles: neither needs the other until the app is
+# put together, and running them side by side saves about a minute.
+log "Sound engine and driver (Apple silicon + Intel), in the background"
 engine_dir="$work/build"
-cmake -S "$repo_dir" -B "$engine_dir" -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release \
-    "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 >/dev/null
-cmake --build "$engine_dir" -j8 --target knob-engine knob-supervisor >/dev/null
-bash "$repo_dir/driver/build.sh" "$engine_dir/driver" >/dev/null
-sh "$repo_dir/tests/driver-build.sh" "$engine_dir/driver/Knob.driver"
+(
+    cmake -S "$repo_dir" -B "$engine_dir" -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release \
+        "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 >/dev/null
+    cmake --build "$engine_dir" -j8 --target knob-engine knob-supervisor >/dev/null
+    bash "$repo_dir/driver/build.sh" "$engine_dir/driver" >/dev/null
+    sh "$repo_dir/tests/driver-build.sh" "$engine_dir/driver/Knob.driver"
+) > "$work/engine.log" 2>&1 &
+engine_pid=$!
 
-log "App"
+log "App (Apple silicon + Intel at once)"
 bash "$repo_dir/packaging/fetch-spotdl.sh"
+KNOB_UNIVERSAL=1 KNOB_COMPILE_ONLY=1 bash "$repo_dir/app/build-app.sh" release
+
+log "Waiting for the sound engine and driver"
+if ! wait "$engine_pid"; then
+    cat "$work/engine.log"
+    echo "The sound engine or driver failed to build." >&2
+    exit 1
+fi
+cat "$work/engine.log"
+
+log "Putting the app together"
 KNOB_VERSION=$version KNOB_BUILD=$build_number KNOB_UNIVERSAL=1 KNOB_ENGINE_DIR=$engine_dir \
     bash "$repo_dir/app/build-app.sh" release
 
