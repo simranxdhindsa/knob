@@ -20,6 +20,7 @@
 ![C++](https://img.shields.io/badge/C%2B%2B-Core%20Audio-00599C?style=for-the-badge&logo=cplusplus&logoColor=white)
 ![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-Native-FF6B1F?style=for-the-badge&logo=apple&logoColor=white)
 ![License](https://img.shields.io/badge/License-AGPL--3.0-555555?style=for-the-badge)
+[![Release](https://img.shields.io/github/actions/workflow/status/simranxdhindsa/knob/release.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=Release)](https://github.com/simranxdhindsa/knob/actions/workflows/release.yml)
 
 [✨ Features](#-features) · [🎛️ The panel](#%EF%B8%8F-the-panel) · [🧭 How it works](#-how-it-works) · [🚀 Quick start](#-quick-start) · [🛠️ Develop](#%EF%B8%8F-develop) · [📚 Docs](#-documentation)
 
