@@ -189,7 +189,13 @@ final class KnobShiftPlayOnSession: ObservableObject {
             update(.connectionLost)
             return
         }
-        let tracks = Array(model.tracks[index...].prefix(Self.longestList))
+        // The whole queue, not just what's ahead, or the songs before this one would be lost when
+        // the music comes back. A very long queue keeps the part around the song playing.
+        let first = max(0, min(index - Self.longestList / 2, model.tracks.count - Self.longestList))
+        let tracks = Array(model.tracks[first...].prefix(Self.longestList))
+        let current = index - first
+        // Going back where it came from: that device's own list, with songs never copied here.
+        let original = arriving
         let playlists = model.playlists
         let position = model.playbackTime, isPlaying = model.isPlaying, isShuffled = model.isShuffled
         let rows = tracks.map { (url: $0.url, title: $0.name, artist: $0.artist, playlist: $0.playlistId) }
@@ -203,7 +209,12 @@ final class KnobShiftPlayOnSession: ObservableObject {
                 let list = playlists.first { $0.id == row.playlist }.map { KnobShiftPlayOn.Playlist(id: $0.id, name: $0.name, link: $0.link) }
                 return KnobShiftPlayOn.Song(key: key, title: row.title, artist: row.artist, fileName: row.url.lastPathComponent, size: Int64(size), playlist: list)
             }
-            let handover = KnobShiftPlayOn.Handover(songs: songs, current: 0, position: position, isPlaying: isPlaying, isShuffled: isShuffled,
+            var list = songs, at = current
+            if let original, current < songs.count, let found = original.songs.firstIndex(where: { $0.key == songs[current].key }) {
+                list = original.songs
+                at = found
+            }
+            let handover = KnobShiftPlayOn.Handover(songs: list, current: at, position: position, isPlaying: isPlaying, isShuffled: isShuffled,
                                                     sentAt: KnobShiftTogether.now(), effects: effects)
             await self?.finishHandover(handover, files: found, on: link)
         }
@@ -223,6 +234,7 @@ final class KnobShiftPlayOnSession: ObservableObject {
     private func sendFiles(_ keys: [String], on link: KnobShiftPlayOnLink) {
         guard let plan else { return }
         let wanted = keys.compactMap { key in plan.songs.first { $0.key == key }.flatMap { song in files[key].map { (song, $0) } } }
+        model?.log("PLAYON", "Asked for \(keys.count) song(s), sending \(wanted.count).")
         Task.detached(priority: .userInitiated) { [weak self] in
             for (number, item) in wanted.enumerated() {
                 let (song, url) = item
@@ -339,14 +351,21 @@ final class KnobShiftPlayOnSession: ObservableObject {
         guard let model else { return }
         have = found
         let needed = KnobShiftPlayOn.sendOrder(handover.songs, current: handover.current, have: Set(found.keys))
+        model.log("PLAYON", "\(peerName) sent \(handover.songs.count) song(s), playing number \(handover.current + 1). This device needs \(needed.count).")
         let space = (try? KnobShiftPlaylists.home.deletingLastPathComponent().resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?
             .volumeAvailableCapacityForImportantUsage ?? .max
-        guard space > needed.reduce(Int64(500_000_000), { $0 + $1.size }) else {
+        #if DEBUG
+        // KNOB_PLAYON_FAKE stands in for a full disk or a dead output, which a check can't cause.
+        let fake = ProcessInfo.processInfo.environment["KNOB_PLAYON_FAKE"]
+        #else
+        let fake: String? = nil
+        #endif
+        guard fake != "nospace", space > needed.reduce(Int64(500_000_000), { $0 + $1.size }) else {
             refuse(.noSpace, on: link)
             return
         }
         Task { [weak self] in
-            guard await model.outputIsWorking() else {
+            guard fake != "nooutput", await model.outputIsWorking() else {
                 self?.refuse(.noOutput, on: link)
                 return
             }
@@ -389,6 +408,7 @@ final class KnobShiftPlayOnSession: ObservableObject {
         guard let url = try? file.finish() else { return }
         if !analysis.isEmpty { KnobShiftAnalysisCache.adopt(analysis, for: url) }
         have[key] = url
+        model?.log("PLAYON", "Copied \(url.lastPathComponent).")
         model?.addPlayOnSong(url, song: arriving?.songs.first { $0.key == key })
         if queueTaken, let model { Task { await model.addTracks([url]) } }
         prepareIfReady(on: link)

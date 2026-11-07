@@ -46,7 +46,7 @@ struct KnobShiftTogetherView: View {
             Text("Play the same music on your Mac and iPhones at the same moment, on the same Wi-Fi.")
                 .font(.system(size: 13)).foregroundStyle(Glass.secondary).fixedSize(horizontal: false, vertical: true)
             wide("Start on this \(Platform.deviceName)", icon: "dot.radiowaves.left.and.right") { session.startHosting(model) }
-            Text("NEARBY").font(.system(size: 11, weight: .bold)).foregroundStyle(Glass.tertiary).padding(.top, 8)
+            Text("NEARBY").font(.system(size: 11, weight: .bold)).foregroundStyle(Glass.secondary).padding(.top, 8)
             if session.nearby.isEmpty {
                 Text("Nobody is sharing yet. Start on another device, then join here.")
                     .font(.system(size: 13)).foregroundStyle(Glass.secondary).fixedSize(horizontal: false, vertical: true)
@@ -84,9 +84,9 @@ struct KnobShiftTogetherView: View {
             }
             if isSharedSound { lineUp }
             if isSharedSound { Text(session.soundIsOff ? "Effects are shared. Turn Knob on here to hear them." : "Effects are shared. A change on any device reaches everyone.")
-                .font(.system(size: 12)).foregroundStyle(Glass.tertiary).fixedSize(horizontal: false, vertical: true) }
+                .font(.system(size: 12)).foregroundStyle(Glass.secondary).fixedSize(horizontal: false, vertical: true) }
             if session.role == .hosting {
-                Text(session.people.isEmpty ? "Waiting for others to join." : "LISTENING").font(.system(size: 11, weight: .bold)).foregroundStyle(Glass.tertiary)
+                Text(session.people.isEmpty ? "Waiting for others to join." : "LISTENING").font(.system(size: 11, weight: .bold)).foregroundStyle(Glass.secondary)
                 ForEach(session.people, id: \.self) { name in row(name, action: "Remove") { session.remove(name) } }
             }
             if session.isRemote {
@@ -95,7 +95,7 @@ struct KnobShiftTogetherView: View {
                 wide(session.role == .hosting ? "End for Everyone" : "Leave", icon: "xmark.circle") { session.leave() }
             }
             if !session.queue.isEmpty {
-                Text("QUEUE").font(.system(size: 11, weight: .bold)).foregroundStyle(Glass.tertiary)
+                Text("QUEUE").font(.system(size: 11, weight: .bold)).foregroundStyle(Glass.secondary)
                 LazyVStack(spacing: 4) {
                     ForEach(session.queue) { song in queueRow(song) }
                 }
@@ -145,6 +145,8 @@ struct KnobShiftTogetherView: View {
         .accessibilityLabel(playing ? "\(song.title), playing" : "Play \(song.title)")
     }
 
+    private static let longestLineUp = 0.4
+
     /// Line up only matters when two devices play at once.
     private var isSharedSound: Bool {
         switch session.role {
@@ -160,9 +162,11 @@ struct KnobShiftTogetherView: View {
                 Spacer()
                 Text("\(Int(session.lineUp * 1000)) ms").font(.system(size: 12).monospacedDigit()).foregroundStyle(Glass.secondary)
             }
-            Slider(value: $session.lineUp, in: 0...0.4).tint(Palette.accent).accessibilityLabel("Line up")
+            KnobGroove(value: session.lineUp / Self.longestLineUp, showsCap: true, accessibilityLabel: "Line up",
+                       accessibilityValue: "\(Int(session.lineUp * 1000)) milliseconds",
+                       onChange: { session.lineUp = $0 * Self.longestLineUp })
             Text("If this device sounds late, as Bluetooth does, slide right until they match.")
-                .font(.system(size: 12)).foregroundStyle(Glass.tertiary).fixedSize(horizontal: false, vertical: true)
+                .font(.system(size: 12)).foregroundStyle(Glass.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 

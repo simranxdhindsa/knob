@@ -42,6 +42,22 @@ struct KnobShiftPlayOnView: View {
             }
             .padding(.horizontal, 12)
             .background(Glass.fill, in: RoundedRectangle(cornerRadius: 10))
+            #else
+            // Apple's picker on the Mac only routes its own player, not Knob's sound. AirPlay
+            // speakers are listed in Sound settings, and Knob follows whatever is picked there.
+            Button { Self.openSoundSettings() } label: {
+                HStack {
+                    Text("AirPlay speakers").font(.system(size: 14)).foregroundStyle(Glass.text)
+                    Spacer()
+                    Image(systemName: "airplayaudio").font(.system(size: 18)).foregroundStyle(Glass.secondary)
+                }
+                .frame(minHeight: 44)
+                .padding(.horizontal, 12)
+                .background(Glass.fill, in: RoundedRectangle(cornerRadius: 10))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Choose AirPlay speakers in Sound settings")
             #endif
             if let receiving = playOn.receiving {
                 Text(receiving).font(.system(size: 13)).foregroundStyle(Palette.accent)
@@ -56,6 +72,12 @@ struct KnobShiftPlayOnView: View {
         .onAppear { playOn.startLooking() }
         .onDisappear { playOn.stopLooking() }
     }
+
+    #if os(macOS)
+    private static func openSoundSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.Sound-Settings.extension") { NSWorkspace.shared.open(url) }
+    }
+    #endif
 
     private var playingOn: String? {
         if case .remote(let name) = together.role { return name }

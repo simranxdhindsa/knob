@@ -23,6 +23,10 @@ enum KnobShiftPlayOnCheck {
         case "receiver": Task { @MainActor in await receiver() }
         case "sender": Task { @MainActor in await sender(arguments.dropFirst().map { URL(fileURLWithPath: $0) }) }
         case "refused": Task { @MainActor in await refused(arguments.dropFirst().map { URL(fileURLWithPath: $0) }) }
+        case "blocked": Task { @MainActor in await blocked(arguments.dropFirst().map { URL(fileURLWithPath: $0) }) }
+        case "mixwait": Task { @MainActor in await mixWait(arguments.dropFirst().map { URL(fileURLWithPath: $0) }) }
+        case "remotemix": Task { @MainActor in await remoteMix(arguments.dropFirst().map { URL(fileURLWithPath: $0) }) }
+        case "gone": Task { @MainActor in await gone(arguments.dropFirst().map { URL(fileURLWithPath: $0) }) }
         case "intruder": Task { @MainActor in await intruder() }
         case "dropped": Task { @MainActor in await dropped(arguments.dropFirst().map { URL(fileURLWithPath: $0) }) }
         default:
@@ -83,8 +87,14 @@ enum KnobShiftPlayOnCheck {
         model.savePlaylists()
         await model.addTracks(placed)
         session.startLooking()
-        for _ in 0..<120 where session.devices.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
-        return (model, sound, session.devices.first)
+        for _ in 0..<120 where target(session) == nil { try? await Task.sleep(for: .milliseconds(250)) }
+        return (model, sound, target(session))
+    }
+
+    /// KNOB_PLAYON_TARGET picks one device, since a real iPhone may be on the same Wi-Fi.
+    private static func target(_ session: KnobShiftPlayOnSession) -> KnobShiftPlayOnSession.Device? {
+        let name = ProcessInfo.processInfo.environment["KNOB_PLAYON_TARGET"]
+        return session.devices.first { name == nil || $0.name.contains(name ?? "") }
     }
 
     private static func wait(_ seconds: Double = 20, until done: () -> Bool) async -> Bool {
@@ -134,7 +144,10 @@ enum KnobShiftPlayOnCheck {
         session.clearFailure()
         try? await Task.sleep(for: .seconds(1))
 
-        print("Moving it there with songs to copy")
+        print("Moving it there with songs to copy, from the middle of the queue")
+        let order = model.tracks.map(\.url.lastPathComponent)
+        model.select(model.tracks[1])
+        try? await Task.sleep(for: .seconds(1))
         model.seek(to: 40)
         sound.setEffect(.clarity, 6)
         try? await Task.sleep(for: .seconds(2))
@@ -160,7 +173,7 @@ enum KnobShiftPlayOnCheck {
         expect(waited, "the remote shows it playing: \(together.state?.title ?? "none")")
         let there = together.state?.time ?? 0
         expect(abs(there - (before + took)) < 3, "it carried on from the same moment (\(Int(there))s, expected about \(Int(before + took))s)")
-        expect(await wait(8) { together.queue.count == urls.count }, "the remote shows the whole queue (\(together.queue.count) of \(urls.count))")
+        expect(await wait(8) { together.queue.count == urls.count - 1 }, "the remote shows the song playing and what's next (\(together.queue.count))")
         together.send(.playPause)
         expect(await wait(5) { together.state?.isPlaying == false }, "pause from here works")
         together.send(.playPause)
@@ -187,6 +200,8 @@ enum KnobShiftPlayOnCheck {
         try? await Task.sleep(for: .seconds(1))
         expect(model.isPlaying, "and plays here")
         expect(model.playbackTime >= 68, "from where it had got to (\(Int(model.playbackTime))s)")
+        expect(model.tracks.count == urls.count, "and the whole queue is still here (\(model.tracks.count) of \(urls.count))")
+        expect(Set(model.tracks.map(\.url.lastPathComponent)) == Set(order), "with every song it started with")
 
         print("Moving it there a second time")
         session.clearFailure()
@@ -198,6 +213,63 @@ enum KnobShiftPlayOnCheck {
         expect(second < 8, "and quicker, with nothing to copy (\(String(format: "%.1f", second))s)")
         try? await Task.sleep(for: .seconds(2))
         expect(!model.isPlaying, "and stopped here again")
+        finish()
+    }
+
+    /// The other device can't take it: no space, or no working output.
+    private static func blocked(_ urls: [URL]) async {
+        let (model, _, found) = await prepared(urls)
+        let session = KnobShiftPlayOnSession.shared
+        print("The other device can't take the music")
+        guard let device = found, let track = model.tracks.first else { expect(false, "found the device and song"); finish() }
+        model.playForCheck(volume: 0, bySelecting: track)
+        try? await Task.sleep(for: .seconds(2))
+        session.move(to: device)
+        let done = await wait(20) { if case .failed = session.handoff?.stage { return true } else { return false } }
+        expect(done, "it failed cleanly: \(session.handoff?.stage.text ?? "nothing")")
+        expect(model.isPlaying, "the music stayed here")
+        finish()
+    }
+
+    /// A KnobMix is running when the move is asked for.
+    private static func mixWait(_ urls: [URL]) async {
+        let (model, _, found) = await prepared(urls)
+        let session = KnobShiftPlayOnSession.shared
+        print("Moving during a mix")
+        guard let device = found, let track = model.tracks.first else { expect(false, "found the device and song"); finish() }
+        model.playForCheck(volume: 0, bySelecting: track)
+        try? await Task.sleep(for: .seconds(3))
+        model.mixNow()
+        expect(await wait(25) { model.mixState == .mixing }, "the mix started")
+        let trail = Trail()
+        let watcher = stageTrail(session, into: trail)
+        session.move(to: device)
+        expect(await wait(20) { session.handoff?.stage == .waitingForMix }, "it waits for the mix to finish")
+        expect(model.isPlaying, "and the mix carries on here")
+        expect(await wait(70) { session.handoff?.stage == .playingThere }, "then the music moves")
+        watcher.cancel()
+        print("  stages seen: \(trail.seen)")
+        try? await Task.sleep(for: .seconds(1))
+        expect(!model.isPlaying, "and stops here")
+        finish()
+    }
+
+    /// KnobMix Now pressed on the remote.
+    private static func remoteMix(_ urls: [URL]) async {
+        let (model, _, found) = await prepared(urls)
+        let session = KnobShiftPlayOnSession.shared, together = KnobShiftTogetherSession.shared
+        print("KnobMix Now from the remote")
+        guard let device = found, let track = model.tracks.first else { expect(false, "found the device and song"); finish() }
+        model.playForCheck(volume: 0, bySelecting: track)
+        try? await Task.sleep(for: .seconds(2))
+        session.move(to: device)
+        expect(await wait(40) { session.handoff?.stage == .playingThere }, "the music moved")
+        expect(await wait(10) { together.queue.count == urls.count }, "the whole queue arrived (\(together.queue.count))")
+        expect(await wait(10) { together.state?.canMix == true }, "KnobMix Now is available")
+        let first = together.state?.song
+        together.send(.mixNow)
+        expect(await wait(25) { together.state?.canMix == false }, "pressing it starts a mix there")
+        expect(await wait(70) { together.state?.song != first }, "and the next song takes over: \(together.state?.title ?? "none")")
         finish()
     }
 
@@ -246,6 +318,22 @@ enum KnobShiftPlayOnCheck {
             try? await Task.sleep(for: .seconds(2))
         }
         expect(true, "sent every message without being allowed")
+        finish()
+    }
+
+    /// The other device was in the list but has since gone away, before anything was sent.
+    private static func gone(_ urls: [URL]) async {
+        let (model, _, found) = await prepared(urls)
+        let session = KnobShiftPlayOnSession.shared
+        print("Choosing a device that has gone")
+        guard let device = found, let track = model.tracks.first else { expect(false, "found the device and song"); finish() }
+        model.playForCheck(volume: 0, bySelecting: track)
+        print("KILL RECEIVER NOW")
+        try? await Task.sleep(for: .seconds(2))
+        session.move(to: device)
+        let done = await wait(12) { if case .failed = session.handoff?.stage { return true } else { return false } }
+        expect(done, "it gives up instead of waiting for ever: \(session.handoff?.stage.text ?? "nothing")")
+        expect(model.isPlaying, "the music stayed here")
         finish()
     }
 
