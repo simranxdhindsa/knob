@@ -78,6 +78,10 @@ struct KnobLauncher {
             MainActor.assumeIsolated { KnobShiftQueueCheck.run() }
             exit(MainActor.assumeIsolated { KnobShiftQueueCheck.failures } == 0 ? 0 : 1)
         }
+        if arguments.contains("--knobshift-playon-check") {
+            KnobShiftPlayOnTests.run()
+            return
+        }
         if let index = arguments.firstIndex(of: "--knobshift-together-check"), index + 1 < arguments.count {
             KnobShiftTogetherCheck.run(Array(arguments[(index + 1)...]))
             return
