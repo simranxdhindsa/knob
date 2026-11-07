@@ -56,6 +56,12 @@ struct PlayerMoreMenu: View {
                 }
                 .disabled(model.tracks.count < 2)
             }
+            Section {
+                Button { KnobShiftPlayOnSession.shared.show(model) } label: {
+                    Label("Play On", systemImage: "hifispeaker")
+                }
+                TogetherMenuItems(model: model)
+            }
             Section("Add music") {
                 Button(action: onSpotify) { Label("From Spotify", systemImage: "link") }
                 Button(action: onYouTube) { Label("From YouTube", systemImage: "play.rectangle") }

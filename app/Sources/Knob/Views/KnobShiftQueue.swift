@@ -32,11 +32,23 @@ struct KnobShiftUpNext: View {
     }
 }
 
-/// The queue: every song with its cover and length, the playing one highlighted. Songs can be
-/// dragged into a new order, and shuffle shows the shuffled order so what plays next is visible.
-/// Songs are selected like in Music: click, Shift click for a range, Command click to add one,
-/// Command A for all; double click plays. Delete, REMOVE or the right click menu removes the
-/// selection, and the bin removes every song after a confirmation.
+/// Which rows are on screen, kept as plain data (not state) so scrolling never redraws the list.
+/// It lets the queue come back to the same place after a search and know when the playing song
+/// has scrolled away.
+final class QueueViewport {
+    var visible = Set<UUID>()
+    /// The first song in view when a search began.
+    var anchor: UUID?
+
+    func firstVisibleIndex(in ids: [UUID]) -> Int? { ids.firstIndex { visible.contains($0) } }
+}
+
+/// The queue: every song with its cover and length, the playing one highlighted and the songs
+/// already played dimmed. Songs can be dragged into a new order, and shuffle shows the shuffled
+/// order so what plays next is visible. Songs are selected like in Music: click, Shift click for a
+/// range, Command click to add one, Command A for all; double click plays. Delete, REMOVE or the
+/// right click menu removes the selection, and the bin removes every song after a confirmation.
+/// The search box filters by song or artist; while it filters, dragging is off.
 struct KnobShiftQueue: View {
     @ObservedObject var model: KnobShiftModel
     var onAdd: () -> Void
@@ -45,77 +57,115 @@ struct KnobShiftQueue: View {
     var onSync: () -> Void = {}
     @State private var selection: Set<UUID> = []
     @State private var confirmingRemoveAll = false
+    @State private var search = ""
+    /// The one row the pointer is on (Mac). Rows hold no hover state of their own.
+    @State private var hovered: UUID?
+    /// The row the jump button has just brought into view, while it glows.
+    @State private var landing: UUID?
+    @State private var playingOnScreen = true
+    @State private var viewport = QueueViewport()
     @AppStorage(PersistKey.knobShiftShowPlaylists.rawValue) private var showingPlaylists = false
     @Environment(\.surface) private var surface
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var query: String { search.trimmingCharacters(in: .whitespaces) }
+    private var searching: Bool { !query.isEmpty }
+
+    private func matches(_ track: KnobShiftModel.Track) -> Bool {
+        QueueSearch.matches(query, in: [track.name, track.artist, track.title])
+    }
+    private func matches(_ song: KnobShiftModel.PendingSong) -> Bool {
+        QueueSearch.matches(query, in: [song.name, song.artist, song.title])
+    }
 
     var body: some View {
+        let tracks = searching ? model.tracks.filter(matches) : model.tracks
+        let pending = searching ? model.queuePending.filter(matches) : model.queuePending
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(showingPlaylists ? "PLAYLISTS" : "QUEUE").font(.system(size: 9, weight: .bold)).tracking(0.9).foregroundStyle(surface.tertiary)
-                if showingPlaylists {
-                    if !model.playlists.isEmpty {
-                        Text("\(model.playlists.count)").font(.system(size: 9, weight: .bold)).foregroundStyle(surface.tertiary)
-                    }
-                } else if !model.tracks.isEmpty || !model.queuePending.isEmpty {
-                    Text("\(model.tracks.count + model.queuePending.count)").font(.system(size: 9, weight: .bold)).foregroundStyle(surface.tertiary)
+            KnobShiftQueueHeader(model: model, showingPlaylists: $showingPlaylists, confirmingRemoveAll: $confirmingRemoveAll,
+                                 onAdd: onAdd, onSpotify: onSpotify, onYouTube: onYouTube, onSync: onSync)
+                .confirmationDialog("Remove all \(model.tracks.count + model.queuePending.count) songs from the queue?",
+                                    isPresented: $confirmingRemoveAll) {
+                    Button("Remove all", role: .destructive) { selection = []; search = ""; model.removeAll() }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("The music files stay on your \(Platform.deviceName), so you can add them again later.")
                 }
-                Spacer()
-                playlistsButton
-                // Shuffle and the bin are for the queue, so they step aside for Playlists.
-                if !showingPlaylists {
-                    Button { model.toggleShuffle() } label: {
-                        Image(systemName: "shuffle")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(model.isShuffled ? Palette.accent : surface.tertiary)
-                            .frame(width: 24, height: 20)
-                            .background(Capsule().fill(model.isShuffled ? Palette.accent.opacity(0.14) : .clear))
-                            .shadow(color: model.isShuffled ? Palette.accentGlow.opacity(0.5) : .clear, radius: 4)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(model.tracks.count < 2)
-                    .help(model.isShuffled ? "Shuffle is on. Click to go back to your order." : "Shuffle the queue")
-                    .accessibilityLabel(model.isShuffled ? "Shuffle on" : "Shuffle off")
-                    .padding(.trailing, 8)
-                    if !selection.isEmpty {
-                        Button { removeSelection() } label: {
-                            Text("REMOVE \(selection.count)").font(.system(size: 9, weight: .bold)).tracking(0.6)
-                                .foregroundStyle(Palette.accent)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Take the selected songs out of the queue. Delete does the same.")
-                        .padding(.trailing, 10)
-                    } else if !model.tracks.isEmpty || !model.queuePending.isEmpty {
-                        Button { confirmingRemoveAll = true } label: {
-                            Image(systemName: "trash").font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(surface.tertiary).frame(width: 22, height: 20)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Remove every song from the queue")
-                        .accessibilityLabel("Remove all songs")
-                        .padding(.trailing, 6)
-                    }
-                }
-                addMusic
-            }
-            .confirmationDialog("Remove all \(model.tracks.count + model.queuePending.count) songs from the queue?",
-                                isPresented: $confirmingRemoveAll) {
-                Button("Remove all", role: .destructive) { selection = []; model.removeAll() }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("The music files stay on your \(Platform.deviceName), so you can add them again later.")
-            }
             if showingPlaylists {
                 KnobShiftPlaylistsView(model: model, onSpotify: onSpotify, onYouTube: onYouTube)
                     .transition(.opacity)
             } else if model.tracks.isEmpty && model.queuePending.isEmpty {
                 empty
             } else {
-                // A List gives native drag to reorder, in your order and in shuffle alike.
-                ScrollViewReader { reader in
+                topLine(shown: tracks.count + pending.count)
+                QueueSearchField(text: searchBinding)
+                queueList(tracks: tracks, pending: pending)
+            }
+            if let notice = model.notice {
+                Text(notice).font(.system(size: 10)).foregroundStyle(Palette.accent).lineLimit(2)
+            }
+        }
+        .screenCard(radius: 16, padding: 14)
+        // Escape lets go of the selection on the Mac (the search box has its own Escape).
+        .onEscapeKey { if !selection.isEmpty { selection = [] } }
+    }
+
+    /// Typing remembers the first song in view, so clearing the search lands in the same place.
+    private var searchBinding: Binding<String> {
+        Binding(get: { search }, set: { new in
+            if search.trimmingCharacters(in: .whitespaces).isEmpty, !new.trimmingCharacters(in: .whitespaces).isEmpty {
+                viewport.anchor = viewport.firstVisibleIndex(in: model.tracks.map(\.id)).map { model.tracks[$0].id }
+            }
+            search = new
+        })
+    }
+
+    /// The summary, or, with songs selected, what is selected and how to drop or remove it.
+    @ViewBuilder
+    private func topLine(shown: Int) -> some View {
+        if selection.isEmpty {
+            QueueSummaryLine(model: model, filteredCount: searching ? shown : nil)
+            if searching && !model.tracks.isEmpty {
+                Text("Reordering is off while you search. Clear the search to drag songs.")
+                    .font(.system(size: 9)).foregroundStyle(surface.tertiary).lineLimit(2)
+                    .padding(.top, -6)
+            }
+        } else {
+            QueueSelectionBar(name: selectedName, count: selection.count, onClear: { selection = [] }, onRemove: removeSelection)
+        }
+    }
+
+    private var selectedName: String? {
+        guard selection.count == 1, let id = selection.first else { return nil }
+        if let track = model.tracks.first(where: { $0.id == id }) { return SongTitle.parts(name: track.name, artist: track.artist).name }
+        return model.queuePending.first { $0.id == id }.map { SongTitle.parts(name: $0.name, artist: $0.artist).name }
+    }
+
+    private func queueList(tracks: [KnobShiftModel.Track], pending: [KnobShiftModel.PendingSong]) -> some View {
+        let playingID = model.nowPlaying?.id
+        // Rows before the playing song, in the order on screen, are the ones already played.
+        let playedIDs: Set<UUID> = playingID.flatMap { id in model.tracks.firstIndex { $0.id == id } }
+            .map { Set(model.tracks.prefix($0).map(\.id)) } ?? []
+        let jumps = Self.jumps(in: model.tracks, playing: playingID)
+        let shownIDs = tracks.map(\.id)
+        let playingShown = playingID.map(shownIDs.contains) ?? false
+        return ScrollViewReader { reader in
+            ZStack(alignment: .bottom) {
+                if tracks.isEmpty && pending.isEmpty {
+                    Text("No songs match \u{201C}\(query)\u{201D}. Try part of the song name or the artist.")
+                        .font(.system(size: 11)).foregroundStyle(surface.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity).padding(.horizontal, 12)
+                } else {
+                    // A List gives native drag to reorder, in your order and in shuffle alike.
                     List(selection: $selection) {
-                        ForEach(model.tracks) { track in queueRow(row(track)) }
-                            .onMove { model.move(fromOffsets: $0, toOffset: $1) }
-                        ForEach(model.queuePending) { song in queueRow(pendingRow(song)) }
+                        ForEach(tracks) { track in
+                            queueRow(trackRow(track, playingID: playingID, played: playedIDs.contains(track.id), jump: jumps[track.id]), id: track.id, track: track)
+                        }
+                        .onMove(perform: searching ? nil : { model.move(fromOffsets: $0, toOffset: $1) })
+                        ForEach(pending) { song in
+                            queueRow(pendingRow(song), id: song.id, track: nil)
+                        }
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
@@ -124,9 +174,14 @@ struct KnobShiftQueue: View {
                     .onDeleteKey(perform: removeSelection)
                     .contextMenu(forSelectionType: UUID.self) { ids in
                         if !ids.isEmpty {
-                            Button(ids.count == 1 ? "Remove from Queue" : "Remove \(ids.count) Songs from Queue") {
+                            Button { model.playNext(ids: ids) } label: {
+                                Label(ids.count == 1 ? "Play Next" : "Play \(ids.count) Songs Next", systemImage: "text.insert").labelStyle(.titleAndIcon)
+                            }
+                            Button {
                                 selection.subtract(ids)
                                 model.remove(ids: ids)
+                            } label: {
+                                Label(ids.count == 1 ? "Remove from Queue" : "Remove \(ids.count) Songs from Queue", systemImage: "trash").labelStyle(.titleAndIcon)
                             }
                         }
                     } primaryAction: { ids in
@@ -140,56 +195,93 @@ struct KnobShiftQueue: View {
                     }
                     // Shuffle animates; mapping every song's id on each change was slow with
                     // thousands of songs.
-                    .animation(Motion.gentle, value: model.isShuffled)
+                    .animation(Motion.respecting(Motion.gentle, reduce: reduceMotion), value: model.isShuffled)
                     // After the list has laid out: before that there is nothing to scroll to.
                     .task {
                         try? await Task.sleep(for: .milliseconds(80))
                         showPlaying(reader)
                     }
-                    .onChange(of: model.nowPlaying?.id) { showPlaying(reader) }
-                #if os(iOS)
+                    .onChange(of: model.nowPlaying?.id) { playingOnScreen = true; showPlaying(reader) }
+                    #if os(iOS)
                     .padding(.leading, -8)
-                #endif
+                    #endif
+                }
+                if playingShown, !playingOnScreen {
+                    let above = (playingID.flatMap { id in shownIDs.firstIndex(of: id) } ?? 0)
+                        < (viewport.firstVisibleIndex(in: shownIDs) ?? 0)
+                    QueueJumpButton(above: above) { jumpToPlaying(reader) }
+                        .padding(.bottom, 8)
+                        .transition(.opacity)
                 }
             }
-            if let notice = model.notice {
-                Text(notice).font(.system(size: 10)).foregroundStyle(Palette.accent).lineLimit(2)
+            .animation(Motion.respecting(Motion.snappy, reduce: reduceMotion), value: playingOnScreen)
+            // Selection in a search keeps only songs still shown, so REMOVE never takes a hidden one.
+            .onChange(of: search) {
+                if searching {
+                    selection.formIntersection(Set(shownIDs).union(pending.map(\.id)))
+                } else {
+                    returnToPlace(reader)
+                }
             }
         }
-        .screenCard(radius: 16, padding: 14)
     }
 
-    /// Switches between the queue and the Playlists view, where imported and synced songs wait
-    /// to be added. Lit while playlists show, and on the Mac while one is downloading.
-    private var playlistsButton: some View {
-        #if os(macOS)
-        let downloading = !model.spotifyProgress.isEmpty
-        #else
-        let downloading = false
-        #endif
-        return Button {
-            withAnimation(Motion.gentle) { showingPlaylists.toggle() }
-        } label: {
-            Image(systemName: "music.note.list")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(showingPlaylists || downloading ? Palette.accent : surface.tertiary)
-                .frame(width: 24, height: 20)
-                .background(Capsule().fill(showingPlaylists ? Palette.accent.opacity(0.14) : .clear))
+    /// Strips the list's own look, leaves room on the right for the scroll bar, adds the swipe to
+    /// remove on the iPhone, and tells the list which rows are on screen.
+    private func queueRow<Content: View>(_ content: Content, id: UUID, track: KnobShiftModel.Track?) -> some View {
+        content
+            .listRowInsets(EdgeInsets(top: 2, leading: Self.rowLeading, bottom: 2, trailing: 6))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .id(id)
+            #if os(macOS)
+            .onHover { inside in
+                if inside { hovered = id } else if hovered == id { hovered = nil }
+            }
+            #else
+            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                if track != nil {
+                    Button { model.playNext(ids: [id]) } label: { Label("Play Next", systemImage: "text.insert") }
+                        .tint(Palette.accent)
+                }
+            }
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                Button(role: .destructive) { removeOne(id) } label: { Label("Remove", systemImage: "trash") }
+            }
+            #endif
+            .onAppear {
+                viewport.visible.insert(id)
+                if id == model.nowPlaying?.id { playingOnScreen = true }
+            }
+            .onDisappear {
+                viewport.visible.remove(id)
+                if id == model.nowPlaying?.id { playingOnScreen = false }
+            }
+    }
+
+    /// How the mix into each song still to come will feel, in the real play order, which stays
+    /// the order while a search hides the songs between.
+    private static func jumps(in tracks: [KnobShiftModel.Track], playing: UUID?) -> [UUID: KnobShiftMixJump] {
+        let start = (playing.flatMap { id in tracks.firstIndex { $0.id == id } } ?? 0) + 1
+        guard start < tracks.count else { return [:] }
+        var jumps: [UUID: KnobShiftMixJump] = [:]
+        for index in start..<tracks.count {
+            jumps[tracks[index].id] = KnobShiftMixOrder.jump(from: tracks[index - 1].analysis, to: tracks[index].analysis)
         }
-        .buttonStyle(.plain)
-        .help(showingPlaylists ? "Back to the queue" : "Playlists")
-        .accessibilityLabel(showingPlaylists ? "Back to the queue" : "Playlists")
-        .padding(.trailing, 8)
+        return jumps
     }
 
-    /// ADD MUSIC: songs on this Mac, or, where Spotify import is available, a dropdown with both
-    /// (KnobShiftAddMusic). The header looks the same either way, so it never changes size.
-    private var addMusic: some View {
-        #if os(macOS)
-        KnobShiftAddMusic(spotify: model.spotifyAvailable, youtube: model.youtubeAvailable, onMac: onAdd, onSpotify: onSpotify, onYouTube: onYouTube)
-        #else
-        KnobShiftAddMusic(spotify: true, youtube: true, onMac: onAdd, onSpotify: onSpotify, onYouTube: onYouTube, sync: true, onSync: onSync)
-        #endif
+    private func trackRow(_ track: KnobShiftModel.Track, playingID: UUID?, played: Bool, jump: KnobShiftMixJump?) -> some View {
+        QueueTrackRow(
+            track: track, playing: track.id == playingID, selected: selection.contains(track.id), played: played,
+            hovered: hovered == track.id, reveal: model.justPrepared.contains(track.id), landing: landing == track.id, jump: jump,
+            voiceNote: voiceNote(track), offersRetry: offersVoiceRetry(track),
+            onRetry: { model.rereadVoice(track) }, onPlayNext: { model.playNext(ids: [track.id]) }, onRemove: { removeOne(track.id) })
+    }
+
+    private func pendingRow(_ song: KnobShiftModel.PendingSong) -> some View {
+        QueuePendingRow(song: song, selected: selection.contains(song.id), hovered: hovered == song.id,
+                        onRetry: { model.retry(song) }, onRemove: { removeOne(song.id) })
     }
 
     /// The rows sit flush with the card's header. The iPhone's list cuts off anything drawn past
@@ -200,64 +292,46 @@ struct KnobShiftQueue: View {
     private static let rowLeading: CGFloat = 0
     #endif
 
-    /// Strips the list's own look, and leaves room on the right for the scroll bar so it never
-    /// sits on top of the remove buttons.
-    private func queueRow<Content: View>(_ content: Content) -> some View {
-        content
-            .listRowInsets(EdgeInsets(top: 2, leading: Self.rowLeading, bottom: 2, trailing: 6))
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-    }
-
-    private func row(_ track: KnobShiftModel.Track) -> some View {
-        let playing = model.nowPlaying == track
-        return HStack(spacing: 10) {
-            AlbumArtwork(url: track.url, size: 34, lit: playing, reveal: model.justPrepared.contains(track.id))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(track.name).font(.system(size: 12, weight: playing ? .bold : .medium))
-                    .foregroundStyle(playing ? Palette.accent : surface.text).lineLimit(1)
-                Text(voiceNote(track) ?? [track.artist, track.analysis.tempo.map { String(format: "%.0f BPM", $0) }].compactMap { $0 }.joined(separator: "  ·  "))
-                    .font(.system(size: 10)).foregroundStyle(surface.tertiary).lineLimit(1)
-            }
-            Spacer(minLength: 4)
-            if offersVoiceRetry(track) {
-                Button("Retry") { model.rereadVoice(track) }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Palette.accent)
-                    .accessibilityLabel("Read the voice of \(track.name) again")
-            }
-            Text(KnobShiftNowPlaying.clock(track.duration))
-                .font(.system(size: 10, weight: .medium).monospacedDigit()).foregroundStyle(surface.tertiary)
-            Button { model.remove(track) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .bold)) }
-                .buttonStyle(.plain).foregroundStyle(surface.tertiary)
-                .accessibilityLabel("Remove \(track.name)")
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(rowHighlight(playing: playing, selected: selection.contains(track.id)))
-        .contentShape(Rectangle())
-    }
-
     /// Brings the playing song into view when the queue opens and when the song changes, unless
-    /// rows are selected, which means someone is working in the list.
-    private func showPlaying(_ reader: ScrollViewProxy) {
-        guard selection.isEmpty, let id = model.nowPlaying?.id else { return }
+    /// rows are selected, which means someone is working in the list. The jump button forces it.
+    private func showPlaying(_ reader: ScrollViewProxy, force: Bool = false) {
+        guard force || selection.isEmpty, let id = model.nowPlaying?.id else { return }
         reader.scrollTo(id, anchor: .center)
     }
 
-    /// Selected and playing are one shape, so the two rows always line up.
-    private func rowHighlight(playing: Bool, selected: Bool) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
-        return shape.fill(Palette.accent.opacity(selected ? 0.22 : (playing ? 0.10 : 0)))
-            .overlay(shape.stroke(Palette.accent.opacity(selected ? 0.55 : 0), lineWidth: 1))
+    /// The jump button: the list glides to the playing song, and the row glows as it arrives. One
+    /// value on the list drives the glow, so no row holds any animation of its own.
+    private func jumpToPlaying(_ reader: ScrollViewProxy) {
+        guard let id = model.nowPlaying?.id else { return }
+        withAnimation(Motion.respecting(Motion.queueJump, reduce: reduceMotion)) { reader.scrollTo(id, anchor: .center) }
+        Task {
+            try? await Task.sleep(for: .seconds(reduceMotion ? 0 : Motion.queueJumpSeconds * 0.6))
+            withAnimation(Motion.snappy) { landing = id }
+            try? await Task.sleep(for: .seconds(Motion.queueJumpSeconds))
+            withAnimation(Motion.queueLand) { landing = nil }
+        }
     }
 
-    /// The quiet second try shows nothing; only a song that missed twice says so.
+    /// After a search is cleared: back to what was selected, else the song that was at the top.
+    private func returnToPlace(_ reader: ScrollViewProxy) {
+        let target = model.tracks.first { selection.contains($0.id) }?.id ?? viewport.anchor
+        guard let target else { return }
+        Task {
+            try? await Task.sleep(for: .milliseconds(80))
+            reader.scrollTo(target, anchor: .top)
+        }
+    }
+
+    private func removeOne(_ id: UUID) {
+        selection.remove(id)
+        model.remove(ids: [id])
+    }
+
     private func offersVoiceRetry(_ track: KnobShiftModel.Track) -> Bool {
         track.voiceUnread && track.voiceRetried && !model.rereading.contains(track.id)
     }
 
+    /// The quiet second try shows nothing; only a song that missed twice says so.
     private func voiceNote(_ track: KnobShiftModel.Track) -> String? {
         guard track.voiceUnread, track.voiceRetried else { return nil }
         return model.rereading.contains(track.id) ? "Reading voice" : "Voice not read"
@@ -267,44 +341,6 @@ struct KnobShiftQueue: View {
         let ids = selection
         selection = []
         model.remove(ids: ids)
-    }
-
-    /// A song still being prepared: its ring fills as the analysis moves on; a failed song
-    /// offers Retry.
-    private func pendingRow(_ song: KnobShiftModel.PendingSong) -> some View {
-        HStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 5, style: .continuous).fill(surface.grid)
-                if !song.waitingForDownload, song.failure == nil { AlbumArtwork(url: song.url, size: 34, greyed: true) }
-                if song.failure != nil {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 13)).foregroundStyle(Palette.accent)
-                } else {
-                    PreparingRing(progress: song.progress, active: song.isActive || song.stage == "Downloading")
-                }
-            }
-            .frame(width: 34, height: 34)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(song.name).font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(song.failure == nil ? surface.secondary : surface.text).lineLimit(1)
-                Text([song.artist, song.failure ?? song.stage ?? (song.isActive ? "Preparing \(Int(song.progress * 100))%" : "Waiting to prepare")]
-                        .compactMap { $0 }.joined(separator: "  ·  "))
-                    .font(.system(size: 10)).foregroundStyle(song.failure == nil ? surface.tertiary : Palette.accent).lineLimit(1)
-            }
-            Spacer(minLength: 4)
-            if song.failure != nil {
-                Button("Retry") { model.retry(song) }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Palette.accent)
-            }
-            Button { model.removePending(song) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .bold)) }
-                .buttonStyle(.plain).foregroundStyle(surface.tertiary)
-                .accessibilityLabel("Remove \(song.name)")
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(rowHighlight(playing: false, selected: selection.contains(song.id)))
     }
 
     #if os(macOS)
@@ -323,27 +359,5 @@ struct KnobShiftQueue: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 18)
-    }
-}
-
-/// A small progress ring for a song being prepared: a faint track, the filled share in orange,
-/// and nothing filled while the song waits its turn.
-struct PreparingRing: View {
-    @Environment(\.surface) private var surface
-    let progress: Double
-    let active: Bool
-
-    var body: some View {
-        ZStack {
-            Circle().stroke(surface.tertiary.opacity(0.35), lineWidth: 2.5)
-            Circle()
-                .trim(from: 0, to: active ? max(0.04, min(progress, 1)) : 0)
-                .stroke(Palette.accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .shadow(color: Palette.accentGlow.opacity(0.6), radius: 2)
-        }
-        .frame(width: 18, height: 18)
-        .animation(Motion.gentle, value: progress)
-        .accessibilityLabel(active ? "Preparing, \(Int(progress * 100)) percent" : "Waiting to prepare")
     }
 }

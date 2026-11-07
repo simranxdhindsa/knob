@@ -9,3 +9,7 @@ KnobShiftNowPlaying
 KnobShiftQueue
 KnobShiftAddMusic
 KnobShiftPlaylistsView
+KnobShiftQueueRows
+KnobShiftQueueHeader
+KnobShiftTogetherView
+KnobShiftPlayOnView

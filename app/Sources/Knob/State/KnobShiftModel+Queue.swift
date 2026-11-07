@@ -12,7 +12,11 @@ extension KnobShiftModel {
         return tracks[(min(currentIndex, tracks.count - 1) + 1) % tracks.count]
     }
 
+    /// Shuffle or Mix Order is showing, so `unshuffled` holds the user's own order.
+    var isArranged: Bool { isShuffled || isMixOrdered }
+
     func toggleShuffle() {
+        if sendToMirror(.shuffle) { return }
         shuffleToRestore = nil
         if isShuffled {
             tracks = unshuffled
@@ -20,7 +24,8 @@ extension KnobShiftModel {
             isShuffled = false
             log("QUEUE", "Shuffle off, back to your order.")
         } else {
-            unshuffled = tracks
+            // Coming from Mix Order the user's own order is already kept; it stays the one restored.
+            if isMixOrdered { isMixOrdered = false } else { unshuffled = tracks }
             if let playing = nowPlaying, tracks.contains(playing) {
                 tracks = [playing] + tracks.filter { $0 != playing }.shuffled()
             } else {
@@ -35,13 +40,16 @@ extension KnobShiftModel {
     /// Moves songs in the order that is showing. In shuffle the user's own order is left as it
     /// was, so turning shuffle off still restores it.
     func move(fromOffsets source: IndexSet, toOffset destination: Int) {
+        // The order belongs to the device playing while listening to it.
+        guard !isMirroring else { return }
         tracks.move(fromOffsets: source, toOffset: destination)
+        if !isArranged { orderBeforeSort = nil }
         log("QUEUE", "Reordered: " + tracks.map(\.name).joined(separator: ", ") + ".")
         queueReordered()
     }
 
     /// Keeps the playing song current at its new place and plans the mix into whatever is now next.
-    private func queueReordered() {
+    func queueReordered() {
         if let playing = nowPlaying, let index = tracks.firstIndex(of: playing) {
             currentIndex = index
         }
@@ -53,7 +61,7 @@ extension KnobShiftModel {
     /// One change and one save, however many songs. The files stay on the Mac; a Spotify song
     /// still waiting to download is not downloaded again later.
     func remove(ids: Set<UUID>, remembers: Bool = true) {
-        guard !ids.isEmpty else { return }
+        guard !isMirroring, !ids.isEmpty else { return }
         if let playing = nowPlaying, ids.contains(playing.id) { stop() }
         let leaving = tracks.filter { ids.contains($0.id) }.count
         #if os(iOS)
@@ -84,6 +92,7 @@ extension KnobShiftModel {
         }
         log("QUEUE", "Removed \(leaving) song(s) and \(waiting) still preparing.")
         currentIndex = min(currentIndex, max(0, tracks.count - 1))
+        if tracks.isEmpty { clearOrderModes() }
         persistQueue()
         if tracks.isEmpty {
             mixState = .idle
@@ -93,6 +102,8 @@ extension KnobShiftModel {
 
     /// Empties the queue.
     func removeAll() {
+        // The order belongs to the device playing while listening to it.
+        guard !isMirroring else { return }
         remove(ids: Set(tracks.map(\.id)).union(queuePending.map(\.id)), remembers: false)
     }
 }

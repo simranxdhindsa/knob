@@ -9,12 +9,23 @@ Knob 4.1 keeps the orange microphone dot away, makes low volumes easier to hear,
 
 ### New features
 
+- Listen Together plays the same music on your Mac and iPhones at the same moment, on the same network. Pick a device from the dots menu and it is asked to join. Tap Join and its own player shows the song, the cover and the queue, and every button controls the music for everyone
+- Listen Together shares your effects and equalizer, so every device sounds the same, and a line up setting helps Bluetooth speakers that play a little late
+- Play On moves the music to another Mac or iPhone and carries on from the same moment. Songs the other device doesn't have are copied over and kept in a playlist with the same name, and it asks once before a new device can play on yours
+- AirPlay and Bluetooth speakers are in the same list as your other devices, from the speaker button
+- In StandBy and the Dynamic Island the record really turns while music plays and holds still when you pause, and the StandBy card has its own KnobMix button
 - A new Playlists view from the queue: open any playlist, pick songs or add them all, and imported songs wait there until you add them
 - Knob no longer uses your Mac's audio input to carry sound, so the orange microphone dot stays off while Knob is on. Turning Knob on asks you to install a small update to its audio device, once
 - Songs Knob could not find now show YouTube matches to pick from, or you can paste a link, and Retry tries them all at once
 - Turn your iPhone on its side and the player becomes a real record deck: spin the record to scratch through the song, lift the arm to jump anywhere, tap the cover to pause
 - On the Mac, a switch at the top of full screen brings up the same record deck
 - When the song changes on the record deck, the record slides back into its sleeve, the cover changes and the new record comes out
+- The queue can arrange itself so neighbouring songs mix well, and a small mark shows which mixes will be smooth and which are a big tempo jump
+- Search the queue by song or artist, sort it by BPM, length, artist or recently added, and go back to your own order at any time
+- Play Next puts any song straight after the one playing, from the right click menu on Mac or a swipe on iPhone
+- The queue shows how long is left and when it ends, dims songs already played, and takes you back to the playing song with one click
+- Long song names read better, with the film or album they come from moved to the line below
+- On iPhone, the playing song can show in StandBy and on the Lock Screen with its cover, a moving bar and play, previous and next buttons, and a small widget shows the last song
 - Short tips show you the way to the record deck and how to use it, one at a time, and go away for good once you have tried each thing
 - Put your iPhone on its side on a charger with Knob open and it becomes a bedside clock: the record keeps turning in a dimmed room beside a big clock, the screen stays on, and a tap brings the controls back
 - KnobShift in full screen shows the whole cover, sharp and uncut, with bigger controls
@@ -37,6 +48,8 @@ Knob 4.1 keeps the orange microphone dot away, makes low volumes easier to hear,
 - New headphones and speakers show in Knob as soon as you connect them, with no need to restart it
 - Clean vocal handovers in a mix now work on every song, not only some of them
 - FLAC songs you add yourself now show their names and covers
+- Moving music back with Play On keeps the whole queue, and Play On stops waiting for a device that has gone away
+- The StandBy record keeps up when the song changes, and the Dynamic Island shows the cover
 
 ## 4.0
 

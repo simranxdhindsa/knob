@@ -159,6 +159,13 @@ final class KnobShiftModel: ObservableObject {
     /// The queue in play order: the user's order, or the shuffled one (KnobShiftModel+Queue.swift).
     @Published internal(set) var tracks: [Track] = []
     @Published internal(set) var isShuffled = false
+    /// Mix Order is on: the songs after the playing one are arranged by tempo. Like shuffle it
+    /// keeps the user's own order in `unshuffled`, and the two are never on together.
+    @Published internal(set) var isMixOrdered = false
+    var mixOrderToRestore = false
+    /// The user's own order from before the first sort, so a sort can be taken back. A drag makes
+    /// a new order of their own, and this goes.
+    @Published internal(set) var orderBeforeSort: [Track]?
     /// KnobMix Now was pressed and the mix is waiting for its phrase or break.
     @Published internal(set) var mixNowWaiting = false
     /// The user's own order while shuffle is on, so turning it off brings that order back.
@@ -275,8 +282,17 @@ final class KnobShiftModel: ObservableObject {
     var releaseHold: (() -> Void)?
     var playbackStartedAt = Date()
     private var configurationObserver: NSObjectProtocol?
+    /// Everything KnobShift plays meets here, before any device's volume: what Listen Together
+    /// sends. The gate is open unless a session plays this device through its delay instead.
+    let deckBus = AVAudioMixerNode()
+    let deckGate = AVAudioMixerNode()
+    /// The running Listen Together session, if any.
+    var together: KnobShiftTogetherPlayer?
+    var togetherCapture: KnobShiftTogetherCapture?
     /// The song the current plan or blend leads into, for the log when it is called off.
     var plannedNext: Track?
+    /// Another device's music shown in the player while listening to it (KnobShiftModel+Mirror.swift).
+    var mirror: KnobShiftMirror?
     var isProcessing = false
 
     private var outputFormatDescription: String {
@@ -286,8 +302,12 @@ final class KnobShiftModel: ObservableObject {
 
     init(restoresQueue: Bool = true) {
         let engine = audioEngine
-        deckOne = KnobShiftDeck(name: "Deck 1", engine: engine)
-        deckTwo = KnobShiftDeck(name: "Deck 2", engine: engine)
+        engine.attach(deckBus)
+        engine.attach(deckGate)
+        engine.connect(deckBus, to: deckGate, format: nil)
+        engine.connect(deckGate, to: engine.mainMixerNode, format: nil)
+        deckOne = KnobShiftDeck(name: "Deck 1", engine: engine, output: deckBus)
+        deckTwo = KnobShiftDeck(name: "Deck 2", engine: engine, output: deckBus)
         primaryDeck = deckOne
         secondaryDeck = deckTwo
         log("SESSION", "Local mixer initialized with Deck 1 and Deck 2.")
@@ -300,6 +320,7 @@ final class KnobShiftModel: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.log("DEVICE", "Output configuration changed. Engine running: \(self.audioEngine.isRunning), \(self.outputFormatDescription).")
+                KnobShiftTogetherSession.shared.outputChanged()
             }
         }
         if restoresQueue {
@@ -396,7 +417,7 @@ final class KnobShiftModel: ObservableObject {
 
     /// When a newly ready song becomes the next one while music plays, plan the mix into it.
     func refreshPlanIfNeeded() {
-        guard isPlaying, mixState != .mixing, nowPlaying != nil, tracks.count > 1,
+        guard !isMirroring, isPlaying, mixState != .mixing, nowPlaying != nil, tracks.count > 1,
               abs(primaryDeck.rate - 1) < 0.001 else { return }
         let expected = tracks[(currentIndex + 1) % tracks.count]
         guard plannedNext != expected else { return }
@@ -405,7 +426,7 @@ final class KnobShiftModel: ObservableObject {
     }
 
     func play() {
-        guard !tracks.isEmpty else { return }
+        guard !isMirroring, !tracks.isEmpty else { return }
         stop()
         currentIndex = min(currentIndex, tracks.count - 1)
         log("PLAY", "Starting \(tracks[currentIndex].title).")
@@ -463,7 +484,7 @@ final class KnobShiftModel: ObservableObject {
     }
 
     func remove(_ track: Track) {
-        guard let index = tracks.firstIndex(of: track) else { return }
+        guard !isMirroring, let index = tracks.firstIndex(of: track) else { return }
         if nowPlaying == track { stop() }
         tracks.remove(at: index)
         unshuffled.removeAll { $0 == track }
@@ -477,6 +498,7 @@ final class KnobShiftModel: ObservableObject {
     }
 
     func pauseOrResume() {
+        if sendToMirror(.playPause) { return }
         releaseHold?()
         guard nowPlaying != nil else { play(); return }
         if isPlaying, mixState == .mixing, transitionTask != nil {
@@ -513,6 +535,7 @@ final class KnobShiftModel: ObservableObject {
     }
 
     func previous() {
+        if sendToMirror(.previous) { return }
         releaseHold?()
         guard !tracks.isEmpty else { return }
         if playbackTime > 3 { seek(to: 0); return }
@@ -522,6 +545,7 @@ final class KnobShiftModel: ObservableObject {
     }
 
     func next() {
+        if sendToMirror(.next) { return }
         releaseHold?()
         guard !tracks.isEmpty else { return }
         currentIndex = (currentIndex + 1) % tracks.count
@@ -530,6 +554,7 @@ final class KnobShiftModel: ObservableObject {
     }
 
     func select(_ track: Track) {
+        if sendToMirror(.pick, track: track) { return }
         guard let index = tracks.firstIndex(of: track) else { return }
         currentIndex = index
         log("TRANSPORT", "Selected \(track.title).")
@@ -537,6 +562,7 @@ final class KnobShiftModel: ObservableObject {
     }
 
     func seek(to time: TimeInterval) {
+        if sendToMirror(.seek, time: time) { return }
         releaseHold?()
         guard let track = nowPlaying else { return }
         let wasPlaying = isPlaying

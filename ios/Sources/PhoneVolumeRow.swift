@@ -97,12 +97,18 @@ final class PhoneOutputLevel: ObservableObject {
     func read() { volume = Double(AVAudioSession.sharedInstance().outputVolume) }
 }
 
-/// Apple's own output picker (AirPlay, headphones, speakers), orange while sound goes elsewhere.
+/// Where the music plays. Apple's list can't show Knob's devices, so this opens Knob's own list,
+/// with Apple's picker (AirPlay, headphones, speakers) as a row inside it.
 struct PhoneOutputButton: View {
+    var action: () -> Void
+
     var body: some View {
-        PhoneRoutePicker(tint: Glass.secondary)
-            .frame(width: 44, height: 44)
-            .accessibilityLabel("Choose where the sound plays")
+        Button(action: action) {
+            Image(systemName: "airplayaudio").font(.system(size: 20)).foregroundStyle(Glass.secondary)
+                .frame(width: 44, height: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Choose where the music plays")
     }
 }
 

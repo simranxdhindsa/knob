@@ -1,6 +1,11 @@
 /// Every persisted setting. Views read and write these only through `@AppStorage`;
 /// the model and engine helpers use `UserDefaults` with the same keys.
 enum PersistKey: String {
+    /// Play On: this device's own id, and the devices allowed to send music here.
+    case playOnDeviceId = "knob.ui.playOnDeviceId"
+    case playOnAllowed = "knob.ui.playOnAllowed"
+    /// Listen Together's line up for an output, in seconds: the output's name is added to this.
+    case togetherLineUp = "knob.ui.togetherLineUp"
     case selectedTab = "knob.ui.selectedTab"
     case lastPreset = "knob.ui.lastPreset"
     /// Show Knob in the Dock and the ⌘-Tab switcher (default true).
@@ -24,6 +29,8 @@ enum PersistKey: String {
     case knobShiftTipsSeen = "knob.shift.tipsSeen"
     /// While shuffle is on, the shuffled order; `knobShiftQueue` keeps the user's own order.
     case knobShiftShuffledQueue = "knob.shift.shuffledQueue"
+    /// Whether the saved arranged order (`knobShiftShuffledQueue`) is Mix Order rather than shuffle.
+    case knobShiftMixOrdered = "knob.shift.mixOrdered"
     /// The song last in the player and where it was, so the next launch has it ready to play.
     case knobShiftLastSong = "knob.shift.lastSong"
     case knobShiftLastPosition = "knob.shift.lastPosition"

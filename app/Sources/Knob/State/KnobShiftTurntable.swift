@@ -82,13 +82,13 @@ final class KnobShiftTurntable: ObservableObject {
         loaded = nil
     }
 
-    /// The deck is on screen: wires the record into Knob's sound, after the mixer, so Knob's
-    /// volume and effects apply to it like everything else.
+    /// The deck is on screen: wires the record into the mix, so Knob's volume and effects apply
+    /// to it like everything else, and Listen Together sends it too.
     func start() {
         decks += 1
         guard !attached else { return }
         model.audioEngine.attach(node)
-        model.audioEngine.connect(node, to: model.audioEngine.mainMixerNode, format: nil)
+        model.audioEngine.connect(node, to: model.deckBus, format: nil)
         attached = true
         follow(model.nowPlaying)
     }
@@ -288,7 +288,7 @@ final class KnobShiftTurntable: ObservableObject {
 
     /// Lifted off the record, the song stops, as it does on a real one.
     func armLifted(progress: Double) {
-        guard model.nowPlaying != nil, model.mixState != .mixing, !model.isMixPaused, !isActive else { return }
+        guard !model.isMirroring, model.nowPlaying != nil, model.mixState != .mixing, !model.isMixPaused, !isActive else { return }
         holdDeck()
         isArmHeld = true
         heldProgress = progress

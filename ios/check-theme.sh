@@ -13,7 +13,7 @@ analyser='/(InsetScreen|SpectrumView|ScreenSection|KnobShiftScreen|AppIconView|P
 
 files=()
 while IFS= read -r file; do files+=("$file"); done < <(
-  { ls "$shared"/Components/*.swift "$repo_dir"/ios/Sources/*.swift
+  { ls "$shared"/Components/*.swift "$repo_dir"/ios/Sources/*.swift "$repo_dir"/ios/Widget/*.swift
     while read -r view; do echo "$shared/Views/$view.swift"; done < "$repo_dir/ios/shared-views.txt"
   } | grep -vE 'Spotify|YouTube|Google|SpotDL|HelperProcess|MacEngine|UpdateStatusLabel' | grep -vE "$analyser"
 )

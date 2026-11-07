@@ -43,6 +43,20 @@ enum Motion {
     static let tipMoveSeconds = 2.4
     static let tipTurn = Animation.easeInOut(duration: 0.9).delay(0.5)
 
+    /// The queue going to the playing song: the list glides there, the button's arrow shoots the
+    /// way the list is about to move, and the row glows as it arrives.
+    static let queueJumpSeconds = 0.6
+    static let queueJump = Animation.timingCurve(0.2, 0, 0.2, 1, duration: queueJumpSeconds)
+    static let queueJumpArrow = Animation.easeOut(duration: 0.28)
+    static let queueLand = Animation.easeOut(duration: 0.9)
+
+    /// The record in StandBy and the Dynamic Island turning as the song changes, at the deck's own
+    /// speed of 160 degrees a second. iOS runs nothing by itself on a Live Activity and stops an
+    /// animation after about 2 seconds, so this is one glide, not a spin.
+    static let standbyTurnSeconds = 2.0
+    static let standbyTurnDegrees = 320.0
+    static let standbyTurn = Animation.linear(duration: standbyTurnSeconds)
+
     /// A song's cover coming up from grey to full colour once it is ready.
     static let artworkReveal = Animation.easeOut(duration: 0.4)
 
@@ -53,4 +67,9 @@ enum Motion {
     static func switchThumb(turningOn: Bool) -> Animation {
         .timingCurve(0.26, 0.75, 0.38, 0.45, duration: turningOn ? 0.25 : 0.125)
     }
+}
+
+extension Motion {
+    /// Nothing moves for someone who asked for less motion.
+    static func respecting(_ animation: Animation, reduce: Bool) -> Animation? { reduce ? nil : animation }
 }

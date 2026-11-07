@@ -62,11 +62,13 @@ final class KnobModel: ObservableObject {
         self.engine = engine
         self.volumeControl = volume
         self.launcher = launcher
+        KnobShiftTogetherSession.shared.sound = self
     }
     #else
     init(engine: SoundEngine, volume: VolumeControl) {
         self.engine = engine
         self.volumeControl = volume
+        KnobShiftTogetherSession.shared.sound = self
     }
     #endif
 
@@ -277,6 +279,13 @@ final class KnobModel: ObservableObject {
         guard eq.indices.contains(band) else { return }
         eq[band] = value
         queue("eq\(band + 1)", value * 12)
+    }
+
+    /// Listen Together: shows the session's preset by name, on a device that has it. The sound
+    /// itself arrives as settings, so nothing is loaded here.
+    func showSharedPreset(named name: String?) {
+        if presets.isEmpty { presets = Preset.all() }
+        currentPreset = name.flatMap { name in presets.first { $0.name == name } }
     }
 
     func editingChanged(_ active: Bool) { editing = max(0, editing + (active ? 1 : -1)) }

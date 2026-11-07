@@ -54,7 +54,12 @@
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_knobshift._tcp</string>
+		<string>_knobplay._tcp</string>
+		<string>_knobtogether._tcp</string>
+		<string>_knobtogether._udp</string>
 	</array>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
