@@ -5,8 +5,9 @@ import Foundation
 /// are degrees clockwise from pointing right, as on screen. The arm's pivot sits above and to the
 /// right of the record, so the stylus crosses the half of the record the sleeve leaves showing.
 struct KnobShiftVinylGeometry {
-    /// Where the music starts and ends on the record, as shares of its width from the centre.
-    static let outerGroove = 0.47, innerGroove = 0.22
+    /// Where the music starts and ends on the record, as shares of its width from the centre. The
+    /// song starts right at the outer edge, as on a real record.
+    static let outerGroove = 0.488, innerGroove = 0.22
     private static let pivotRight = 0.66, pivotUp = 0.40, reach = 0.72
     /// How far past the outer groove the arm rests, clear of the record.
     private static let restSwing = 16.0

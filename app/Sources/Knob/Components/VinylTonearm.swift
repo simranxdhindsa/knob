@@ -9,17 +9,28 @@ struct VinylTonearm: View {
     @ObservedObject var clock: KnobShiftClock
     let geometry: KnobShiftVinylGeometry
     var resting = false
+    /// Raised off the record while it swings, so it casts a longer shadow.
+    var lifted = false
     /// Told when the arm has been picked up and set down.
     var onUsed: () -> Void = {}
     /// Resets by itself if the system takes the touch away, which ends the drag with no word.
     @GestureState private var touching = false
 
     private var progress: Double {
-        turntable.heldProgress ?? (clock.duration > 0 ? clock.time / clock.duration : 0)
+        if let held = turntable.heldProgress { return held }
+        // In a KnobMix the record already shows the song coming in, so the arm plays that one,
+        // read from its own deck each time the clock ticks, and is already in place as it takes over.
+        let model = turntable.model
+        if let next = model.mixingInto, next.duration > 0 {
+            let deck = model.secondaryDeck
+            return min(max((deck.position ?? deck.startOffset) / next.duration, 0), 1)
+        }
+        return clock.duration > 0 ? clock.time / clock.duration : 0
     }
 
     var body: some View {
         let held = turntable.isArmHeld
+        let up = held || lifted
         let angle = resting ? geometry.restAngle : geometry.angle(progress: progress)
         let reach = geometry.armLength
         ZStack {
@@ -28,7 +39,7 @@ struct VinylTonearm: View {
             Canvas { context, size in VinylArmDrawing.draw(context, size: size, reach: reach) }
                 .frame(width: VinylArmDrawing.width(reach), height: VinylArmDrawing.height(reach))
                 .allowsHitTesting(false)
-                .shadow(color: Glass.shadow, radius: held ? 12 : 5, x: 2, y: held ? 12 : 5)
+                .shadow(color: Glass.shadow, radius: up ? 12 : 5, x: 2, y: up ? 12 : 5)
                 .rotationEffect(.degrees(angle), anchor: VinylArmDrawing.anchor(reach))
                 .position(x: geometry.pivot.x + VinylArmDrawing.width(reach) / 2 - VinylArmDrawing.pivot(reach).x,
                           y: geometry.pivot.y + VinylArmDrawing.height(reach) / 2 - VinylArmDrawing.pivot(reach).y)
@@ -45,7 +56,8 @@ struct VinylTonearm: View {
             turntable.armDropped()
             onUsed()
         }
-        .animation(held ? nil : Motion.gentle, value: resting)
+        .animation(held ? nil : Motion.armSwing, value: resting)
+        .animation(Motion.armLift, value: lifted)
         .animation(held || resting ? nil : .linear(duration: 0.1), value: progress)
         .accessibilityElement()
         .accessibilityLabel("Tonearm")

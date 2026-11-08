@@ -7,8 +7,9 @@ import SwiftUI
 /// song, pick the arm up and set it down, and tap the sleeve to play or pause or swipe for
 /// another song. When the song changes, by a button or a KnobMix, the arm lifts, the record goes
 /// back into its sleeve, the cover changes and the new record comes out, always in the same time.
-/// In a KnobMix that happens as the mix begins, and the arm stays up until the new song has taken
-/// over, since until then the song's clock still belongs to the old one.
+/// In a KnobMix that happens as the mix begins, and the arm comes down on the new song and follows
+/// it through the mix. Mirroring another device, where the new song's deck isn't here to read,
+/// the arm stays up until the new song has taken over.
 struct VinylStage: View {
     static let space = "VinylStage"
 
@@ -32,6 +33,9 @@ struct VinylStage: View {
     @State private var leaving: KnobShiftModel.Track?
     /// The deck has been settled for a moment, so a tip doesn't land on top of its opening.
     @State private var tipsReady = false
+    /// The arm is on the record. It only comes down once the record is fully out.
+    @State private var armDown = false
+    @State private var armLifted = false
 
     private enum Stage { case sleeve, out, settled, tucked }
 
@@ -63,7 +67,7 @@ struct VinylStage: View {
                 .scaleEffect(isInSleeve ? 0.9 : 1)
                 .position(recordPosition(layout))
             sleeve(layout)
-            VinylTonearm(turntable: turntable, clock: model.clock, geometry: geometry, resting: stage != .settled || model.mixingInto != nil, onUsed: { DeckTip.arm.mark(in: &tipsSeen) })
+            VinylTonearm(turntable: turntable, clock: model.clock, geometry: geometry, resting: !armDown || (model.mixingInto != nil && model.isMirroring), lifted: armLifted, onUsed: { DeckTip.arm.mark(in: &tipsSeen) })
                 .opacity(stage == .sleeve ? 0 : 1)
             guide(layout, geometry: geometry)
         }
@@ -133,7 +137,9 @@ struct VinylStage: View {
     private func change() async {
         leaving = nil
         guard let wanted, wanted != showing else {
+            let wasTucked = stage == .tucked
             comeBackOut()
+            await armComesDown(after: wasTucked ? Motion.vinylReturnSeconds : 0)
             return
         }
         // Nothing on show yet, or still opening: the new song simply goes in the sleeve.
@@ -152,10 +158,12 @@ struct VinylStage: View {
             try? await Task.sleep(for: .seconds(0.2))
             leaving = nil
             comeBackOut()
+            await armComesDown(after: 0)
             return
         }
         let began = Date()
         do {
+            armGoesAway()
             withAnimation(Motion.vinylTuck) { stage = .tucked }
             try await Task.sleep(for: .seconds(Motion.vinylTuckSeconds))
             _ = await cover.value
@@ -166,8 +174,42 @@ struct VinylStage: View {
             withAnimation(Motion.vinylReturn) { stage = .settled }
             try await Task.sleep(for: .seconds(Motion.vinylReturnSeconds))
             model.log("VINYL", "The record changed in \(String(format: "%.2f", Date().timeIntervalSince(began)))s.")
+            await armComesDown(after: 0)
         } catch {
             // A newer song took over.
+        }
+    }
+
+    /// Lifted and swung back to its rest, as the record goes into its sleeve.
+    private func armGoesAway() {
+        guard armDown else {
+            armLifted = false
+            return
+        }
+        armLifted = true
+        armDown = false
+        Task {
+            try? await Task.sleep(for: .seconds(Motion.armSwingSeconds))
+            if !armDown { armLifted = false }
+        }
+    }
+
+    /// Once the record is out and still: lifted off the rest, swung across, lowered into the groove.
+    private func armComesDown(after wait: Double) async {
+        guard !armDown else { return }
+        guard !reduceMotion else {
+            armDown = true
+            return
+        }
+        do {
+            try await Task.sleep(for: .seconds(wait))
+            armLifted = true
+            try await Task.sleep(for: .seconds(Motion.armLiftSeconds))
+            armDown = true
+            try await Task.sleep(for: .seconds(Motion.armSwingSeconds))
+            armLifted = false
+        } catch {
+            // Another song came first, and that change moves the arm instead.
         }
     }
 
@@ -180,6 +222,7 @@ struct VinylStage: View {
     private func open() async {
         guard !reduceMotion else {
             stage = .settled
+            armDown = true
             onSettled()
             return
         }
@@ -190,6 +233,7 @@ struct VinylStage: View {
             try await Task.sleep(for: .milliseconds(760))
             withAnimation(Motion.vinylSettle) { stage = .settled }
             onSettled()
+            await armComesDown(after: 0.6)
         } catch {
             // The deck left mid opening, and there is nothing left to open.
         }

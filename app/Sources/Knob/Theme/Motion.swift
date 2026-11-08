@@ -29,6 +29,12 @@ enum Motion {
     static let vinylCover = Animation.easeInOut(duration: vinylCoverSeconds)
     static let vinylReturn = Animation.timingCurve(0.2, 0, 0.2, 1, duration: vinylReturnSeconds)
 
+    /// The arm cueing like a real one, only once the record is out: lifted off its rest, swung
+    /// across, then lowered into the groove. Going away for a song change it lifts and swings back.
+    static let armLiftSeconds = 0.2, armSwingSeconds = 0.8
+    static let armLift = Animation.easeOut(duration: armLiftSeconds)
+    static let armSwing = Animation.timingCurve(0.45, 0, 0.25, 1, duration: armSwingSeconds)
+
     /// The iPhone's Bedside mode: the room going dim, the clock and the controls trading places
     /// with one gone before the other comes, and each part of the clock rising into place a
     /// moment after the one above it.
