@@ -44,6 +44,32 @@ if [ ! -f "$app_dir/Package.swift" ]; then
     exit 1
 fi
 
+# Only one dev mode at a time: two of them rebuild the same build/Knob.app at once and break each
+# other's signing ("the code cannot be read by the verifier"). Any other one still running, even
+# a forgotten one in the background, is stopped first, the way Ctrl-C stops it, then its helpers.
+stop_other_dev_modes() {
+    local others=() helpers=() pid parent alive child
+    while read -r pid; do
+        [ "$pid" = "$$" ] && continue
+        parent=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+        # A dev mode's helpers run as its children (and so does this check); its top one is stopped.
+        if [ -n "$parent" ] && ps -o command= -p "$parent" 2>/dev/null | grep -q 'scripts/dev\.sh'; then continue; fi
+        others+=("$pid")
+        while read -r child; do [ -n "$child" ] && helpers+=("$child"); done < <(pgrep -P "$pid" || true)
+    done < <(pgrep -f 'scripts/dev\.sh' || true)
+    [ ${#others[@]} -gt 0 ] || return 0
+    warn "Another dev mode was already running (${others[*]}). Stopping it so the builds don't collide."
+    kill -TERM "${others[@]}" 2>/dev/null || true
+    for _ in $(seq 1 20); do
+        alive=no
+        for pid in "${others[@]}"; do kill -0 "$pid" 2>/dev/null && alive=yes; done
+        [ "$alive" = no ] && break
+        sleep 0.5
+    done
+    [ ${#helpers[@]} -eq 0 ] || kill -TERM "${helpers[@]}" 2>/dev/null || true
+}
+stop_other_dev_modes
+
 # Engine helpers are optional: the app can still be iterated on without them.
 build_engine() {
     if [ ! -f "$cmake_dir/CMakeCache.txt" ]; then
