@@ -5,8 +5,9 @@ import Foundation
 /// are degrees clockwise from pointing right, as on screen. The arm's pivot sits above and to the
 /// right of the record, so the stylus crosses the half of the record the sleeve leaves showing.
 struct KnobShiftVinylGeometry {
-    /// Where the music starts and ends on the record, as shares of its width from the centre.
-    static let outerGroove = 0.47, innerGroove = 0.22
+    /// Where the music starts and ends on the record, as shares of its width from the centre. The
+    /// song starts right at the outer edge, as on a real record.
+    static let outerGroove = 0.488, innerGroove = 0.22
     private static let pivotRight = 0.66, pivotUp = 0.40, reach = 0.72
     /// How far past the outer groove the arm rests, clear of the record.
     private static let restSwing = 16.0
@@ -41,7 +42,21 @@ struct KnobShiftVinylGeometry {
 
     /// The point in the song for a finger holding the arm here.
     func progress(finger: CGPoint) -> Double {
-        progress(angle: atan2(Double(finger.y - pivot.y), Double(finger.x - pivot.x)) * 180 / .pi)
+        progress(angle: bearing(finger: finger))
+    }
+
+    /// The direction from the pivot to a finger, in the same degrees as the arm's angle.
+    func bearing(finger: CGPoint) -> Double {
+        atan2(Double(finger.y - pivot.y), Double(finger.x - pivot.x)) * 180 / .pi
+    }
+
+    /// The point in the song for an arm picked up at `progress` with the finger at `from`, once
+    /// the finger is at `to`. The arm turns by a share of the finger's turn, so the whole song
+    /// isn't squeezed into a few degrees of the finger, and it never jumps to the finger on pickup.
+    func progress(from: CGPoint, to: CGPoint, startingAt progress: Double, precision: Double) -> Double {
+        var turned = bearing(finger: to) - bearing(finger: from)
+        if turned > 180 { turned -= 360 } else if turned < -180 { turned += 360 }
+        return self.progress(angle: angle(progress: progress) + turned * precision)
     }
 
     func stylus(progress: Double) -> CGPoint {
