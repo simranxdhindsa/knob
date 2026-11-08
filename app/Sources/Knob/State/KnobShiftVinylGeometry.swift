@@ -42,7 +42,21 @@ struct KnobShiftVinylGeometry {
 
     /// The point in the song for a finger holding the arm here.
     func progress(finger: CGPoint) -> Double {
-        progress(angle: atan2(Double(finger.y - pivot.y), Double(finger.x - pivot.x)) * 180 / .pi)
+        progress(angle: bearing(finger: finger))
+    }
+
+    /// The direction from the pivot to a finger, in the same degrees as the arm's angle.
+    func bearing(finger: CGPoint) -> Double {
+        atan2(Double(finger.y - pivot.y), Double(finger.x - pivot.x)) * 180 / .pi
+    }
+
+    /// The point in the song for an arm picked up at `progress` with the finger at `from`, once
+    /// the finger is at `to`. The arm turns by a share of the finger's turn, so the whole song
+    /// isn't squeezed into a few degrees of the finger, and it never jumps to the finger on pickup.
+    func progress(from: CGPoint, to: CGPoint, startingAt progress: Double, precision: Double) -> Double {
+        var turned = bearing(finger: to) - bearing(finger: from)
+        if turned > 180 { turned -= 360 } else if turned < -180 { turned += 360 }
+        return self.progress(angle: angle(progress: progress) + turned * precision)
     }
 
     func stylus(progress: Double) -> CGPoint {

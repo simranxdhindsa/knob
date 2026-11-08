@@ -15,6 +15,10 @@ struct VinylTonearm: View {
     var onUsed: () -> Void = {}
     /// Resets by itself if the system takes the touch away, which ends the drag with no word.
     @GestureState private var touching = false
+    /// Where the finger and the song were when the arm was picked up.
+    @State private var pickedUp: (finger: CGPoint, progress: Double)?
+    /// The arm turns by this share of the finger's turn, for finer control over where it lands.
+    private static let precision = 0.5
 
     private var progress: Double {
         if let held = turntable.heldProgress { return held }
@@ -52,6 +56,7 @@ struct VinylTonearm: View {
         }
         .onChange(of: touching) {
             guard !touching else { return }
+            pickedUp = nil
             Haptics.mark()
             turntable.armDropped()
             onUsed()
@@ -73,11 +78,12 @@ struct VinylTonearm: View {
         DragGesture(minimumDistance: 0, coordinateSpace: .named(VinylStage.space))
             .updating($touching) { _, touching, _ in touching = true }
             .onChanged { drag in
-                let at = geometry.progress(finger: drag.location)
-                if turntable.isArmHeld {
-                    turntable.armMoved(progress: at)
-                } else {
+                if turntable.isArmHeld, let pickedUp {
+                    turntable.armMoved(progress: geometry.progress(from: pickedUp.finger, to: drag.location,
+                                                                   startingAt: pickedUp.progress, precision: Self.precision))
+                } else if !turntable.isArmHeld {
                     Haptics.mark()
+                    pickedUp = (drag.location, progress)
                     turntable.armLifted(progress: progress)
                 }
             }
