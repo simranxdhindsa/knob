@@ -28,7 +28,17 @@ final class KnobShiftScratch {
         var requestPosition = 0.0
         var requestSpeed = 0.0
         var requests = 0
+        /// The host time the record cuts out at, for the deck to take over; 0 for none.
+        var cutAtHost: UInt64 = 0
+        var cutFollow: Float = 0.01
+        // Set once at the start.
+        var outputRate = 48_000.0
+        var ticksPerSecond = 1_000_000_000.0
         // Written by the audio thread.
+        /// When the last block starts playing out, and where the record and its speed were then.
+        var renderHost: UInt64 = 0
+        var renderPosition = 0.0
+        var renderSpeed = 0.0
         var handled = 0
         var position = 0.0
         var speed = 0.0
@@ -39,6 +49,8 @@ final class KnobShiftScratch {
 
     /// A hand is quick; the motor takes a moment to bring the record back up to speed.
     static let handSeconds = 0.012, motorSeconds = 0.14, fadeSeconds = 0.03
+    /// The record cutting out under the deck: short enough that the two never sound together.
+    static let cutSeconds = 0.002
     /// Below this speed a stylus fades to nothing.
     private static let quietSpeed = 0.12
     /// Longer than this stays off the record: 20 minutes is about 210 MB, and a long mix in
@@ -55,6 +67,11 @@ final class KnobShiftScratch {
         shared = .allocate(capacity: 1)
         shared.initialize(to: Shared())
         shared.pointee.levelFollow = Self.coefficient(Self.fadeSeconds, rate: outputRate).float
+        shared.pointee.cutFollow = Self.coefficient(Self.cutSeconds, rate: outputRate).float
+        shared.pointee.outputRate = outputRate
+        var timebase = mach_timebase_info_data_t()
+        mach_timebase_info(&timebase)
+        shared.pointee.ticksPerSecond = 1_000_000_000 * Double(timebase.denom) / Double(timebase.numer)
     }
 
     deinit {
@@ -70,15 +87,32 @@ final class KnobShiftScratch {
     var isSounding: Bool { shared.pointee.level > 0.0005 || shared.pointee.targetLevel > 0 }
     var time: TimeInterval { shared.pointee.position / fileRate }
     var speed: Double { shared.pointee.speed }
+    var requestCount: Int { shared.pointee.requests }
+
+    /// A moment from now, as a host time, and where in the song the record will be then, with
+    /// the motor still closing on `speed`. Nil until the audio thread has said when it plays.
+    func handover(after seconds: Double, towards speed: Double) -> (host: UInt64, time: TimeInterval)? {
+        let s = shared.pointee
+        guard s.renderHost != 0 else { return nil }
+        let host = max(s.renderHost, mach_absolute_time()) + UInt64(seconds * s.ticksPerSecond)
+        let elapsed = Double(host - s.renderHost) / s.ticksPerSecond
+        let settle = Self.motorSeconds
+        let covered = speed * elapsed + (s.renderSpeed - speed) * settle * (1 - exp(-elapsed / settle))
+        return (host, s.renderPosition / fileRate + covered)
+    }
+
+    /// Cuts the record out at this host time, the moment the deck comes in.
+    func cut(at host: UInt64) { shared.pointee.cutAtHost = host }
 
     /// The player node for this record: it sits silent until a hand lands.
     func makeNode(format: AVAudioFormat) -> AVAudioSourceNode {
         let shared = shared
-        return AVAudioSourceNode(format: format) { isSilent, _, frames, list in
+        return AVAudioSourceNode(format: format) { isSilent, timestamp, frames, list in
             let buffers = UnsafeMutableAudioBufferListPointer(list)
             guard buffers.count >= 2, let left = buffers[0].mData?.assumingMemoryBound(to: Float.self),
                   let right = buffers[1].mData?.assumingMemoryBound(to: Float.self),
-                  Self.render(shared, left: left, right: right, frames: Int(frames)) else {
+                  Self.render(shared, left: left, right: right, frames: Int(frames),
+                              host: timestamp.pointee.mFlags.contains(.hostTimeValid) ? timestamp.pointee.mHostTime : 0) else {
                 for buffer in buffers { if let data = buffer.mData { memset(data, 0, Int(buffer.mDataByteSize)) } }
                 isSilent.pointee = true
                 return noErr
@@ -153,6 +187,7 @@ final class KnobShiftScratch {
         shared.pointee.targetSpeed = speed
         shared.pointee.follow = Self.coefficient(Self.handSeconds, rate: outputRate)
         shared.pointee.targetLevel = 1
+        shared.pointee.cutAtHost = 0
         OSMemoryBarrier()
         shared.pointee.requests += 1
     }
@@ -174,8 +209,10 @@ final class KnobShiftScratch {
     /// Fills the output. Runs on the audio thread: no allocation, locks or logging. Returns
     /// false when it wrote nothing because it is silent.
     @inline(__always)
-    static func render(_ s: UnsafeMutablePointer<Shared>, left: UnsafeMutablePointer<Float>, right: UnsafeMutablePointer<Float>, frames: Int) -> Bool {
-        guard let song = s.pointee.song?.pointee, song.frames > 3, s.pointee.level > 0.0005 || s.pointee.targetLevel > 0 else {
+    static func render(_ s: UnsafeMutablePointer<Shared>, left: UnsafeMutablePointer<Float>, right: UnsafeMutablePointer<Float>, frames: Int, host: UInt64 = 0) -> Bool {
+        let cutAt = s.pointee.cutAtHost
+        let pastCut = cutAt != 0 && host != 0 && host >= cutAt
+        guard let song = s.pointee.song?.pointee, song.frames > 3, s.pointee.level > 0.0005 || (s.pointee.targetLevel > 0 && !pastCut) else {
             return false
         }
         let requests = s.pointee.requests
@@ -185,6 +222,16 @@ final class KnobShiftScratch {
             s.pointee.level = 1
             s.pointee.handled = requests
         }
+        s.pointee.renderPosition = s.pointee.position
+        s.pointee.renderSpeed = s.pointee.speed
+        s.pointee.renderHost = host
+        // The frame in this block where the deck comes in, if it does.
+        var cutFrame = Int.max
+        if cutAt != 0, host != 0 {
+            let ahead = cutAt >= host ? Double(cutAt - host) / s.pointee.ticksPerSecond * s.pointee.outputRate : 0
+            if ahead < Double(frames) { cutFrame = Int(ahead) }
+        }
+        let cutFollow = s.pointee.cutFollow
         let samples = song.samples, step = song.step
         var position = s.pointee.position, speed = s.pointee.speed, level = s.pointee.level
         var outLeft = s.pointee.left, outRight = s.pointee.right
@@ -194,7 +241,11 @@ final class KnobShiftScratch {
         position = min(position, last)
         for frame in 0..<frames {
             speed += (target - speed) * follow
-            level += (targetLevel - level) * levelFollow
+            if frame >= cutFrame {
+                level -= level * cutFollow
+            } else {
+                level += (targetLevel - level) * levelFollow
+            }
             position += speed * step
             if position <= 0 { position = 0; if speed < 0 { speed = 0 } }
             if position >= last { position = last; if speed > 0 { speed = 0 } }

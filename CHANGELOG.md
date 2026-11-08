@@ -19,6 +19,7 @@ Knob 4.1 keeps the orange microphone dot away, makes low volumes easier to hear,
 - Songs Knob could not find now show YouTube matches to pick from, or you can paste a link, and Retry tries them all at once
 - Turn your iPhone on its side and the player becomes a real record deck: spin the record to scratch through the song, lift the arm to jump anywhere, tap the cover to pause
 - On the Mac, a switch at the top of full screen brings up the same record deck
+- The record deck's arm looks like the real thing, with a counterweight, machined metal, a brushed headshell and an arm rest
 - When the song changes on the record deck, the record slides back into its sleeve, the cover changes and the new record comes out
 - The queue can arrange itself so neighbouring songs mix well, and a small mark shows which mixes will be smooth and which are a big tempo jump
 - Search the queue by song or artist, sort it by BPM, length, artist or recently added, and go back to your own order at any time
@@ -38,6 +39,12 @@ Knob 4.1 keeps the orange microphone dot away, makes low volumes easier to hear,
 
 ### Fixes
 
+- On the record deck you can pick up the arm anywhere on it, its bend and its head included, instead of turning the record by mistake
+- Lifting the arm stops the record, and setting it down brings the record and the song back up to speed together
+- The song carries on cleanly after you scratch the record or drop the arm, with no stutter or short silence
+- During a KnobMix the arm plays the song coming in instead of waiting off the record
+- The arm waits for the new record to come out, then swings across and lowers onto it, starting right at the outer edge
+- Moving the arm is more precise, so it lands where you want in the song
 - Quit Knob in the menu now always quits, so you never need Force Quit
 - Check for Updates shows its result in the panel instead of a window, so the panel stays open
 - Pausing during a mix now freezes both songs, and Play carries the same mix on from that moment

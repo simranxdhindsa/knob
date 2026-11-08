@@ -90,6 +90,21 @@ enum Vinyl {
     static let plate = Color(hex: 0x38393E)
     static let plateLight = Color(hex: 0x6A6C73)
     static let base = Color(hex: 0x2B2C31)
+    /// The warm room light a polished tube picks up low on its side.
+    static let chromeWarm = Color(hex: 0xA79F92)
+    /// The cartridge's glossy black body and the light running along it.
+    static let cartridge = Color(hex: 0x0E0E11)
+    static let cartridgeGloss = Color(hex: 0x4A4B52)
+    /// The four lead wires every real headshell has: red, green, blue and white.
+    static let leads = [Color(hex: 0xC8463C), Color(hex: 0x3F9A5B), Color(hex: 0x3C6FC8), Color(hex: 0xE6E6E6)]
+    /// The arm rest's rubber cradle.
+    static let rubber = Color(hex: 0x1A1A1D)
+    /// Turned metal: the light runs round it in two opposite streaks, as on a machined part.
+    static let machined = Gradient(colors: [
+        Color(hex: 0x9A9DA4), Color(hex: 0xE4E6EA), Color(hex: 0x7C7F87), Color(hex: 0x45474D), Color(hex: 0x7C7F87),
+        Color(hex: 0x9A9DA4), Color(hex: 0xE4E6EA), Color(hex: 0x7C7F87), Color(hex: 0x45474D), Color(hex: 0x7C7F87),
+        Color(hex: 0x9A9DA4),
+    ])
 }
 
 /// The iPhone's Bedside mode, laid over the deck so the screen doesn't light up the room.

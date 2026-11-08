@@ -561,7 +561,9 @@ final class KnobShiftModel: ObservableObject {
         restartCurrent()
     }
 
-    func seek(to time: TimeInterval) {
+    /// Moves within the song. `start` holds the deck back until that exact moment, for the record
+    /// to hand the song over with no gap.
+    func seek(to time: TimeInterval, at start: AVAudioTime? = nil) {
         if sendToMirror(.seek, time: time) { return }
         releaseHold?()
         guard let track = nowPlaying else { return }
@@ -570,7 +572,7 @@ final class KnobShiftModel: ObservableObject {
         secondaryDeck.stop()
         do {
             log("SEEK", "Moving \(track.title) to \(String(format: "%.2f", time))s.")
-            try schedulePrimary(track, from: min(max(time, 0), track.duration), play: wasPlaying)
+            try schedulePrimary(track, from: min(max(time, 0), track.duration), play: wasPlaying, at: start)
             if wasPlaying { scheduleNext() }
         } catch {
             log("ERROR", "Seek failed: \(error.localizedDescription)")
@@ -584,7 +586,7 @@ final class KnobShiftModel: ObservableObject {
         scheduleNext()
     }
 
-    func schedulePrimary(_ track: Track, from time: TimeInterval, play: Bool) throws {
+    func schedulePrimary(_ track: Track, from time: TimeInterval, play: Bool, at startTime: AVAudioTime? = nil) throws {
         let file = try AVAudioFile(forReading: track.url)
         let start = AVAudioFramePosition((time * file.processingFormat.sampleRate).rounded())
         let remaining = max(0, file.length - start)
@@ -597,11 +599,12 @@ final class KnobShiftModel: ObservableObject {
         nowPlaying = track
         playbackDuration = track.duration
         playbackTime = time
-        playbackStartedAt = Date().addingTimeInterval(-time)
+        let wait = startTime.map { AVAudioTime.seconds(forHostTime: $0.hostTime - min($0.hostTime, mach_absolute_time())) } ?? 0
+        playbackStartedAt = Date().addingTimeInterval(wait - time)
         isPlaying = play
         if play {
             try startEngineIfNeeded()
-            primaryDeck.player.play()
+            primaryDeck.player.play(at: startTime)
             startProgressUpdates()
         }
         log("DECK", "\(primaryDeck.name) is primary: \(track.title) from \(Self.seconds(time)) of \(Self.seconds(track.duration)), \(remaining) frames, \(play ? "playing" : "paused").")
