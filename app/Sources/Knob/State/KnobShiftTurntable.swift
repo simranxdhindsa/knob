@@ -17,8 +17,11 @@ final class KnobShiftTurntable: ObservableObject {
     private static let grip = 0.035
     /// The motor is back up to speed well inside this; past it, the deck takes over regardless.
     private static let longestReturn = 1.2
-    /// The deck starts this far ahead, to meet the record as it fades out.
-    private static let handoverLead = 0.03
+    /// The deck is told to start this far ahead, long enough for it to be ready, and the record
+    /// cuts out at that same moment, so the song never doubles up or drops out.
+    private static let handoverLead = 0.12
+    /// With the arm lifted the platter runs down to a stop over about half a second.
+    private static let runDown = 5.0
 
     let model: KnobShiftModel
     /// A hand is on the record, or it is coming back up to speed after one.
@@ -145,8 +148,9 @@ final class KnobShiftTurntable: ObservableObject {
         let elapsed = min(date.timeIntervalSince(lastFrame), 0.1)
         lastFrame = date
         if !holding {
-            let target = isActive ? scratch.speed : (model.isPlaying ? 1 : 0)
-            spin += (target - spin) * min(1, elapsed * 14)
+            // The arm off the record stops it; set back down, it follows the motor up to speed.
+            let target = isArmHeld ? 0 : (isActive ? scratch.speed : (model.isPlaying ? 1 : 0))
+            spin += (target - spin) * min(1, elapsed * (isArmHeld ? Self.runDown : 14))
             angle += spin * Self.degreesPerSecond * elapsed
         }
         return angle
@@ -261,7 +265,8 @@ final class KnobShiftTurntable: ObservableObject {
         guard let target = returningTo else { return }
         // At the very end of the song there is no groove left for the record to speed up in.
         let atEnd = target > 0 && scratch.time >= model.playbackDuration - 0.05
-        if abs(scratch.speed - target) < 0.03 || atEnd || Date().timeIntervalSince(returnStarted) > Self.longestReturn { finish() }
+        // Close enough that the deck's normal speed takes over with no change in pitch.
+        if abs(scratch.speed - target) < 0.005 || atEnd || Date().timeIntervalSince(returnStarted) > Self.longestReturn { finish() }
     }
 
     private func finish() {
@@ -269,11 +274,27 @@ final class KnobShiftTurntable: ObservableObject {
         returningTo = nil
         isActive = false
         model.releaseHold = nil
-        let duration = model.nowPlaying?.duration ?? 0
-        let time = min(scratch.time + (model.isPlaying ? Self.handoverLead : 0), max(duration - 0.5, 0))
-        model.seek(to: time)
-        scratch.fadeOut()
+        let last = max((model.nowPlaying?.duration ?? 0) - 0.5, 0)
+        // Playing, the deck starts at the exact moment and point in the song the record will
+        // have reached, and the record cuts out right then: one copy of the song throughout.
+        guard model.isPlaying, let handover = scratch.handover(after: Self.handoverLead, towards: 1) else {
+            let time = min(scratch.time, last)
+            model.seek(to: time)
+            scratch.fadeOut()
+            model.log("VINYL", "The deck takes over at \(String(format: "%.2f", time))s.")
+            return
+        }
+        let time = min(handover.time, last)
+        scratch.cut(at: handover.host)
+        model.seek(to: time, at: AVAudioTime(hostTime: handover.host))
         model.log("VINYL", "The deck takes over at \(String(format: "%.2f", time))s.")
+        // Once the cut has passed, the record stops working altogether, unless a hand came back.
+        let request = scratch.requestCount
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.handoverLead + 0.1))
+            guard let self, self.scratch.requestCount == request else { return }
+            self.scratch.fadeOut()
+        }
     }
 
     private func abandon() {

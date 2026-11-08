@@ -27,11 +27,16 @@ struct VinylTonearm: View {
                 .position(geometry.pivot)
             Canvas { context, size in VinylArmDrawing.draw(context, size: size, reach: reach) }
                 .frame(width: VinylArmDrawing.width(reach), height: VinylArmDrawing.height(reach))
-                .contentShape(VinylArmDrawing.Line(reach: reach).stroke(style: StrokeStyle(lineWidth: 44, lineCap: .round)))
+                .allowsHitTesting(false)
                 .shadow(color: Glass.shadow, radius: held ? 12 : 5, x: 2, y: held ? 12 : 5)
                 .rotationEffect(.degrees(angle), anchor: VinylArmDrawing.anchor(reach))
                 .position(x: geometry.pivot.x + VinylArmDrawing.width(reach) / 2 - VinylArmDrawing.pivot(reach).x,
                           y: geometry.pivot.y + VinylArmDrawing.height(reach) / 2 - VinylArmDrawing.pivot(reach).y)
+            // The part a finger takes hold of, laid out in the deck's own space on top of
+            // everything, so a touch anywhere on the arm, its bend and its headshell included,
+            // picks the arm up instead of turning the record underneath it.
+            Color.clear
+                .contentShape(VinylArmDrawing.grip(pivot: geometry.pivot, reach: reach, angle: angle))
                 .gesture(pick)
         }
         .onChange(of: touching) {
@@ -124,14 +129,23 @@ enum VinylArmDrawing {
         return path
     }
 
-    struct Line: Shape {
-        let reach: CGFloat
-        func path(in rect: CGRect) -> Path {
-            var path = VinylArmDrawing.tube(reach)
-            let start = VinylArmDrawing.pivot(reach)
-            path.addLine(to: CGPoint(x: start.x + reach, y: start.y))
-            return path
-        }
+    /// The far end of the headshell, where the cartridge stops.
+    private static var headEnd: CGPoint {
+        let head = headAngle * .pi / 180, along = collar + neck + cartridge
+        return CGPoint(x: bendEnd.x + along * cos(head), y: bendEnd.y + along * sin(head))
+    }
+
+    /// Where a finger can take hold of the arm, in the deck's space with the arm turned to this
+    /// angle: along the tube, round the bend, over the whole headshell and down to the stylus,
+    /// and wide enough for a fingertip all the way.
+    static func grip(pivot: CGPoint, reach: CGFloat, angle: Double) -> Path {
+        let points = [CGPoint(x: 0.05, y: 0), bendStart, bendEnd, headEnd, CGPoint(x: 1, y: 0)]
+        var line = Path()
+        line.addLines(points.map { CGPoint(x: $0.x * reach, y: $0.y * reach) })
+        let place = CGAffineTransform(rotationAngle: angle * .pi / 180)
+            .concatenating(CGAffineTransform(translationX: pivot.x, y: pivot.y))
+        return line.strokedPath(StrokeStyle(lineWidth: max(48, reach * 0.17), lineCap: .round, lineJoin: .round))
+            .applying(place)
     }
 
     static func draw(_ context: GraphicsContext, size: CGSize, reach: CGFloat) {
