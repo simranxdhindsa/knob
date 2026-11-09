@@ -161,14 +161,14 @@ struct KnobShiftPlaylistDetail: View {
                 if playlist == nil {
                     Button {
                         Haptics.mark()
-                        Task { await model.shuffleAll(ready) }
+                        Task { await model.playAllSongsQueue(ready) }
                     } label: {
                         Image(systemName: "shuffle").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.accent)
                             .frame(width: 30, height: 28).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .disabled(ready.count < 2)
-                    .help("Shuffle all songs and play")
+                    .help("Shuffle all songs in their own queue and play. Your queue stays as it is")
                     .accessibilityLabel("Shuffle all songs and play")
                 }
             }

@@ -296,6 +296,9 @@ final class KnobShiftModel: ObservableObject {
     var plannedNext: Track?
     /// Another device's music shown in the player while listening to it (KnobShiftModel+Mirror.swift).
     var mirror: KnobShiftMirror?
+    /// The All Songs queue is playing; the user's own queue waits here (KnobShiftModel+AllSongs.swift).
+    @Published internal(set) var playingAllSongs = false
+    var ownQueue: KnobShiftOwnQueue?
     var isProcessing = false
 
     private var outputFormatDescription: String {

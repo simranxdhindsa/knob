@@ -16,7 +16,22 @@ struct KnobShiftQueueHeader: View {
 
     var body: some View {
         HStack {
-            Text(showingPlaylists ? "PLAYLISTS" : "QUEUE").font(.system(size: 9, weight: .bold)).tracking(0.9).foregroundStyle(surface.tertiary)
+            Text(showingPlaylists ? "PLAYLISTS" : (model.playingAllSongs ? "ALL SONGS" : "QUEUE")).font(.system(size: 9, weight: .bold)).tracking(0.9).foregroundStyle(surface.tertiary)
+            // All Songs is a queue of its own; this brings the user's queue back as it was.
+            if model.playingAllSongs, !showingPlaylists {
+                Button {
+                    Haptics.tick()
+                    model.returnToOwnQueue()
+                } label: {
+                    Label("MY QUEUE", systemImage: "arrow.uturn.backward")
+                        .font(.system(size: 9, weight: .bold)).tracking(0.6).foregroundStyle(Palette.accent)
+                        .frame(minHeight: QueueRowStyle.tap)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Go back to your own queue, paused where you left it")
+                .accessibilityLabel("Back to my queue")
+            }
             if showingPlaylists, !model.playlists.isEmpty {
                 Text("\(model.playlists.count)").font(.system(size: 9, weight: .bold)).foregroundStyle(surface.tertiary)
             }
