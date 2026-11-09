@@ -95,9 +95,12 @@ enum Snapshot {
                 render(KnobShiftSpotifySheet(model: spotify, showsForm: form).environment(\.colorScheme, .dark), scheme: .dark,
                        to: folder.appendingPathComponent("knobshift-spotify-\(name).png"))
             }
-            spotify.showSpotifyPickerForSnapshot()
-            render(KnobShiftSpotifySheet(model: spotify, showsForm: true).environment(\.colorScheme, .dark), scheme: .dark,
-                   to: folder.appendingPathComponent("knobshift-spotify-picker.png"))
+            // The picker, the picker while the rest of a long list arrives, and the question an update asks.
+            for (name, update, loading) in [("picker", false, false), ("picker-loading", false, true), ("update", true, true), ("update-done", true, false)] {
+                spotify.showSpotifyPickerForSnapshot(update: update, loading: loading)
+                render(KnobShiftSpotifySheet(model: spotify, showsForm: true).environment(\.colorScheme, .dark), scheme: .dark,
+                       to: folder.appendingPathComponent("knobshift-spotify-\(name).png"))
+            }
             // The YouTube sheet: its one time notice, the form signed out and signed in, and the picker.
             let youtube = KnobShiftModel(restoresQueue: false)
             for (name, form) in [("notice", false), ("form", true)] {

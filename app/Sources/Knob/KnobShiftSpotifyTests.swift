@@ -44,6 +44,7 @@ extension KnobShiftSpotifyCheck {
         expect(skipped == [ids[5], ids[6], ids[8], ids[9]], "unticked songs remembered, queued ones never")
         let rows = KnobShiftImport.newRows(songs: list + [list[1]], selected: Set(ids), queued: [ids[0]])
         expect(rows.map(\.song_id) == Array(ids.dropFirst()), "new rows: in order, once each, none already queued")
+        await streamingTests(list)
         expect(KnobShiftImport.hasRoom(for: 40, available: 2_000_000_000), "room for 40 songs in 2 GB")
         expect(!KnobShiftImport.hasRoom(for: 100, available: 2_000_000_000), "no room for 100 songs in 2 GB")
         expect(KnobShiftImport.hasRoom(for: 1_000, available: nil), "unknown space does not block")
@@ -167,6 +168,47 @@ extension KnobShiftSpotifyCheck {
         started = Date()
         _ = model.queuedSpotifyIds()
         expect(Date().timeIntervalSince(started) < 0.1, "queued ids of 1000 rows in one pass")
+    }
+
+    /// A long list arrives in two parts (the first 100, then the rest), and Add All runs in the
+    /// background: nothing may be added twice, songs in the queue stay put, and songs unticked
+    /// before stay out.
+    @MainActor
+    private static func streamingTests(_ list: [KnobShiftSpotDL.Song]) async {
+        print("Long lists arriving in parts")
+        let ids = list.map(\.song_id)
+        let first = Array(list.prefix(4)), rest = Array(list[3...])
+        let merged = KnobShiftImport.merged(first, rest)
+        expect(merged.map(\.song_id) == ids, "the rest joins the first part once, overlap dropped, in list order")
+        expect(KnobShiftImport.merged(first, rest.reversed()).map(\.song_id) == ids, "songs arriving out of order go back in list order")
+        expect(KnobShiftImport.merged(first, first).map(\.song_id) == Array(ids.prefix(4)), "the same part twice changes nothing")
+        expect(KnobShiftImport.merged(list + [list[2]], []).map(\.song_id) == ids, "a song listed twice in one list shows once")
+        expect(KnobShiftImport.merged([], list).count == 10, "nothing first, all of the rest")
+
+        print("Add All")
+        let all = KnobShiftImport.addAllSelection(songs: list, skipped: [ids[4]])
+        expect(all.count == 9 && !all.contains(ids[4]), "a song unticked before stays out of Add All")
+        let rows = KnobShiftImport.newRows(songs: list + [list[1]], selected: all, queued: [ids[0], ids[1]])
+        expect(rows.map(\.song_id) == [ids[2], ids[3], ids[5], ids[6], ids[7], ids[8], ids[9]], "Add All skips songs already in the queue, unticked ones and repeats")
+        expect(KnobShiftImport.newSongCount(songs: list + [list[5]], queued: [ids[0], ids[1]], skipped: [ids[4]]) == 7,
+               "new songs counted once each, without queued or unticked ones")
+        expect(KnobShiftImport.newSongCount(songs: list, queued: Set(ids), skipped: []) == 0, "a list fully in the queue has nothing new")
+
+        print("The picker filling up")
+        let model = KnobShiftModel(restoresQueue: false)
+        model.showSpotifyReview(playlistId: "p1", name: "Long list", kind: .playlist, query: "q", songs: first, queued: [ids[0]],
+                                skipped: [], isUpdate: true, loadingMore: true)
+        expect(model.spotifyReview?.songs.count == 4 && model.spotifyReview?.loadingMore == true, "the first part shows at once, still loading")
+        expect(model.spotifyReview?.initial.contains(ids[0]) == true, "a queued song starts ticked")
+        model.addToSpotifyReview(playlistId: "other", songs: rest, skipped: [], finished: true)
+        expect(model.spotifyReview?.songs.count == 4, "songs of another list never join this one")
+        model.addToSpotifyReview(playlistId: "p1", songs: rest, skipped: [ids[6]], finished: true)
+        expect(model.spotifyReview?.songs.map(\.song_id) == ids, "the rest joins once, in order")
+        expect(model.spotifyReview?.initial.contains(ids[6]) == false && model.spotifyReview?.initial.contains(ids[7]) == true,
+               "new songs start ticked unless unticked before")
+        expect(model.spotifyReview?.loadingMore == false, "loading ends with the last part")
+        model.addToSpotifyReview(playlistId: "p1", songs: rest, skipped: [], finished: true)
+        expect(model.spotifyReview?.songs.count == 10, "the rest arriving again adds nothing")
     }
 
     static func song(_ index: Int) -> KnobShiftSpotDL.Song {

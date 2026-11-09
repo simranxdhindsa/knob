@@ -24,6 +24,11 @@ struct KnobShiftSpotifySheet: View {
                                            model.confirmSpotifyReview(selected: $0)
                                            dismiss()
                                        },
+                                       onAddAll: {
+                                           // Every new song downloads in the background, so the sheet closes at once.
+                                           model.addAllFromSpotifyReview()
+                                           dismiss()
+                                       },
                                        onCancel: { model.dismissSpotifyReview() })
             } else {
                 form

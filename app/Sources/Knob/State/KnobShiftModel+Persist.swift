@@ -100,7 +100,7 @@ extension KnobShiftModel {
 
     /// Remembers the song in the player and where it is. Cheap enough to call every few seconds.
     func rememberNowPlaying() {
-        guard !isMirroring, let track = nowPlaying else { return }
+        guard !isMirroring, !playingAllSongs, let track = nowPlaying else { return }
         UserDefaults.standard.set(track.url.path, forKey: PersistKey.knobShiftLastSong.rawValue)
         UserDefaults.standard.set(playbackTime, forKey: PersistKey.knobShiftLastPosition.rawValue)
         rememberedAt = Date()
@@ -122,8 +122,9 @@ extension KnobShiftModel {
     /// Spotify songs still downloading are not saved: their list in the playlist folder brings
     /// them back.
     func persistQueueNow() {
-        // The other device's songs are only shown here; this device's own queue stays saved.
-        guard !isMirroring else { return }
+        // The other device's songs are only shown here, and All Songs is a queue of its own:
+        // the user's own queue stays saved as it was.
+        guard !isMirroring, !playingAllSongs else { return }
         let paths = (isArranged ? unshuffled : tracks).map { $0.url.path }
             + pending.filter { !$0.waitingForDownload && $0.joinsQueue }.map { $0.url.path }
         UserDefaults.standard.set(paths, forKey: PersistKey.knobShiftQueue.rawValue)

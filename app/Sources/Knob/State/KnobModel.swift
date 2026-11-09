@@ -78,7 +78,7 @@ final class KnobModel: ObservableObject {
             self.volume = volume
             self.muted = muted
             self.volumeControllable = controllable
-            self.volumeChanged(volume)
+            self.volumeChanged(volume, controllable: controllable)
         }
         volumeControl.start()
         startPlatform()

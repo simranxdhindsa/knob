@@ -12,12 +12,19 @@ extension KnobShiftModel {
         let name: String
         let kind: KnobShiftPlaylist.Kind
         let query: String
-        let songs: [KnobShiftSpotDL.Song]
+        var songs: [KnobShiftSpotDL.Song]
         /// Songs of this list already in the queue: they stay ticked here.
         let queued: Set<String>
         /// What starts ticked: everything except songs unticked last time.
-        let initial: Set<String>
+        var initial: Set<String>
         let isUpdate: Bool
+        /// The first 100 songs show while the rest of a long list is still being read.
+        var loadingMore = false
+        /// Songs unticked last time, which stay out of Add All.
+        var skipped: Set<String> = []
+
+        /// Songs Add All would bring in, so far.
+        var newCount: Int { KnobShiftImport.newSongCount(songs: songs, queued: queued, skipped: skipped) }
 
         /// The same picker shows YouTube lists; their ids start with "yt:".
         var source: KnobShiftPlaylist.Source {
@@ -108,6 +115,12 @@ extension KnobShiftModel {
             }
             guard spotifyReadJob == job else { return }
         }
+        // A list longer than the player shows: its first 100 songs open in the picker at once
+        // and the rest joins them as spotDL reads it (KnobShiftModel+SpotifyStream.swift).
+        if let embedded, embedded.truncated {
+            await readRestOfList(query: query, id: id, kind: kind, job: job, first: embedded.listing, title: listTitle ?? embedded.name)
+            return
+        }
         do {
             if let embedded, !embedded.truncated {
                 listing = embedded.listing
@@ -154,10 +167,8 @@ extension KnobShiftModel {
             case .playlist: name = listTitle ?? ordered.first?.list_name ?? "Spotify playlist"
             }
         }
-        let initial = KnobShiftImport.initialSelection(songs: ordered, skipped: Set(existing?.skipped ?? [])).union(queued)
-        spotifyReview = SpotifyReview(playlistId: id, name: name, kind: kind, query: query, songs: ordered,
-                                      queued: queued, initial: initial, isUpdate: existing != nil)
-        spotifyStatus = nil
+        showSpotifyReview(playlistId: id, name: name, kind: kind, query: query, songs: ordered, queued: queued,
+                          skipped: Set(existing?.skipped ?? []), isUpdate: existing != nil, loadingMore: false)
         log("SPOTIFY", "\(name): \(ordered.count) song(s) read, \(queued.count) already in the queue.")
     }
 
@@ -174,7 +185,10 @@ extension KnobShiftModel {
     }
 
     func dismissSpotifyReview() {
+        // Cancel in the picker also stops reading the rest of a long list.
+        let stillReading = spotifyReview?.loadingMore == true
         spotifyReview = nil
+        if stillReading { cancelSpotifyRead() }
     }
 
     /// Adds the ticked songs: they show in the queue at once in Spotify's order, songs already
@@ -182,6 +196,19 @@ extension KnobShiftModel {
     func confirmSpotifyReview(selected: Set<String>) {
         guard let review = spotifyReview else { return }
         spotifyReview = nil
+        // The chosen songs are all on screen, so the rest of a long list is no longer needed.
+        if review.loadingMore, let job = spotifyReadJob {
+            KnobShiftSpotDL.shared.cancel(job)
+            spotifyReadJob = nil
+            spotifyBusy = false
+        }
+        applySpotifySelection(review, selected: selected)
+    }
+
+    /// Keeps the playlist's order and unticked songs, writes the chosen songs to its save file
+    /// and adds rows for those not in the queue yet. Safe to run again with more of the list:
+    /// songs already in the queue never get a second row.
+    func applySpotifySelection(_ review: SpotifyReview, selected: Set<String>) {
         let chosen = selected.union(review.queued)
         let skipped = KnobShiftImport.skipped(songs: review.songs, selected: chosen, queued: review.queued)
         var playlist: KnobShiftPlaylist
@@ -420,11 +447,12 @@ extension KnobShiftModel {
     }
 
     /// Screenshot only: the song picker for a list, with two songs already in the queue.
-    func showSpotifyPickerForSnapshot() {
+    func showSpotifyPickerForSnapshot(update: Bool = false, loading: Bool = false) {
         let songs = Self.previewSongs(["Sardaari", "Kya Baat Aa", "Bodyguard", "Lalkaara", "Ghaint", "Jee Karuga (feat. Sargi Maan)",
                                        "Why So", "No Luck", "Shaukeen", "Daaru Sasti", "Ghostface Killah", "Majhail", "Khayaal"])
         let queued: Set<String> = [songs[0].song_id, songs[1].song_id]
         spotifyReview = SpotifyReview(playlistId: "a2", name: "Late Night Drive", kind: .playlist, query: "", songs: songs,
-                                      queued: queued, initial: Set(songs.map(\.song_id)).subtracting([songs[4].song_id]), isUpdate: true)
+                                      queued: queued, initial: Set(songs.map(\.song_id)).subtracting([songs[4].song_id]), isUpdate: update,
+                                      loadingMore: loading, skipped: [songs[4].song_id])
     }
 }

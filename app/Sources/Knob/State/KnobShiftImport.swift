@@ -119,6 +119,28 @@ enum KnobShiftImport {
         return songs.filter { selected.contains($0.song_id) && seen.insert($0.song_id).inserted }
     }
 
+    /// A long list arrives in parts: the first 100 songs from Spotify's player, then the rest
+    /// from spotDL. Each song once, in the list's own order; a song without a place keeps the
+    /// order it came in, after those with one.
+    static func merged(_ first: [KnobShiftSpotDL.Song], _ more: [KnobShiftSpotDL.Song]) -> [KnobShiftSpotDL.Song] {
+        var seen = Set<String>()
+        let unique = (first + more).filter { seen.insert($0.song_id).inserted }
+        return unique.enumerated()
+            .sorted { ($0.element.list_position ?? Int.max, $0.offset) < ($1.element.list_position ?? Int.max, $1.offset) }
+            .map(\.element)
+    }
+
+    /// What Add All ticks: every song except those unticked before. Songs in the queue are left
+    /// out later by `newRows`, so nothing is added twice.
+    static func addAllSelection(songs: [KnobShiftSpotDL.Song], skipped: Set<String>) -> Set<String> {
+        Set(songs.map(\.song_id)).subtracting(skipped)
+    }
+
+    /// How many songs Add All would bring in: each once, not in the queue, not unticked before.
+    static func newSongCount(songs: [KnobShiftSpotDL.Song], queued: Set<String>, skipped: Set<String>) -> Int {
+        Set(songs.map(\.song_id)).subtracting(queued).subtracting(skipped).count
+    }
+
     /// About 30 MB a song as FLAC (KNOB_SONG_MB changes it for the command line checks, whose songs are tiny).
     static var bytesPerSong: Int64 {
         Int64((Double(ProcessInfo.processInfo.environment["KNOB_SONG_MB"] ?? "") ?? 30) * 1_000_000)

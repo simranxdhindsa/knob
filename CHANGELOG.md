@@ -9,6 +9,9 @@ Knob 4.1 keeps the orange microphone dot away, makes low volumes easier to hear,
 
 ### New features
 
+- Long Spotify playlists open at once: the first 100 songs show in about a second and the rest join them while you look
+- Updating a playlist asks whether to add all new songs or choose them. Add All downloads them one by one in the background, so you can keep listening
+- All Songs plays as a queue of its own, from Play All or Shuffle, and My Queue brings your own queue back exactly as you left it
 - Listen Together plays the same music on your Mac and iPhones at the same moment, on the same network. Pick a device from the dots menu and it is asked to join. Tap Join and its own player shows the song, the cover and the queue, and every button controls the music for everyone
 - Listen Together shares your effects and equalizer, so every device sounds the same, and a line up setting helps Bluetooth speakers that play a little late
 - Play On moves the music to another Mac or iPhone and carries on from the same moment. Songs the other device doesn't have are copied over and kept in a playlist with the same name, and it asks once before a new device can play on yours
@@ -57,6 +60,8 @@ Knob 4.1 keeps the orange microphone dot away, makes low volumes easier to hear,
 - FLAC songs you add yourself now show their names and covers
 - Moving music back with Play On keeps the whole queue, and Play On stops waiting for a device that has gone away
 - The StandBy record keeps up when the song changes, and the Dynamic Island shows the cover
+- The volume no longer drops to 0% when the sound moves to an HDMI monitor and back
+- A Spotify playlist that Spotify is slow to give no longer leaves the import stuck on Reading
 
 ## 4.0
 

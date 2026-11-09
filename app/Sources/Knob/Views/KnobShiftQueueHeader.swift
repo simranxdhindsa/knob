@@ -15,8 +15,38 @@ struct KnobShiftQueueHeader: View {
     private var hasSongs: Bool { !model.tracks.isEmpty || !model.queuePending.isEmpty }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            topRow
+            // All Songs is a queue of its own: a line of its own brings the user's queue back.
+            if model.playingAllSongs, !showingPlaylists { ownQueueRow }
+        }
+    }
+
+    private var ownQueueRow: some View {
+        HStack(spacing: 8) {
+            Text("Your queue is waiting, as you left it.")
+                .font(.system(size: 10)).foregroundStyle(surface.tertiary).lineLimit(1)
+            Spacer(minLength: 6)
+            Button {
+                Haptics.tick()
+                model.returnToOwnQueue()
+            } label: {
+                Label("MY QUEUE", systemImage: "arrow.uturn.backward")
+                    .font(.system(size: 9, weight: .bold)).tracking(0.6).foregroundStyle(Palette.accent)
+                    .lineLimit(1).fixedSize()
+                    .frame(minHeight: QueueRowStyle.tap)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Go back to your own queue, paused where you left it")
+            .accessibilityLabel("Back to my queue")
+        }
+    }
+
+    private var topRow: some View {
         HStack {
-            Text(showingPlaylists ? "PLAYLISTS" : "QUEUE").font(.system(size: 9, weight: .bold)).tracking(0.9).foregroundStyle(surface.tertiary)
+            Text(showingPlaylists ? "PLAYLISTS" : (model.playingAllSongs ? "ALL SONGS" : "QUEUE")).font(.system(size: 9, weight: .bold)).tracking(0.9).foregroundStyle(surface.tertiary)
+                .lineLimit(1).fixedSize()
             if showingPlaylists, !model.playlists.isEmpty {
                 Text("\(model.playlists.count)").font(.system(size: 9, weight: .bold)).foregroundStyle(surface.tertiary)
             }
