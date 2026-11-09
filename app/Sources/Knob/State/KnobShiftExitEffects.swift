@@ -21,8 +21,10 @@ enum KnobShiftExitStyle: CaseIterable {
                        sync: KnobShiftSync) -> (style: KnobShiftExitStyle, reason: String) {
         let pair = seed(current, next)
         if !sync.isOn {
-            if current.analysis.fadeOutCue != nil, pair % 2 == 0 {
-                return (.reverbWash, "the tempos are far apart and the old song fades out, so it dissolves into a hall")
+            // Every other pair dissolves into a hall instead of echoing, so mixes between songs
+            // whose beats cannot lock do not all end the same way.
+            if (pair >> 8) & 1 == 0 {
+                return (.reverbWash, "the tempos are far apart, so it dissolves into a hall")
             }
             return (.echoOut, "the tempos are far apart, so its last beats echo away instead of clashing")
         }

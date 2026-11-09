@@ -236,7 +236,7 @@ extension KnobShiftModel {
             secondaryDeck.resetTransitionEffects()
             // The new song arrives in a hall, so its deck's reverb has to be in the sound.
             if voiceThrow { secondaryDeck.armTransitionEffects(echoEvery: 0.5, hall: .largeHall) }
-            armExitEffects(from: current, to: next, sync: sync, announces: !voiceThrow)
+            armExitEffects(from: current, to: next, sync: sync)
             secondaryDeck.volume = 0
             secondaryDeck.rate = sync.rates(progress: 0, voice: tempoAt).incoming
             secondaryDeck.bassCut = 1
