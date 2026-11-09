@@ -38,8 +38,8 @@ struct KnobShiftPlan {
     static let targetMix: TimeInterval = 8
     /// No mix is shorter than this when the song leaves room, so its exit is heard.
     static let shortestMix: TimeInterval = 6
-    /// No mix is ever longer than this.
-    static let longestMix: TimeInterval = 16
+    /// No mix is ever longer than this, in real time.
+    static let longestMix: TimeInterval = 10
     /// A short mix lands the new voice this long before the old voice's last words end, so the
     /// two always overlap, however little room there is.
     static let handover: TimeInterval = 0.5
@@ -208,12 +208,26 @@ struct KnobShiftPlan {
                 start = voiceEnd - Self.longestPress
                 reasoning.append("That is more than \(Int(Self.longestPress)) seconds before its last words, so the mix starts at \(clock(start)) instead.")
             }
-            let lastWords = min(max(voiceEnd, start + Self.shortestWords), audibleEnd)
+            var lastWords = min(max(voiceEnd, start + Self.shortestWords), audibleEnd)
             let tail = Self.tail(bar: bar)
             // The analysis places the last words about 1.25 seconds late, and the tail is counted
             // from where they really end.
-            let exit = min(audibleEnd, max(lastWords - Self.analysisSlack + tail, start + Self.shortestMix))
-            let newVoiceAt = start + Self.newVoiceEntry(wordsEnd: lastWords - start, bar: bar)
+            var exit = min(audibleEnd, max(lastWords - Self.analysisSlack + tail, start + Self.shortestMix))
+            // A KnobMix never lasts more than 10 seconds: however far back the hook is, the old
+            // voice is pressed down only in the last stretch before it leaves.
+            if exit - start > Self.longestMusic, handoffAt != nil {
+                // KnobMix Now starts where it was asked; the old song leaves sooner instead.
+                exit = start + Self.longestMusic
+                lastWords = min(lastWords, exit)
+                reasoning.append("KnobMix Now: the mix lasts \(seconds(Self.longestMusic)) from \(clock(start)).")
+            } else if exit - start > Self.longestMusic {
+                reasoning.append("From \(clock(start)) the mix would last \(seconds(exit - start)), so it starts at \(clock(exit - Self.longestMusic)) and lasts \(seconds(Self.longestMusic)).")
+                start = exit - Self.longestMusic
+                lastWords = min(max(voiceEnd, start + Self.shortestWords), audibleEnd)
+                exit = min(audibleEnd, max(lastWords - Self.analysisSlack + tail, start + Self.shortestMix), start + Self.longestMusic)
+            }
+            // The two voices are heard together for at most 2 seconds.
+            let newVoiceAt = max(start + Self.newVoiceEntry(wordsEnd: lastWords - start, bar: bar), lastWords - Self.overlap)
             let firstVoice = Self.firstSinging(incoming)?.at
             let introLead = firstVoice.map { min(Self.introLead, max(0, $0 - leadIn)) } ?? Self.introLead
             let handoff = max(start + 0.5, newVoiceAt - introLead)

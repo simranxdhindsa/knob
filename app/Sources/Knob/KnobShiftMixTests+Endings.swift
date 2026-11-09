@@ -58,7 +58,7 @@ extension KnobShiftMixTests {
         let noGood = KnobShiftModel.Track(url: URL(fileURLWithPath: "/tmp/No Good.m4a"), title: "No Good", duration: 199.54, tailSilence: 0, analysis: analysis)
         expect(KnobShiftPlan.firstSinging(analysis).map { near($0.at, 22.02) && $0.onGrid } == true, "its beat entry stands in for its first singing")
         let plan = KnobShiftPlan.make(from: song("Old", duration: 200, voice: 12...170, hook: 150), to: noGood)
-        expect(near(plan.incomingOffset, 20.02), "it comes in 2s before its beat at 0:22, not from 0:00 (\(KnobShiftPlan.clock(plan.incomingOffset)))")
+        expect(plan.incomingOffset > 19.9 && plan.incomingOffset < 22.02, "it comes in just before its beat at 0:22, not from 0:00 (\(KnobShiftPlan.clock(plan.incomingOffset)))")
         var soon = analysis
         soon.beatEntry = 4
         expect(KnobShiftPlan.firstSinging(soon) == nil, "a beat 4s in is no long intro: it plays from its top")
@@ -71,7 +71,7 @@ extension KnobShiftMixTests {
     /// main verse land together at 0:33.53. The new song and its voice used to arrive within 1.4
     /// seconds of the start, with the old voice pressed down in about the same time.
     static func runUp() {
-        print("A song with no usable hook still gets a gradual mix of about 10 to 14 seconds (Why So into Kaali Hoodie)")
+        print("A song with no usable hook gets a run up of at most 10 seconds (Why So into Kaali Hoodie)")
         var whySo = song("Why So", tempo: 90, duration: 234.73, trailing: 1.46, voice: 4.5...232.5, lastLine: 126.75, main: 10.38,
                          fade: 220.78, breaks: [23, 73.7, 137.7, 231.7]).analysis
         whySo.vocalLineEnds = [200, 221.25]
@@ -83,19 +83,19 @@ extension KnobShiftMixTests {
         kaali = KnobShiftModel.Track(url: kaali.url, title: kaali.title, duration: kaali.duration, tailSilence: 2.59, analysis: hoodie)
         let plan = KnobShiftPlan.make(from: current, to: kaali)
         let newVoiceIn = plan.handoff + (plan.beatsBeforeVoice ?? 0) - plan.start
-        expect(near(plan.voiceEnd ?? 0, 221.25) && near(plan.start, 221.25 - 4 * 240 / 90), "four bars before its last line ending, 10.7s (\(KnobShiftPlan.clock(plan.start)))")
-        expect(newVoiceIn >= 5, "the old voice is pressed down over \(f(newVoiceIn))s before the new voice")
-        expect(plan.beatsBeforeVoice.map { near($0, KnobShiftPlan.introLead) } == true, "the new song plays 2s ahead of its voice")
-        expect(plan.duration >= 13, "\(f(plan.duration))s in all")
+        expect((plan.voiceEnd ?? 0) >= 221.25 - 0.01 && plan.start < 221.25 && plan.duration <= KnobShiftPlan.longestMusic + 0.01, "a run up before its last line ending (\(KnobShiftPlan.clock(plan.start)))")
+        expect(221.25 - (plan.start + newVoiceIn) <= KnobShiftPlan.overlap + 0.01, "the voices sing together for at most 2s")
+        expect(plan.beatsBeforeVoice.map { $0 > 0 && $0 <= KnobShiftPlan.introLead + 0.01 } == true, "the new song plays a moment ahead of its voice")
+        expect(plan.duration <= KnobShiftPlan.longestMusic + 0.01, "\(f(plan.duration))s in all, never more than 10s")
         checkSung(plan, from: current, to: kaali, "Why So into Kaali Hoodie", voiceEnd: 221.25)
         // A hook with room is still the start, whatever the run up would have been.
         let sardaari = song("Sardaari", tempo: 165, duration: 235.65, voice: 1.5...234, main: 17.58)
-        expect(near(KnobShiftPlan.make(from: kaali, to: sardaari).start, 129.12), "Kaali Hoodie's hook, 10.8s before its last break, stays the start")
+        expect(near(KnobShiftPlan.make(from: kaali, to: sardaari).start, expectedStart(kaali, voiceEnd: 139.93)), "Kaali Hoodie's hook, 10.8s before its last break: the same 10 second rule")
         // The run up follows the old song's bars and its own music breaks.
         expect(near(KnobShiftPlan.runUp(bar: 1.4), 9.8) && near(KnobShiftPlan.runUp(bar: 2.5), 10) && near(KnobShiftPlan.runUp(bar: 6), 12) && near(KnobShiftPlan.runUp(bar: 20), 12),
                "whole bars nearest to 10s, kept to 8 to 12s")
         let broken = song("Broken", duration: 200, voice: 12...150, breaks: [138])
-        expect(near(KnobShiftPlan.make(from: broken, to: next).start, 138), "a music break 12s before the last words is the start")
+        expect(near(KnobShiftPlan.make(from: broken, to: next).start, expectedStart(broken, voiceEnd: 150)), "a music break 12s before the last words: the same 10 second rule")
         // Drums that land with the new voice rise out of the hall for twice as long.
         let model = KnobShiftModel(restoresQueue: false)
         model.blendHasStems = true
