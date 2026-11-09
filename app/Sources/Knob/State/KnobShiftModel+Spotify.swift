@@ -72,6 +72,9 @@ extension KnobShiftModel {
 
     /// Reads a list's songs (no download) and shows them for ticking. One read at a time; Cancel
     /// stops it.
+    /// How long spotDL may take over the songs after the first 100 before those 100 are used.
+    private static let restOfListLimit: TimeInterval = 60
+
     private func readList(query: String, id: String, kind: KnobShiftPlaylist.Kind) async {
         guard spotifyReadJob == nil, spotifyLoginJob == nil else {
             spotifyStatus = "Spotify is still busy with the last step. Cancel it or wait for it to finish."
@@ -113,7 +116,13 @@ extension KnobShiftModel {
                 listing = embedded.listing
                 log("SPOTIFY", "Read \(listing.songs.count) song(s) from Spotify's public player, no key needed.")
             } else {
-                listing = try await KnobShiftSpotDL.shared.list(query, userAuth: spotifyLoggedIn, id: job)
+                // With the first 100 songs already in hand, waiting long for the rest isn't worth it.
+                if embedded != nil {
+                    spotifyStatus = "Reading the rest of \(title ?? embedded?.name ?? "the playlist"). It has more than 100 songs."
+                    log("SPOTIFY", "The public player shows only the first 100 songs, so spotDL reads the rest, for at most \(Int(Self.restOfListLimit)) seconds.")
+                }
+                listing = try await KnobShiftSpotDL.shared.list(query, userAuth: spotifyLoggedIn, id: job,
+                                                                idleLimit: embedded != nil ? Self.restOfListLimit : 900)
             }
             if listTitle == nil { listTitle = embedded?.name }
         } catch is CancellationError {

@@ -102,11 +102,13 @@ final class KnobShiftSpotDL: @unchecked Sendable {
     }
 
     /// Reads a list's songs from Spotify without downloading anything (`spotdl save`).
-    func list(_ query: String, userAuth: Bool, id: UUID = UUID()) async throws -> Listing {
+    /// `idleLimit` is how long spotDL may print nothing before it is stopped: Spotify can hold a
+    /// long list back for many minutes, and spotDL waits in silence.
+    func list(_ query: String, userAuth: Bool, id: UUID = UUID(), idleLimit: TimeInterval = 900) async throws -> Listing {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("knobshift-\(UUID().uuidString).spotdl")
         defer { try? FileManager.default.removeItem(at: file) }
         if await KnobShiftSpotifyAccount.pausedUntil(userAuth: userAuth) != nil { throw Failure.paused }
-        let result = await run(["save", query, "--save-file", file.path] + (userAuth ? ["--user-auth"] : []), id: id) { _ in }
+        let result = await run(["save", query, "--save-file", file.path] + (userAuth ? ["--user-auth"] : []), id: id, idleLimit: idleLimit) { _ in }
         if result.cancelled { throw CancellationError() }
         if result.stalled { throw Failure.stalled }
         guard let data = try? Data(contentsOf: file) else { throw Self.classify(result.lines) ?? .failed }
