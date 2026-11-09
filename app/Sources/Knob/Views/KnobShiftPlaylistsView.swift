@@ -173,7 +173,10 @@ struct KnobShiftPlaylistDetail: View {
                 }
             }
             HStack(spacing: 8) {
-                action("PLAY ALL", symbol: "play.fill", filled: true) { Task { await model.play(ready) } }
+                // In All Songs, Play All starts the All Songs queue and leaves the user's queue alone.
+                action("PLAY ALL", symbol: "play.fill", filled: true) {
+                    Task { if playlist == nil { await model.playAllSongsQueue(ready, shuffled: false) } else { await model.play(ready) } }
+                }
                     .disabled(ready.isEmpty)
                 action(fresh.isEmpty ? "ALL IN QUEUE" : "ADD \(fresh.count) TO QUEUE", symbol: fresh.isEmpty ? "checkmark" : "plus", filled: false) {
                     Task { await model.addToQueue(fresh) }

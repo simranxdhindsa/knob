@@ -20,7 +20,8 @@ struct KnobShiftOwnQueue {
 /// paused where it was, with any songs added in the meantime at its end. Only the user's own
 /// queue is saved, so after a relaunch Knob opens on it.
 extension KnobShiftModel {
-    func playAllSongsQueue(_ songs: [KnobShiftPlaylistSong]) async {
+    /// `shuffled` comes from the shuffle button; Play All keeps the songs in their list order.
+    func playAllSongsQueue(_ songs: [KnobShiftPlaylistSong], shuffled: Bool = true) async {
         let ready = songs.filter { $0.url != nil }
         guard !ready.isEmpty, !isMirroring else { return }
         if !playingAllSongs {
@@ -40,7 +41,7 @@ extension KnobShiftModel {
         isMixOrdered = false
         currentIndex = 0
         ownQueue?.allSongs = Set(ready.compactMap { $0.url?.standardizedFileURL })
-        await shuffleAll(ready)
+        if shuffled { await shuffleAll(ready) } else { await play(ready) }
     }
 
     /// Back to the user's own queue as it was, paused at the same place.
