@@ -225,6 +225,9 @@ final class KnobShiftModel: ObservableObject {
     @Published internal(set) var spotifyReadJob: UUID?
     /// A list just read, waiting for the user to tick the songs to add.
     @Published internal(set) var spotifyReview: SpotifyReview?
+    /// A long list whose rest is still being read after Add All closed the picker: the rest is
+    /// added in the background when it arrives (KnobShiftModel+SpotifyStream.swift).
+    var spotifyAddingAll: String?
     /// Download progress by playlist id, as the views see it (updated at most twice a second).
     @Published internal(set) var spotifyProgress: [String: KnobShiftImport.Progress] = [:]
     /// The live progress behind it, updated on every line spotDL prints.
