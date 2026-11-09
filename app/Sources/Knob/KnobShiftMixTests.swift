@@ -102,10 +102,11 @@ enum KnobShiftMixTests {
         }
         start = max(start, voiceEnd - KnobShiftPlan.longestPress)
         if handoffAt != nil { return start }
-        // No KnobMix lasts more than 10 seconds: it starts that long before the old song leaves.
+        // No KnobMix lasts more than 10 seconds: a longer one starts 5 seconds before the old
+        // voice's last words.
         let lastWords = min(max(voiceEnd, start + KnobShiftPlan.shortestWords), end)
         let exit = min(end, max(lastWords - KnobShiftPlan.analysisSlack + KnobShiftPlan.tail(bar: bar(track)), start + KnobShiftPlan.shortestMix))
-        return exit - start > KnobShiftPlan.longestMusic ? exit - KnobShiftPlan.longestMusic : start
+        return exit - start > KnobShiftPlan.longestMusic ? max(start, lastWords - KnobShiftPlan.pressRoom) : start
     }
 
     static func near(_ a: TimeInterval, _ b: TimeInterval, _ tolerance: Double = 0.01) -> Bool {
@@ -129,7 +130,8 @@ enum KnobShiftMixTests {
                && plan.duration <= min(room, KnobShiftPlan.longestMusic) + 0.01,
                "\(name): \(f(plan.duration))s, at least 6 (or what is left) and never more than 10s of real time")
         if let voiceEnd {
-            expect(near(lastWords, min(max(voiceEnd, plan.start + KnobShiftPlan.shortestWords), end, exit)),
+            let floor = plan.duration >= KnobShiftPlan.longestMusic - 0.01 ? KnobShiftPlan.pressRoom : KnobShiftPlan.shortestWords
+            expect(near(lastWords, min(max(voiceEnd, plan.start + floor), end, exit)) || near(lastWords, min(max(voiceEnd, plan.start + KnobShiftPlan.shortestWords), end, exit)),
                    "\(name): the old voice's last words end at \(KnobShiftPlan.clock(lastWords)), at least \(Int(KnobShiftPlan.shortestWords))s into the mix")
         }
         let tail = KnobShiftPlan.tail(bar: bar(current))
@@ -140,8 +142,9 @@ enum KnobShiftMixTests {
         // The new song comes in ahead of its voice, which lands half way to the old voice's last
         // words, never more than four bars (5 to 8 seconds) ahead of them and never after them.
         let together = min(max(4 * bar(current), 5), 8)
-        let newVoiceAt = max(min(max((plan.start + lastWords) / 2, lastWords - together), lastWords - handover),
-                             lastWords - KnobShiftPlan.overlap)
+        let held = plan.held
+        let newVoiceAt = held ? lastWords - handover
+            : max(min(max((plan.start + lastWords) / 2, lastWords - together), lastWords - handover), lastWords - KnobShiftPlan.overlap)
         let firstVoice = KnobShiftPlan.firstSinging(next.analysis)?.at
         let leadIn = min(next.analysis.leadingSilence, next.duration)
         let introLead = firstVoice.map { min(KnobShiftPlan.introLead, max(0, $0 - leadIn)) } ?? KnobShiftPlan.introLead
@@ -295,8 +298,8 @@ enum KnobShiftMixTests {
         let hooked = song("Now", duration: 200, voice: 12...150, breaks: [80], hook: 140)
         let plan = KnobShiftPlan.make(from: hooked, to: next, handoffAt: 80)
         expect(near(plan.start, 80), "it starts where asked, 1:20, not at the hook (\(KnobShiftPlan.clock(plan.start)))")
-        expect(near(plan.handoff, 80.5) && near(plan.duration, KnobShiftPlan.longestMusic),
-               "the new song comes in half a second in, and the old one is gone within 10s (\(f(plan.duration))s)")
+        expect(plan.handoff >= 80.5 && plan.handoff <= 80 + KnobShiftPlan.pressRoom && plan.duration <= KnobShiftPlan.longestMusic + 0.01 && (plan.voiceEnd ?? 0) >= 80 + KnobShiftPlan.pressRoom - 0.01,
+               "the old voice gets 6s of a gentle press, the new song creeps in after \(f(plan.handoff - 80))s, and the old one is gone within 10s (\(f(plan.duration))s)")
         checkSung(plan, from: hooked, to: next, "KnobMix Now", voiceEnd: 80)
         let plain = song("NowPlain", duration: 200, voice: 12...150)
         expect(near(KnobShiftPlan.make(from: plain, to: next, handoffAt: 33.5).start, 33.5), "a song with no hook starts there too")

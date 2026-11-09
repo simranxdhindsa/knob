@@ -285,7 +285,10 @@ extension KnobShiftModel {
                 let overlap = { (wait: TimeInterval) in wordsEnd - (wait + lead) }
                 let latest = duration * 0.97
                 let bar = current.analysis.tempo.map { 4 * 60 / $0 } ?? 2.5
-                let target = KnobShiftPlan.newVoiceEntry(wordsEnd: wordsEnd, bar: bar)
+                // A mix held to 10 seconds (KnobShiftPlan.pressRoom): the new voice lands just before
+                // the old voice's last words, so the press and the new song build over the whole run up.
+                let held = music >= KnobShiftPlan.longestMusic * 0.9
+                let target = held ? max(wordsEnd - KnobShiftPlan.handover, 0) : KnobShiftPlan.newVoiceEntry(wordsEnd: wordsEnd, bar: bar)
                 var chosen = min(max(target - lead, 0), latest)
                 if mixSync.isOn {
                     // Whole beats keep the lock; of the nearest few, the one closest to the target.

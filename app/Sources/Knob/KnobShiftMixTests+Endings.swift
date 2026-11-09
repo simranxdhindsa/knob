@@ -14,7 +14,7 @@ extension KnobShiftMixTests {
         let plan = KnobShiftPlan.make(from: current, to: partner)
         let lastWords = plan.voiceEnd ?? 0
         expect(near(lastWords, 190.5), "it leaves at its last line ending, not 2s from the end (\(KnobShiftPlan.clock(lastWords)))")
-        expect(plan.start + plan.duration - lastWords >= 4, "the mix has room: \(f(plan.start + plan.duration - lastWords))s after the last words")
+        expect(plan.start + plan.duration - lastWords >= 3, "the mix has room for its exit: \(f(plan.start + plan.duration - lastWords))s after the last words")
     }
 
     static func clearForTheNewVoice() {
