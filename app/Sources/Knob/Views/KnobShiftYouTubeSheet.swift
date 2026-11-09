@@ -25,6 +25,10 @@ struct KnobShiftYouTubeSheet: View {
                                            model.confirmSpotifyReview(selected: $0)
                                            dismiss()
                                        },
+                                       onAddAll: {
+                                           model.addAllFromSpotifyReview()
+                                           dismiss()
+                                       },
                                        onCancel: { model.dismissSpotifyReview() })
             } else {
                 form

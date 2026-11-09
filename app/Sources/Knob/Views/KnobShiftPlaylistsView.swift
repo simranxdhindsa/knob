@@ -161,19 +161,22 @@ struct KnobShiftPlaylistDetail: View {
                 if playlist == nil {
                     Button {
                         Haptics.mark()
-                        Task { await model.shuffleAll(ready) }
+                        Task { await model.playAllSongsQueue(ready) }
                     } label: {
                         Image(systemName: "shuffle").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.accent)
                             .frame(width: 30, height: 28).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .disabled(ready.count < 2)
-                    .help("Shuffle all songs and play")
+                    .help("Shuffle all songs in their own queue and play. Your queue stays as it is")
                     .accessibilityLabel("Shuffle all songs and play")
                 }
             }
             HStack(spacing: 8) {
-                action("PLAY ALL", symbol: "play.fill", filled: true) { Task { await model.play(ready) } }
+                // In All Songs, Play All starts the All Songs queue and leaves the user's queue alone.
+                action("PLAY ALL", symbol: "play.fill", filled: true) {
+                    Task { if playlist == nil { await model.playAllSongsQueue(ready, shuffled: false) } else { await model.play(ready) } }
+                }
                     .disabled(ready.isEmpty)
                 action(fresh.isEmpty ? "ALL IN QUEUE" : "ADD \(fresh.count) TO QUEUE", symbol: fresh.isEmpty ? "checkmark" : "plus", filled: false) {
                     Task { await model.addToQueue(fresh) }

@@ -15,7 +15,7 @@ extension KnobModel {
         Task { _ = await succeeds("setPreset", ["path": session.path]) }
     }
 
-    func volumeChanged(_ volume: Double) {}
+    func volumeChanged(_ volume: Double, controllable: Bool) {}
 
     func poweredOn() {}
 

@@ -21,8 +21,11 @@ extension KnobModel {
         volumeKeys.onStep = { [weak self] direction in self?.stepVolume(direction) }
     }
 
-    func volumeChanged(_ volume: Double) {
-        if knobIsOutput { VolumeHandoff.remember(volume) }
+    /// Remembers the level only when it is real: Knob's device answers "no volume" for a moment
+    /// right after it becomes the output, and that 0 was saved and then given back on every take
+    /// over, so the volume fell to 0% each time the output moved to an HDMI monitor and back.
+    func volumeChanged(_ volume: Double, controllable: Bool) {
+        if controllable, knobIsOutput { VolumeHandoff.remember(volume) }
     }
 
     func poweredOn() {

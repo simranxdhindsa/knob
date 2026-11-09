@@ -225,6 +225,9 @@ final class KnobShiftModel: ObservableObject {
     @Published internal(set) var spotifyReadJob: UUID?
     /// A list just read, waiting for the user to tick the songs to add.
     @Published internal(set) var spotifyReview: SpotifyReview?
+    /// A long list whose rest is still being read after Add All closed the picker: the rest is
+    /// added in the background when it arrives (KnobShiftModel+SpotifyStream.swift).
+    var spotifyAddingAll: String?
     /// Download progress by playlist id, as the views see it (updated at most twice a second).
     @Published internal(set) var spotifyProgress: [String: KnobShiftImport.Progress] = [:]
     /// The live progress behind it, updated on every line spotDL prints.
@@ -293,6 +296,9 @@ final class KnobShiftModel: ObservableObject {
     var plannedNext: Track?
     /// Another device's music shown in the player while listening to it (KnobShiftModel+Mirror.swift).
     var mirror: KnobShiftMirror?
+    /// The All Songs queue is playing; the user's own queue waits here (KnobShiftModel+AllSongs.swift).
+    @Published internal(set) var playingAllSongs = false
+    var ownQueue: KnobShiftOwnQueue?
     var isProcessing = false
 
     private var outputFormatDescription: String {
