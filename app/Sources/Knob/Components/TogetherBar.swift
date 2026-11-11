@@ -56,7 +56,7 @@ struct TogetherBar: View {
 
     private var options: some View {
         Menu {
-            if session.role == .hosting { TogetherDeviceItems(model: model) }
+            if session.role == .hosting { Section("Listen with") { TogetherDeviceItems(model: model) } }
             if session.role == .hosting, !session.people.isEmpty {
                 Section("Listening") {
                     ForEach(session.people, id: \.self) { name in
@@ -124,30 +124,26 @@ struct TogetherBar: View {
     }
 }
 
-/// Listen Together in the dots menu: choose a device to listen with. A device already sharing
-/// is joined; any other is asked to join while this one starts sharing.
+/// Listen Together in the dots menu, as plain items rather than a submenu: on the Mac a submenu
+/// closes each time the menu is rebuilt, and the player rebuilds it many times a second while it
+/// plays. Choose a device to listen with: a device already sharing is joined; any other is asked
+/// to join while this one starts sharing.
 struct TogetherMenuItems: View {
-    @ObservedObject var model: KnobShiftModel
+    let model: KnobShiftModel
     @ObservedObject private var session = KnobShiftTogetherSession.shared
 
     var body: some View {
         switch session.role {
         case .off:
-            Menu {
+            Section("Listen Together") {
                 TogetherDeviceItems(model: model)
-                Section {
-                    Button { session.startHosting(model) } label: { Label("Start Without Asking", systemImage: "dot.radiowaves.left.and.right") }
-                }
-            } label: {
-                Label("Listen Together", systemImage: "hifispeaker.2")
+                Button { session.startHosting(model) } label: { Label("Start Listen Together", systemImage: "dot.radiowaves.left.and.right") }
             }
         case .hosting:
-            Menu {
+            Section("Listen Together") {
                 TogetherDeviceItems(model: model)
-            } label: {
-                Label("Ask Another Device", systemImage: "person.badge.plus")
+                Button { session.leave() } label: { Label("End Listen Together", systemImage: "xmark.circle") }
             }
-            Button { session.leave() } label: { Label("End Listen Together", systemImage: "xmark.circle") }
         case .listening:
             Button { session.leave() } label: { Label("Leave Listen Together", systemImage: "xmark.circle") }
         default:
@@ -158,17 +154,18 @@ struct TogetherMenuItems: View {
 
 /// Every other Knob open nearby, to listen with: in the dots menu and on the Listen Together bar.
 struct TogetherDeviceItems: View {
-    @ObservedObject var model: KnobShiftModel
+    let model: KnobShiftModel
     @ObservedObject private var session = KnobShiftTogetherSession.shared
     @ObservedObject private var playOn = KnobShiftPlayOnSession.shared
 
     var body: some View {
         let devices = session.devices.filter { !session.people.contains($0) }
-        Section(devices.isEmpty ? "Open Knob on another device nearby" : "Listen with") {
-            ForEach(devices, id: \.self) { name in
-                Button { session.listen(with: name, model: model) } label: {
-                    Label(title(name), systemImage: session.invited.contains(name) ? "checkmark.circle" : Self.icon(name))
-                }
+        if devices.isEmpty {
+            Text("Open Knob on another device nearby")
+        }
+        ForEach(devices, id: \.self) { name in
+            Button { session.listen(with: name, model: model) } label: {
+                Label(title(name), systemImage: session.invited.contains(name) ? "checkmark.circle" : Self.icon(name))
             }
         }
     }
@@ -176,7 +173,7 @@ struct TogetherDeviceItems: View {
     private func title(_ name: String) -> String {
         if session.role == .off, session.isSharing(name) { return "Join \(name)" }
         if session.invited.contains(name) { return "Ask \(name) Again" }
-        return name
+        return session.role == .hosting ? "Ask \(name)" : "Listen with \(name)"
     }
 
     static func icon(_ name: String) -> String {
