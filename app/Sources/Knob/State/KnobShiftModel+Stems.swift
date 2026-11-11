@@ -136,9 +136,10 @@ extension KnobShiftModel {
                     guard let now, let time = node.playerTime(forNodeTime: now), time.sampleRate > 0 else { return 0 }
                     return Double(time.sampleTime) / time.sampleRate
                 }
-                self.log("VOICE", String(format: "%@ %.0fs after the mix: voice clock %.2fs, music clock %.2fs, voice part %@ at %.0f%%, music part %.0f%%, file %.0f%%, pressed %.0f%%, hall %.0f%%, sweep %.0f%%, deck volume %.0f%%, speed %.3f.",
+                self.log("VOICE", String(format: "%@ %.0fs after the mix: voice clock %.2fs, music clock %.2fs, voice part %@ at %.0f%%, music part %.0f%%, file %.0f%%, pressed %.0f%%, hall %.0f%%, sweep %.0f%%, deck volume %.0f%%, speed %.3f, deck hall %.0f%%, echo %.0f%%, lo-fi %.0f%%, tape %.0f%%.",
                                          track.title, wait, clock(deck.voice), clock(deck.player), deck.voice.isPlaying ? "playing" : "stopped", deck.voiceLevel * 100, deck.musicStemLevel * 100,
-                                         deck.fileLevel * 100, deck.voicePress * 100, deck.voiceReverb * 100, deck.sweep * 100, deck.volume * 100, deck.rate))
+                                         deck.fileLevel * 100, deck.voicePress * 100, deck.voiceReverb * 100, deck.sweep * 100, deck.volume * 100, deck.rate,
+                                         deck.reverbMix * 100, deck.echoMix * 100, deck.lofiMix * 100, deck.tape * 100))
             }
         }
     }
