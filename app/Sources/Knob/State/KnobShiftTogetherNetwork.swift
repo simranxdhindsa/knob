@@ -331,10 +331,21 @@ final class KnobShiftTogetherGuest: @unchecked Sendable {
             if let port = hello.clockPort { followClock(port) }
         case .sound:
             guard let first = KnobShiftTogether.soundFrame(message.body) else { return }
-            let samples = message.body.dropFirst(8).withUnsafeBytes { Array($0.bindMemory(to: UInt8.self)) }
-            let values = samples.withUnsafeBytes { raw in (0..<(raw.count / 2)).map { Int16(littleEndian: raw.loadUnaligned(fromByteOffset: $0 * 2, as: Int16.self)) } }
+            // One block copy: samples arrive little endian, as Apple chips store them. Converting
+            // them one at a time cost a fifth of a core in the dev build.
+            let count = (message.body.count - 8) / 2
+            var values = [Int16](repeating: 0, count: max(count, 0))
+            values.withUnsafeMutableBytes { target in
+                message.body.withUnsafeBytes { source in
+                    guard count > 0, let from = source.baseAddress, let to = target.baseAddress else { return }
+                    memcpy(to, from + 8, count * 2)
+                }
+            }
             values.withUnsafeBufferPointer { player.ring.write(firstFrame: first, samples: $0) }
-            let loudest = values.reduce(Int16(0)) { max($0, $1 == .min ? .max : abs($1)) }
+            var loudest: Int16 = 0
+            values.withUnsafeBufferPointer { buffer in
+                for value in buffer { loudest = max(loudest, value == .min ? .max : abs(value)) }
+            }
             statsLock.withLock {
                 blocks += 1
                 peak = max(peak, loudest)
