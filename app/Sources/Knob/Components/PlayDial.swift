@@ -152,6 +152,13 @@ struct PlayDial: View {
         .frame(width: size, height: size)
         .contentShape(Circle())
         .gesture(turn)
+        // A turn cut off by the view going (the phone turning to the record deck mid touch)
+        // never ends, and its position would hold the time still on every player from then on.
+        .onDisappear {
+            guard rotary != nil else { return }
+            rotary = nil
+            scrub.position = nil
+        }
         .accessibilityElement()
         .accessibilityLabel("Position in song")
         .accessibilityValue(KnobShiftNowPlaying.clock(scrub.position ?? clock.time))
