@@ -21,9 +21,8 @@ final class KnobShiftDeck {
     private let voiceStretch = AVAudioUnitTimePitch()
     private let voiceRoom = AVAudioUnitReverb()
     /// The pressed down, muffled voice of a leaving song (see `voicePress`): a compressor before
-    /// the speed unit and a filter after it, both on the voice alone. At rest the compressor's
-    /// threshold sits above anything a song reaches and the filter is wide open, so they pass the
-    /// voice unchanged and stay connected (switching them in mid song would click).
+    /// the speed unit and a filter after it, both on the voice alone. They are in the sound only
+    /// while a leaving song plays as separated parts (see `voiceEffectsIn`).
     private let voiceSquash = AVAudioUnitEffect(audioComponentDescription: AudioComponentDescription(
         componentType: kAudioUnitType_Effect, componentSubType: kAudioUnitSubType_DynamicsProcessor,
         componentManufacturer: kAudioUnitManufacturer_Apple, componentFlags: 0, componentFlagsMask: 0))
@@ -31,9 +30,10 @@ final class KnobShiftDeck {
     private let submix = AVAudioMixerNode()
     private let stretch = AVAudioUnitTimePitch()
     private let filter = AVAudioUnitEQ(numberOfBands: 3)
-    /// Transition effects for a song that is leaving (the lo-fi exit). Bypassed, so not in the
-    /// sound at all, during normal playback.
-    private let lofi = AVAudioUnitDistortion()
+    /// Transition effects for a song that is leaving, and the hall a sung mix's new song arrives
+    /// in. Bypassed, so not in the sound at all, during normal playback. At 0% both pass the song
+    /// through unchanged, so they can stay in after a mix. (A lo-fi distortion used to sit here:
+    /// even at 0% it crushed the whole song, so it is gone.)
     private let echo = AVAudioUnitDelay()
     private let room = AVAudioUnitReverb()
     /// Where in its file this deck's current segment started.
@@ -74,15 +74,14 @@ final class KnobShiftDeck {
         engine.attach(voiceRoom)
         voiceRoom.loadFactoryPreset(.largeHall)
         voiceRoom.wetDryMix = 0
-        voiceRoom.bypass = true
+        for unit in [voiceSquash, voiceMuffle, voiceRoom] as [AVAudioUnitEffect] { unit.bypass = true }
         engine.attach(submix)
         engine.attach(stretch)
         engine.attach(filter)
-        lofi.loadFactoryPreset(.drumsLoFi)
         echo.feedback = 45
         echo.lowPassCutoff = 3_500
         room.loadFactoryPreset(.mediumHall)
-        for unit in [lofi, echo, room] as [AVAudioUnitEffect] { engine.attach(unit) }
+        for unit in [echo, room] as [AVAudioUnitEffect] { engine.attach(unit) }
         resetTransitionEffects()
         engine.connect(player, to: submix, format: nil)
         engine.connect(voice, to: voiceSquash, format: nil)
@@ -93,8 +92,7 @@ final class KnobShiftDeck {
         engine.connect(musicStem, to: submix, format: nil)
         engine.connect(submix, to: stretch, format: nil)
         engine.connect(stretch, to: filter, format: nil)
-        engine.connect(filter, to: lofi, format: nil)
-        engine.connect(lofi, to: echo, format: nil)
+        engine.connect(filter, to: echo, format: nil)
         engine.connect(echo, to: room, format: nil)
         engine.connect(room, to: output, format: nil)
         applyVoicePress()
@@ -142,9 +140,30 @@ final class KnobShiftDeck {
     /// separated voice's peaks.
     var voicePress: Double = 0 { didSet { applyVoicePress() } }
 
-    /// How late the voice path plays against the music path (the compressor looks ahead), so
-    /// a separated voice can be started that much further into its file and stay in step.
-    var voiceLatency: TimeInterval { voiceSquash.latency + voiceStretch.latency + voiceMuffle.latency + voiceRoom.latency }
+    /// How late the voice path plays against the music path (the compressor looks ahead while it
+    /// is in), so a separated voice can be started that much further into its file and stay in
+    /// step. A bypassed unit adds nothing, though it still reports its delay.
+    var voiceLatency: TimeInterval {
+        voiceStretch.latency + (voiceEffectsIn ? voiceSquash.latency + voiceMuffle.latency + voiceRoom.latency : 0)
+    }
+
+    /// Whether the voice's own press, muffle and hall are in the sound. Out, the voice path passes
+    /// the separated voice through exactly, so an arriving song's voice and music add up to its
+    /// file and hand back to it with no seam. In, even at rest, the muffle shifted the voice
+    /// against its music and the compressor's look ahead swallowed the last few milliseconds
+    /// of the voice part: a click where it handed back to the file. Switched only while the
+    /// voice is silent (before a leaving song's parts start, or with the deck stopped), since
+    /// switching under a playing voice clicks.
+    private(set) var voiceEffectsIn = false
+
+    func setVoiceEffects(_ on: Bool) {
+        guard on != voiceEffectsIn else { return }
+        voiceEffectsIn = on
+        for unit in [voiceSquash, voiceMuffle, voiceRoom] as [AVAudioUnitEffect] {
+            unit.bypass = !on
+            if on { unit.reset() }
+        }
+    }
 
     private func applyVoicePress() {
         let amount = min(max(voicePress, 0), 1)
@@ -174,12 +193,10 @@ final class KnobShiftDeck {
         voiceStretch.pitch = Float(1_200 * log2(heard))
     }
 
+    /// Switching the hall in or out under a playing voice clicked, so it stays in with the other
+    /// voice effects (`voiceEffectsIn`); at 0% it passes the voice unchanged.
     var voiceReverb: Double = 0 {
-        didSet {
-            let wet = min(max(voiceReverb, 0), 1)
-            voiceRoom.wetDryMix = Float(wet * 100)
-            voiceRoom.bypass = wet <= 0.001
-        }
+        didSet { voiceRoom.wetDryMix = Float(min(max(voiceReverb, 0), 1) * 100) }
     }
 
     /// File position where the separated parts this song arrived on run out; until then
@@ -228,8 +245,7 @@ final class KnobShiftDeck {
         stretch.pitch = 0
     }
 
-    /// Lo-fi colour, echo and reverb share, each 0...1.
-    var lofiMix: Double = 0 { didSet { lofi.wetDryMix = Float(min(max(lofiMix, 0), 1) * 100) } }
+    /// Echo and reverb share, each 0...1.
     var echoMix: Double = 0 { didSet { echo.wetDryMix = Float(min(max(echoMix, 0), 1) * 100) } }
     var reverbMix: Double = 0 { didSet { room.wetDryMix = Float(min(max(reverbMix, 0), 1) * 100) } }
 
@@ -238,20 +254,18 @@ final class KnobShiftDeck {
     func armTransitionEffects(echoEvery: TimeInterval, hall: AVAudioUnitReverbPreset) {
         echo.delayTime = min(max(echoEvery, 0.05), 2)
         room.loadFactoryPreset(hall)
-        lofiMix = 0
         echoMix = 0
         reverbMix = 0
-        for unit in [lofi, echo, room] as [AVAudioUnitEffect] { unit.bypass = false }
+        for unit in [echo, room] as [AVAudioUnitEffect] { unit.bypass = false }
     }
 
     /// Takes the transition effects back out of the sound. Called only when the deck is silent
     /// (loading its next song), so the echo and reverb tails of a mix always ring out.
     func resetTransitionEffects() {
         tape = 0
-        lofiMix = 0
         echoMix = 0
         reverbMix = 0
-        for unit in [lofi, echo, room] as [AVAudioUnitEffect] {
+        for unit in [echo, room] as [AVAudioUnitEffect] {
             unit.bypass = true
             unit.reset()
         }
@@ -280,8 +294,10 @@ final class KnobShiftDeck {
         filter.bands[0].frequency = Self.restingCutoff * powf(Self.swapCutoff / Self.restingCutoff, bass)
     }
 
-    /// Back to plain playback after a blend.
+    /// Back to plain playback after a blend. The voice effects come out here too: every caller
+    /// has stopped this deck first, or it is the arriving deck, whose voice effects were never in.
     func resetEffects() {
+        setVoiceEffects(false)
         rate = 1
         tape = 0
         bassCut = 0

@@ -118,7 +118,6 @@ extension KnobShiftModel {
         // The effect levels below follow the keyframe curve; each is then scaled by the beat pulse.
         defer {
             deck.reverbMix *= level * tail
-            deck.lofiMix *= level
             deck.echoMix *= level * tail
             // The underwater filter half reopens on each kick, so the punch comes through.
             deck.sweep *= 0.5 + 0.5 * level

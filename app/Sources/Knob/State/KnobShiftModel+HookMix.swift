@@ -73,7 +73,6 @@ extension KnobShiftModel {
         let old = primaryDeck
         old.tape = 0
         old.echoMix = 0
-        old.lofiMix = 0
         throwingVoice = outgoingOnStems
         // The hall eases away over the last tenth, so its tail is not cut when the mix ends.
         let hall = 1 - Self.shape(min(max((p - 0.9) / 0.1, 0), 1))
