@@ -11,6 +11,16 @@ struct PanelView: View {
     /// The menu bar panel's width on the Mac; the iPhone passes its screen's width.
     var width: CGFloat = PanelView.width
 
+    /// Whether this panel is counted as open, so the meters (polled 15 times a second) run only
+    /// while it can be seen.
+    @State private var live = false
+
+    private func setLive(_ on: Bool) {
+        guard on != live else { return }
+        live = on
+        if on { model.panelOpened() } else { model.panelClosed() }
+    }
+
     var body: some View {
         Group {
             if showingAbout {
@@ -47,8 +57,12 @@ struct PanelView: View {
             }
         }
         .redacted(reason: model.connection == .connecting ? .placeholder : [])
-        .onAppear { model.panelOpened() }
-        .onDisappear { model.panelClosed() }
+        .onAppear { setLive(true) }
+        .onDisappear { setLive(false) }
+        #if os(macOS)
+        // A minimised or covered window keeps its views running; the meters pause until it shows.
+        .background(WindowVisibility { visible in setLive(visible) })
+        #endif
     }
 }
 

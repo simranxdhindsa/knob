@@ -23,6 +23,9 @@ struct KnobShiftPlan {
     /// Position in the outgoing song where its voice ends: its fade and exit effects wait for
     /// this, and so does the incoming voice.
     var voiceEnd: TimeInterval? = nil
+    /// The mix was held to 10 seconds (`pressRoom`): the new voice lands just before the old
+    /// voice's last words, so the press and the new song build over the whole run up.
+    var held = false
     /// Where the incoming song is started from: so its main verse lands as the old song leaves,
     /// or after its leading silence.
     let incomingOffset: TimeInterval
@@ -38,8 +41,8 @@ struct KnobShiftPlan {
     static let targetMix: TimeInterval = 8
     /// No mix is shorter than this when the song leaves room, so its exit is heard.
     static let shortestMix: TimeInterval = 6
-    /// No mix is ever longer than this.
-    static let longestMix: TimeInterval = 16
+    /// No mix is ever longer than this, in real time.
+    static let longestMix: TimeInterval = 10
     /// A short mix lands the new voice this long before the old voice's last words end, so the
     /// two always overlap, however little room there is.
     static let handover: TimeInterval = 0.5
@@ -115,6 +118,9 @@ struct KnobShiftPlan {
     /// The longest the old voice is pressed down before its last words: the mix starts at the
     /// last hook, unless the hook found is further back than this.
     static let longestPress: TimeInterval = 30
+    /// In a mix held to 10 seconds, how long the old voice is pressed before its last words, so
+    /// the press, the new song and the old song's exit follow one another instead of all at once.
+    static let pressRoom: TimeInterval = 6
     /// The most the new song's beats play under the old voice, and the most the old song may
     /// still be heard once the new voice sings.
     static let overlap: TimeInterval = 2
@@ -208,12 +214,29 @@ struct KnobShiftPlan {
                 start = voiceEnd - Self.longestPress
                 reasoning.append("That is more than \(Int(Self.longestPress)) seconds before its last words, so the mix starts at \(clock(start)) instead.")
             }
-            let lastWords = min(max(voiceEnd, start + Self.shortestWords), audibleEnd)
+            var lastWords = min(max(voiceEnd, start + Self.shortestWords), audibleEnd)
             let tail = Self.tail(bar: bar)
             // The analysis places the last words about 1.25 seconds late, and the tail is counted
             // from where they really end.
-            let exit = min(audibleEnd, max(lastWords - Self.analysisSlack + tail, start + Self.shortestMix))
-            let newVoiceAt = start + Self.newVoiceEntry(wordsEnd: lastWords - start, bar: bar)
+            var exit = min(audibleEnd, max(lastWords - Self.analysisSlack + tail, start + Self.shortestMix))
+            // A KnobMix never lasts more than 10 seconds: however far back the hook is, the old
+            // voice is pressed down only in the last stretch before it leaves.
+            // The 10 seconds are shared so nothing happens all at once: about 6 seconds of a gentle
+            // press while the old voice sings its last words and the new song creeps in, then the
+            // exit effects in what is left. KnobMix Now starts where it was asked.
+            let held = exit - start > Self.longestMusic
+            if held {
+                if handoffAt == nil { start = max(start, lastWords - Self.pressRoom) }
+                lastWords = min(max(voiceEnd, start + Self.pressRoom), audibleEnd)
+                exit = min(audibleEnd, max(lastWords - Self.analysisSlack + tail, start + Self.shortestMix), start + Self.longestMusic)
+                lastWords = min(lastWords, exit)
+                reasoning.append("\(handoffAt == nil ? "" : "KnobMix Now: ")The mix lasts \(seconds(exit - start)) from \(clock(start)): about \(seconds(lastWords - start)) of pressing before the last words, then the exit.")
+            }
+            // The two voices are heard together for at most 2 seconds. In a mix held to 10 seconds
+            // the new voice lands just before the old voice's last words, so the press builds over
+            // those 5 seconds and the old beats play on until the new song is near.
+            let newVoiceAt = held ? lastWords - Self.handover
+                : max(start + Self.newVoiceEntry(wordsEnd: lastWords - start, bar: bar), lastWords - Self.overlap)
             let firstVoice = Self.firstSinging(incoming)?.at
             let introLead = firstVoice.map { min(Self.introLead, max(0, $0 - leadIn)) } ?? Self.introLead
             let handoff = max(start + 0.5, newVoiceAt - introLead)
@@ -240,12 +263,14 @@ struct KnobShiftPlan {
                 reasoning.append("\(current.title) skips its last \(seconds(audibleEnd - exit)).")
             }
             reasoning.append("Blend: \(clock(start)) to \(clock(exit)), \(seconds(duration)), \(next.title) from \(clock(handoff)).")
-            return KnobShiftPlan(start: start, duration: duration, handoff: handoff, voiceEnd: lastWords,
-                                 incomingOffset: incomingOffset,
-                                 beatsBeforeVoice: firstVoice.map { max(0, $0 - incomingOffset) },
-                                 voiceThrow: true,
-                                 description: "READY • mix at \(clock(start)) for \(Int(duration.rounded()))s, \(next.title) from \(clock(handoff))",
-                                 reasoning: reasoning)
+            var plan = KnobShiftPlan(start: start, duration: duration, handoff: handoff, voiceEnd: lastWords,
+                                     incomingOffset: incomingOffset,
+                                     beatsBeforeVoice: firstVoice.map { max(0, $0 - incomingOffset) },
+                                     voiceThrow: true,
+                                     description: "READY • mix at \(clock(start)) for \(Int(duration.rounded()))s, \(next.title) from \(clock(handoff))",
+                                     reasoning: reasoning)
+            plan.held = held
+            return plan
         }
 
         // No vocals in the outgoing song: its measured fade is the cue.

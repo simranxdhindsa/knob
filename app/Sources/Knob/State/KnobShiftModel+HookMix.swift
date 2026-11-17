@@ -73,7 +73,6 @@ extension KnobShiftModel {
         let old = primaryDeck
         old.tape = 0
         old.echoMix = 0
-        old.lofiMix = 0
         throwingVoice = outgoingOnStems
         // The hall eases away over the last tenth, so its tail is not cut when the mix ends.
         let hall = 1 - Self.shape(min(max((p - 0.9) / 0.1, 0), 1))
@@ -96,6 +95,18 @@ extension KnobShiftModel {
             old.volume = Float(min(music, voice))
             old.sweep = max(0.55 * press, 1 - music)
             old.reverbMix = 0.35 * press * hall
+        }
+        // Once the old voice has sung its last words, the old song leaves with this pair's own exit
+        // style (KnobShiftExitStyle): a tape slowdown, an echo out or a reverb wash, so no two
+        // mixes end alike. Only the old song is touched; the new one keeps its speed.
+        if p > wordsEnd, exitStyle != nil {
+            let exit = Self.shape(min((p - wordsEnd) / max(1 - wordsEnd, 0.01), 1))
+            let wasThrowing = throwingVoice
+            throwingVoice = false
+            applyExitEffects(exit, envelope: exitStrength * sin(exit * .pi / 2), tail: hall)
+            throwingVoice = wasThrowing
+            secondaryDeck.tape = 0
+            announce("hook exit style", when: true, "\(exitStyle?.name ?? "Exit") as the old song leaves after its last words.")
         }
         // Two basslines never stack: when locked the new bass comes in as the old beats leave.
         old.bassCut = locked ? 1 - music : 0

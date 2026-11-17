@@ -15,7 +15,12 @@ final class KnobModel: ObservableObject {
     @Published var volume = 0.0
     @Published private(set) var muted = false
     @Published private(set) var volumeControllable = true
-    @Published internal(set) var powerOn = false
+    @Published internal(set) var powerOn = false {
+        didSet { if menuBarPower.isOn != powerOn { menuBarPower.isOn = powerOn } }
+    }
+    /// The menu bar icon watches only this, not the whole model, which changes 15 times a second
+    /// while a panel shows its meters: each change made AppKit redraw the icon on every display.
+    let menuBarPower = MenuBarPower()
     @Published private(set) var presets: [Preset] = []
     @Published private(set) var currentPreset: Preset?
     @Published var effects: [Double] = Array(repeating: 0, count: EffectSlot.allCases.count)
@@ -355,4 +360,9 @@ final class KnobModel: ObservableObject {
             self.scheduleSessionSave()
         }
     }
+}
+
+/// Knob on or off, for the menu bar icon alone.
+final class MenuBarPower: ObservableObject {
+    @Published var isOn = false
 }

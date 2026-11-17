@@ -236,7 +236,7 @@ extension KnobShiftModel {
             secondaryDeck.resetTransitionEffects()
             // The new song arrives in a hall, so its deck's reverb has to be in the sound.
             if voiceThrow { secondaryDeck.armTransitionEffects(echoEvery: 0.5, hall: .largeHall) }
-            armExitEffects(from: current, to: next, sync: sync, announces: !voiceThrow)
+            armExitEffects(from: current, to: next, sync: sync)
             secondaryDeck.volume = 0
             secondaryDeck.rate = sync.rates(progress: 0, voice: tempoAt).incoming
             secondaryDeck.bassCut = 1
@@ -285,7 +285,10 @@ extension KnobShiftModel {
                 let overlap = { (wait: TimeInterval) in wordsEnd - (wait + lead) }
                 let latest = duration * 0.97
                 let bar = current.analysis.tempo.map { 4 * 60 / $0 } ?? 2.5
-                let target = KnobShiftPlan.newVoiceEntry(wordsEnd: wordsEnd, bar: bar)
+                // A mix held to 10 seconds (KnobShiftPlan.pressRoom): the new voice lands just before
+                // the old voice's last words, so the press and the new song build over the whole run up.
+                let held = music >= KnobShiftPlan.longestMusic * 0.9
+                let target = held ? max(wordsEnd - KnobShiftPlan.handover, 0) : KnobShiftPlan.newVoiceEntry(wordsEnd: wordsEnd, bar: bar)
                 var chosen = min(max(target - lead, 0), latest)
                 if mixSync.isOn {
                     // Whole beats keep the lock; of the nearest few, the one closest to the target.
@@ -447,7 +450,7 @@ extension KnobShiftModel {
         var outgoing: Double, incoming: Double, swap: Double, sweep: Double, beatsOnly: Double, voice: Double
         // The old singer's separated voice: it leaves before the new one arrives, never together.
         var oldVoice = 1.0
-        // How far the leaving song is through its exit, 0...1: the lo-fi exit follows this.
+        // How far the leaving song is through its exit, 0...1: the exit effects follow this.
         let exit: Double
         if pivot > 0.02 {
             if progress < pivot {
@@ -585,8 +588,8 @@ extension KnobShiftModel {
                         (1 - primaryDeck.bassCut) * 100, (1 - secondaryDeck.bassCut) * 100,
                         (1 - secondaryDeck.beatsOnly) * 100, primaryDeck.sweep * 100)
         let old = primaryDeck, new = secondaryDeck
-        let effects = String(format: "  •  effects: reverb %.0f%%, echo %.0f%%, lofi %.0f%%, slowdown %.0f%% slower",
-                             old.reverbMix * 100, old.echoMix * 100, old.lofiMix * 100, old.tape * 10)
+        let effects = String(format: "  •  effects: reverb %.0f%%, echo %.0f%%, slowdown %.0f%% slower",
+                             old.reverbMix * 100, old.echoMix * 100, old.tape * 10)
         let voices = (outgoingOnStems ? String(format: "  •  old voice %.0f%% (hall %.0f%%)", old.voiceLevel * 100, old.voiceReverb * 100) : "")
             + (blendHasStems ? String(format: "  •  new voice %.0f%% (reverb %.0f%%)", new.voiceLevel * 100, new.voiceReverb * 100) : "")
         log("KNOBMIX", String(format: "+%.2fs  %3.0f%% done  •  out %@ %.2f  •  in %@ %.2f",

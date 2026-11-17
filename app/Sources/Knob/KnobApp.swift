@@ -106,14 +106,16 @@ struct KnobLauncher {
 
 struct KnobApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var model: KnobModel
+    /// Held, not watched: the app's body would otherwise run again on every meter update (15 a
+    /// second while a panel shows), rebuilding the menu bar each time. Views watch what they show.
+    @State private var model: KnobModel
 
     init() {
         let demo = CommandLine.arguments.contains("--demo")
         let model = KnobModel(engine: demo ? DemoEngine() : SocketEngine(),
                               volume: demo ? DemoVolume() : SystemVolume(),
                               launcher: demo ? nil : EngineLauncher())
-        _model = StateObject(wrappedValue: model)
+        _model = State(initialValue: model)
         AppDelegate.model = model
         model.start()
         model.restorePower()
@@ -141,8 +143,7 @@ struct KnobApp: App {
             // Knob never draws macOS's blue focus ring; pointer highlights show what is active.
             .focusEffectDisabled()
         } label: {
-            Image(systemName: model.powerOn ? "dial.medium.fill" : "dial.medium")
-                .accessibilityLabel("Knob")
+            MenuBarIcon(power: model.menuBarPower)
         }
         .menuBarExtraStyle(.window)
         .commands {
@@ -150,5 +151,16 @@ struct KnobApp: App {
                 Button("About Knob") { AboutWindow.show() }
             }
         }
+    }
+}
+
+/// The menu bar icon: filled while Knob is on. It watches only that, so it is drawn again only
+/// when Knob is switched on or off.
+struct MenuBarIcon: View {
+    @ObservedObject var power: MenuBarPower
+
+    var body: some View {
+        Image(systemName: power.isOn ? "dial.medium.fill" : "dial.medium")
+            .accessibilityLabel("Knob")
     }
 }
