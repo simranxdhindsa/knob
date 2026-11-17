@@ -62,6 +62,12 @@ Knob 4.1 keeps the orange microphone dot away, makes low volumes easier to hear,
 - The StandBy record keeps up when the song changes, and the Dynamic Island shows the cover
 - The volume no longer drops to 0% when the sound moves to an HDMI monitor and back
 - A Spotify playlist that Spotify is slow to give no longer leaves the import stuck on Reading
+- A KnobMix now lasts 10 seconds at most and builds up smoothly instead of all at once
+- Songs no longer sound crushed or muffled after a KnobMix, and a sung mix hands over to the new song without a click
+- A paused song's Lock Screen card goes away after 10 seconds
+- Listen Together menu items stay open instead of closing at once
+- The time on iPhone no longer freezes at 0:00 after you turn the phone while touching the screen
+- Knob stays cool with its windows minimised, and the menu bar icon no longer redraws all the time
 
 ## 4.0
 

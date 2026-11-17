@@ -26,7 +26,7 @@ enum KnobShiftWindow {
 
     private static func present(model: KnobShiftModel, activates: Bool) {
         if window == nil {
-            let host = NSHostingController(rootView: KnobShiftPlayerView(model: model).focusEffectDisabled())
+            let host = NSHostingController(rootView: WhileNotMinimized { KnobShiftPlayerView(model: model) }.focusEffectDisabled())
             let created = NSWindow(contentViewController: host)
             created.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
             created.title = "KnobShift"

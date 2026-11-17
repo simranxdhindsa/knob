@@ -82,6 +82,9 @@ extension KnobShiftModel {
         let skip = AVAudioFramePosition(((position - stems.start) * rate).rounded())
         let frames = min(music.length, vocals.length) - skip
         guard skip >= 0, frames > AVAudioFramePosition(rate) else { return false }
+        // Its voice part has not started yet, so its press, muffle and hall can come into the
+        // sound now without a click, before the delay they add is measured below.
+        deck.setVoiceEffects(true)
         // A fade cut short by a pause must not leave the file part down.
         deck.fileLevel = 1
         deck.musicStemLevel = 0
@@ -136,9 +139,10 @@ extension KnobShiftModel {
                     guard let now, let time = node.playerTime(forNodeTime: now), time.sampleRate > 0 else { return 0 }
                     return Double(time.sampleTime) / time.sampleRate
                 }
-                self.log("VOICE", String(format: "%@ %.0fs after the mix: voice clock %.2fs, music clock %.2fs, voice part %@ at %.0f%%, music part %.0f%%, file %.0f%%, pressed %.0f%%, hall %.0f%%, sweep %.0f%%, deck volume %.0f%%, speed %.3f.",
+                self.log("VOICE", String(format: "%@ %.0fs after the mix: voice clock %.2fs, music clock %.2fs, voice part %@ at %.0f%%, music part %.0f%%, file %.0f%%, pressed %.0f%%, hall %.0f%%, voice effects %@, sweep %.0f%%, deck volume %.0f%%, speed %.3f, deck hall %.0f%%, echo %.0f%%, tape %.0f%%.",
                                          track.title, wait, clock(deck.voice), clock(deck.player), deck.voice.isPlaying ? "playing" : "stopped", deck.voiceLevel * 100, deck.musicStemLevel * 100,
-                                         deck.fileLevel * 100, deck.voicePress * 100, deck.voiceReverb * 100, deck.sweep * 100, deck.volume * 100, deck.rate))
+                                         deck.fileLevel * 100, deck.voicePress * 100, deck.voiceReverb * 100, deck.voiceEffectsIn ? "in" : "out", deck.sweep * 100, deck.volume * 100, deck.rate,
+                                         deck.reverbMix * 100, deck.echoMix * 100, deck.tape * 100))
             }
         }
     }

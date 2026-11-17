@@ -21,6 +21,9 @@ struct PlayerTimeline: View {
         let time = scrub.position ?? clock.time
         VStack(spacing: 0) {
             slider(playing: playing, time: time, duration: duration)
+                // A drag cut off by the view going, or a new song, must not hold the time still.
+                .onDisappear { scrub.position = nil }
+                .onChange(of: model.nowPlaying?.id) { scrub.position = nil }
             ZStack {
                 HStack {
                     Text(playing ? KnobShiftNowPlaying.clock(time) : "0:00")

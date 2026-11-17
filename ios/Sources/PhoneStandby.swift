@@ -30,6 +30,9 @@ final class PhoneStandby {
     /// How far the record has turned, in degrees. It grows by one turn with each new song, so the
     /// card's record glides round as the song changes.
     private var turn = 0.0
+    /// A paused song's card goes after this long, even when Knob is closed: iOS removes an ended
+    /// card on time by itself. Playing again brings a new one.
+    private static let pausedSeconds: TimeInterval = 10
 
     func start(model: KnobShiftModel) {
         guard self.model == nil else { return }
@@ -75,6 +78,11 @@ final class PhoneStandby {
             end()
             return
         }
+        // Paused: the card goes in 10 seconds and no new one starts until the music plays again.
+        guard model.isPlaying else {
+            endAfterPause()
+            return
+        }
         if coverFor != track.url {
             // The cover first, so the card never shows a new name over the old picture.
             coverFor = track.url
@@ -95,17 +103,32 @@ final class PhoneStandby {
         push()
     }
 
-    private func push() {
-        guard let model, let track = model.nowPlaying, coverFor == track.url else { return }
+    private func currentState() -> KnobStandbyAttributes.ContentState? {
+        guard let model, let track = model.nowPlaying else { return nil }
         let elapsed = min(max(model.playbackTime, 0), track.duration)
-        let state = KnobStandbyAttributes.ContentState(
+        return KnobStandbyAttributes.ContentState(
             title: Self.short(track.name), artist: track.artist.map(Self.short), isPlaying: model.isPlaying,
             started: Date().addingTimeInterval(-elapsed), duration: track.duration, elapsed: elapsed, cover: coverName,
             turn: turn, next: model.upNext.map { Self.short($0.name) }, mixing: model.mixState == .mixing || model.mixNowWaiting)
+    }
+
+    /// Ends the card showing the pause, for iOS to take away after `pausedSeconds`. It leaves the
+    /// Dynamic Island at once.
+    private func endAfterPause() {
+        guard let activity else { return }
+        self.activity = nil
+        sent = nil
+        let content = currentState().map { ActivityContent(state: $0, staleDate: nil) }
+        Task { await activity.end(content, dismissalPolicy: .after(Date().addingTimeInterval(Self.pausedSeconds))) }
+        model?.log("STANDBY", "Paused, so the Live Activity goes in \(Int(Self.pausedSeconds)) seconds.")
+    }
+
+    private func push() {
+        guard let model, let track = model.nowPlaying, coverFor == track.url, let state = currentState() else { return }
         if let sent, !Self.changed(sent, state) { return }
-        // While paused the card holds still as long as it likes. It only goes out of date if the
-        // song should have ended and Knob has gone, and a late update brings it back.
-        let content = ActivityContent(state: state, staleDate: state.isPlaying ? state.ends.addingTimeInterval(90) : nil)
+        // It only goes out of date if the song should have ended and Knob has gone; a late update
+        // brings it back. A paused card is ended instead (endAfterPause).
+        let content = ActivityContent(state: state, staleDate: state.ends.addingTimeInterval(90))
         if let activity, activity.activityState == .active || activity.activityState == .stale {
             sent = state
             Task { await activity.update(content) }
